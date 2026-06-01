@@ -1,0 +1,95 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"        # v1.0.0 kabi tag push qilinganda ishga tushadi
+  workflow_dispatch:  # Qo'lda ham ishga tushirish mumkin
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Windows: .exe (NSIS) va .msi ──────────────────────────────────
+          - platform: windows-latest
+            args: ""
+            name: Windows
+
+          # ── Linux: .deb, .rpm, .AppImage ──────────────────────────────────
+          - platform: ubuntu-22.04
+            args: ""
+            name: Linux
+
+          # ── macOS: .dmg, .app ─────────────────────────────────────────────
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+            name: macOS
+
+    runs-on: ${{ matrix.platform }}
+    name: Build (${{ matrix.name }})
+
+    steps:
+      # ── 1. Kodni yuklash ──────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js o'rnatish ──────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      # ── 3. Linux uchun kerakli kutubxonalar ───────────────────────────────
+      - name: Install Linux deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev
+
+      # ── 4. Rust o'rnatish ─────────────────────────────────────────────────
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # ── 5. Rust cache ─────────────────────────────────────────────────────
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      # ── 6. npm o'rnatish ──────────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 7. Tauri build ────────────────────────────────────────────────────
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Prava Online ${{ github.ref_name }}"
+          releaseBody: |
+            ## Prava Online ${{ github.ref_name }}
+
+            ### O'rnatish
+
+            | OS      | Fayl                      |
+            |---------|---------------------------|
+            | Windows | `.exe` yoki `.msi`        |
+            | Linux   | `.deb`, `.rpm`, `.AppImage` |
+            | macOS   | `.dmg`                    |
+
+            > **Yangiliklar:** ushbu release haqida batafsil ma'lumot
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Background circle -->
+  <circle cx="512" cy="512" r="512" fill="#7950f2"/>
+
+  <!-- Outer ring of steering wheel -->
+  <circle cx="512" cy="512" r="340" fill="none" stroke="white" stroke-width="72"/>
+
+  <!-- Center hub -->
+  <circle cx="512" cy="512" r="80" fill="white"/>
+
+  <!-- Spoke 1: top -->
+  <rect x="484" y="172" width="56" height="260" rx="28" fill="white"/>
+
+  <!-- Spoke 2: bottom-left -->
+  <rect x="484" y="172" width="56" height="260" rx="28" fill="white"
+        transform="rotate(120 512 512)"/>
+
+  <!-- Spoke 3: bottom-right -->
+  <rect x="484" y="172" width="56" height="260" rx="28" fill="white"
+        transform="rotate(240 512 512)"/>
+</svg>

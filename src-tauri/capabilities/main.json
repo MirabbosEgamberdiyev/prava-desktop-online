@@ -1,0 +1,10 @@
+{
+  "identifier": "main-capability",
+  "description": "Prava Online asosiy imkoniyatlari",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "opener:default"
+  ]
+}
