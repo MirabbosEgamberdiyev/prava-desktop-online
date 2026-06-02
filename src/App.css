@@ -226,6 +226,53 @@ body {
 .machine-id-label { font-size: 11px; color: var(--text-muted); font-weight: 600; }
 .machine-id-value { font-size: 12px; color: var(--text); word-break: break-all; }
 
+.machine-id-box {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+.machine-id-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.machine-id-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.machine-id-row .machine-id-value {
+  flex: 1;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  user-select: all;
+}
+.copy-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: "Montserrat", sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.copy-btn:hover { background: var(--primary-hover); }
+.machine-id-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--warning);
+  font-weight: 600;
+}
+
 /* ============ USER SELECT SCREEN ============ */
 .usp-screen {
   height: 100vh;

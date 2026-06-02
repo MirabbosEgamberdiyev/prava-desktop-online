@@ -6,6 +6,15 @@ export interface LocalizedText {
   ru?: string;
 }
 
+// ─── License ──────────────────────────────────────────────────────────────────
+export interface LicenseStatus {
+  is_valid: boolean;
+  is_expired: boolean;
+  days_remaining: number;
+  expires_at: string;
+  machine_id: string;
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export interface AuthResponse {
   accessToken: string;
@@ -222,6 +231,7 @@ export interface SavedQuestionResponse {
 
 // ─── App Screens ──────────────────────────────────────────────────────────────
 export type AppScreen =
+  | "license"
   | "login"
   | "register"
   | "home"

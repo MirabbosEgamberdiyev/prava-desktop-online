@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { AppScreen, UserResponse, TicketResponse } from "./types";
-import { isLoggedIn, getSavedUser, clearTokens } from "./auth";
+import { AppScreen, LicenseStatus, UserResponse, TicketResponse } from "./types";
+import { checkLicense } from "./api";
+import { isLoggedIn, clearTokens } from "./auth";
 import { getMe } from "./api";
+import LicenseScreen from "./screens/LicenseScreen";
 import LoginScreen from "./screens/LoginScreen";
 import RegisterScreen from "./screens/RegisterScreen";
 import HomeScreen from "./screens/HomeScreen";
@@ -16,31 +18,58 @@ import SavedQuestionsScreen from "./screens/SavedQuestionsScreen";
 import "./App.css";
 
 function App() {
-  const [screen, setScreen]               = useState<AppScreen>("login");
+  const [screen, setScreen]               = useState<AppScreen>("license");
+  const [licenseStatus, setLicenseStatus]  = useState<LicenseStatus | null>(null);
   const [currentUser, setCurrentUser]     = useState<UserResponse | null>(null);
   const [selectedTopicId, setTopicId]     = useState<number | null>(null);
   const [selectedTicket, setTicket]       = useState<TicketResponse | null>(null);
   const [appReady, setAppReady]           = useState(false);
 
-  // Startup: agar token bor bo'lsa → me endpoint → HomeScreen
   useEffect(() => {
     const init = async () => {
-      if (isLoggedIn()) {
-        try {
-          const user = await getMe() as UserResponse;
-          setCurrentUser(user);
-          setScreen("home");
-        } catch {
-          clearTokens();
-          setScreen("login");
+      // 1) Litsenziya tekshirish
+      try {
+        const status = await checkLicense();
+        if (status.is_valid) {
+          setLicenseStatus(status);
+          // 2) Token bor bo'lsa → login skip
+          if (isLoggedIn()) {
+            try {
+              const user = await getMe() as UserResponse;
+              setCurrentUser(user);
+              setScreen("home");
+            } catch {
+              clearTokens();
+              setScreen("login");
+            }
+          } else {
+            setScreen("login");
+          }
+        } else {
+          setScreen("license");
         }
-      } else {
-        setScreen("login");
+      } catch {
+        setScreen("license");
       }
       setAppReady(true);
     };
     init();
   }, []);
+
+  const handleLicenseActivated = async (status: LicenseStatus) => {
+    setLicenseStatus(status);
+    if (isLoggedIn()) {
+      try {
+        const user = await getMe() as UserResponse;
+        setCurrentUser(user);
+        setScreen("home");
+        return;
+      } catch {
+        clearTokens();
+      }
+    }
+    setScreen("login");
+  };
 
   const handleLoggedIn = (user: UserResponse) => {
     setCurrentUser(user);
@@ -78,6 +107,9 @@ function App() {
 
   return (
     <div className="app">
+      {screen === "license" && (
+        <LicenseScreen onActivated={handleLicenseActivated} />
+      )}
       {screen === "login" && (
         <LoginScreen
           onLoggedIn={handleLoggedIn}

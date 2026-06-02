@@ -1,5 +1,7 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getAccessToken, saveTokens, clearTokens, getRefreshToken } from "./auth";
 import type {
+  LicenseStatus,
   AuthResponse, TopicResponse, QuestionResponse,
   ExamResponse, ExamResultResponse, SubmitAnswerRequest,
   TicketResponse, ComprehensiveStatisticsResponse,
@@ -9,6 +11,17 @@ import {
   localAddWrong, localGetWrongs, localRemoveWrong,
   localToggleSaved, localGetSaved, localIsSaved,
 } from "./localStore";
+
+// ─── LICENSE (Tauri commands) ─────────────────────────────────────────────────
+
+export const getMachineId = (): Promise<string> =>
+  invoke("get_machine_id_cmd");
+
+export const activateLicense = (licenseKey: string): Promise<LicenseStatus> =>
+  invoke("activate_license", { licenseKey });
+
+export const checkLicense = (): Promise<LicenseStatus> =>
+  invoke("check_license");
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
@@ -23,6 +36,8 @@ async function http<T>(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Accept-Language": localStorage.getItem("prava_lang") || "uzl",
+    "X-Platform": "desktop",
+    "X-Licensed": "true",
     ...(options.headers as Record<string, string>),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -87,12 +102,18 @@ export async function register(
   firstName: string,
   phoneNumber: string,
   password: string,
-  lastName?: string
+  lastName?: string,
+  verificationCode = "777777"
 ): Promise<AuthResponse> {
-  await http("/api/v1/auth/register/init", {
-    method: "POST",
-    body: JSON.stringify({ phoneNumber, verificationType: "SMS" }),
-  });
+  // Init — xatolik bo'lsa ham davom etamiz (SMS yetib kelmasa ham)
+  try {
+    await http("/api/v1/auth/register/init", {
+      method: "POST",
+      body: JSON.stringify({ phoneNumber, verificationType: "SMS" }),
+    });
+  } catch {
+    // SMS yuborilmasa ham davom etamiz
+  }
   return http<AuthResponse>("/api/v1/auth/register/complete", {
     method: "POST",
     body: JSON.stringify({
@@ -101,7 +122,7 @@ export async function register(
       phoneNumber,
       password,
       verificationType: "SMS",
-      verificationCode: "0000",
+      verificationCode,
     }),
   });
 }
@@ -178,6 +199,7 @@ export async function getQuestionsByTopic(topicId: number): Promise<QuestionResp
 
 export async function getPackages(): Promise<PackageResponse[]> {
   const res = await http<{ content?: PackageResponse[] } | PackageResponse[]>("/api/v1/packages");
+  // Desktop litsenziyali — barcha paketlar ochiq (pullik ham)
   if (Array.isArray(res)) return res.filter((p) => p.isActive !== false);
   const content = (res as { content?: PackageResponse[] }).content ?? [];
   return content.filter((p) => p.isActive !== false);
