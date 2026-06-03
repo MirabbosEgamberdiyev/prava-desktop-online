@@ -69,10 +69,4 @@
           font-size="20" font-weight="900" fill="#ffffff" letter-spacing="3">PRAVA ONLINE</text>
   </g>
 
-  <!-- ── Tagline ── -->
-  <text x="300" y="370" text-anchor="middle"
-        font-family="'Segoe UI', system-ui, sans-serif"
-        font-size="13" font-weight="700" fill="#1e3a8a" letter-spacing="2.5">
-    HAYDOVCHILIK IMTIHONIGA TAYYORLANISH
-  </text>
 </svg>
