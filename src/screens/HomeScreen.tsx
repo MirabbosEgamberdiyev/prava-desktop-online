@@ -142,7 +142,7 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
           <div className="home-header-right">
             <LanguagePicker />
             <ThemeToggle />
-            <button className="user-switcher" onClick={onLogout} title="Chiqish">
+            <button className="user-switcher" onClick={onLogout} title={t("auth.logout")}>
               <div className="user-switcher-avatar" style={{ background: getColor(user.firstName) }}>
                 {getInitials(user.firstName, user.lastName)}
               </div>

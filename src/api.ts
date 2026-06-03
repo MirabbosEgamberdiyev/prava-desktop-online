@@ -26,6 +26,41 @@ export const checkLicense = (): Promise<LicenseStatus> =>
 // ─── Config ───────────────────────────────────────────────────────────────────
 export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
+// ─── In-memory cache (with sessionStorage persistence) ────────────────────────
+type CacheEntry<T> = { data: T; ts: number };
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 daqiqa
+const memCache = new Map<string, CacheEntry<unknown>>();
+
+function cacheGet<T>(key: string): T | null {
+  const m = memCache.get(key) as CacheEntry<T> | undefined;
+  if (m && Date.now() - m.ts < CACHE_TTL_MS) return m.data;
+  try {
+    const raw = sessionStorage.getItem(`prava_cache_${key}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CacheEntry<T>;
+    if (Date.now() - parsed.ts < CACHE_TTL_MS) {
+      memCache.set(key, parsed as CacheEntry<unknown>);
+      return parsed.data;
+    }
+  } catch { /* corrupt cache, ignore */ }
+  return null;
+}
+
+function cacheSet<T>(key: string, data: T): void {
+  const entry: CacheEntry<T> = { data, ts: Date.now() };
+  memCache.set(key, entry as CacheEntry<unknown>);
+  try { sessionStorage.setItem(`prava_cache_${key}`, JSON.stringify(entry)); } catch { /* quota */ }
+}
+
+export function clearCache(): void {
+  memCache.clear();
+  try {
+    Object.keys(sessionStorage)
+      .filter((k) => k.startsWith("prava_cache_"))
+      .forEach((k) => sessionStorage.removeItem(k));
+  } catch { /* ignore */ }
+}
+
 // ─── Base HTTP fetch ──────────────────────────────────────────────────────────
 async function http<T>(
   path: string,
@@ -50,7 +85,7 @@ async function http<T>(
     if (refreshed) return http<T>(path, options, false);
     clearTokens();
     window.location.reload();
-    throw new Error("Session muddati tugadi");
+    throw new Error("session_expired");
   }
 
   // JSON body parse (HTML/bo'sh javob bo'lsa ham crash qilmasin)
@@ -146,7 +181,11 @@ export async function getMe(): Promise<AuthResponse["user"]> {
 // ─── TOPICS ───────────────────────────────────────────────────────────────────
 // /api/v1/app/topics 403 qaytarsa, v2 va v1 alternativlarini sinab ko'ramiz
 
-export async function getTopics(): Promise<TopicResponse[]> {
+export async function getTopics(opts?: { force?: boolean }): Promise<TopicResponse[]> {
+  if (!opts?.force) {
+    const c = cacheGet<TopicResponse[]>("topics");
+    if (c) return c;
+  }
   // 1-urinish: bir nechta API yo'llari
   const paths = [
     "/api/v1/app/topics",
@@ -156,10 +195,16 @@ export async function getTopics(): Promise<TopicResponse[]> {
   for (const path of paths) {
     try {
       const res = await http<unknown>(path);
-      if (Array.isArray(res) && res.length > 0) return res as TopicResponse[];
+      if (Array.isArray(res) && res.length > 0) {
+        cacheSet("topics", res);
+        return res as TopicResponse[];
+      }
       if (res && typeof res === "object" && !Array.isArray(res)) {
         const content = (res as { content?: TopicResponse[] }).content;
-        if (Array.isArray(content) && content.length > 0) return content;
+        if (Array.isArray(content) && content.length > 0) {
+          cacheSet("topics", content);
+          return content;
+        }
       }
     } catch { /* keyingi yo'lni sinab ko'r */ }
   }
@@ -168,7 +213,7 @@ export async function getTopics(): Promise<TopicResponse[]> {
     const stats = await getMyStats();
     const ts = stats?.topicStats;
     if (Array.isArray(ts) && ts.length > 0) {
-      return ts
+      const mapped = ts
         .filter((t) => t.topicId != null)
         .map((t) => ({
           id:       t.topicId!,
@@ -178,6 +223,8 @@ export async function getTopics(): Promise<TopicResponse[]> {
           nameEn:   t.topicName?.en,
           code:     t.topicCode,
         } as TopicResponse));
+      cacheSet("topics", mapped);
+      return mapped;
     }
   } catch {}
   return [];
@@ -197,12 +244,31 @@ export async function getQuestionsByTopic(topicId: number): Promise<QuestionResp
 
 // ─── PACKAGES ─────────────────────────────────────────────────────────────────
 
-export async function getPackages(): Promise<PackageResponse[]> {
-  const res = await http<{ content?: PackageResponse[] } | PackageResponse[]>("/api/v1/packages");
-  // Desktop litsenziyali — barcha paketlar ochiq (pullik ham)
-  if (Array.isArray(res)) return res.filter((p) => p.isActive !== false);
-  const content = (res as { content?: PackageResponse[] }).content ?? [];
-  return content.filter((p) => p.isActive !== false);
+export async function getPackages(opts?: { force?: boolean }): Promise<PackageResponse[]> {
+  if (!opts?.force) {
+    const c = cacheGet<PackageResponse[]>("packages");
+    if (c) return c;
+  }
+  // Bir nechta bo'lishi mumkin bo'lgan yo'llarni ketma-ket sinab ko'ramiz
+  const paths = [
+    "/api/v1/packages",
+    "/api/v1/app/packages",
+    "/api/v2/packages",
+  ];
+  let last: PackageResponse[] = [];
+  for (const path of paths) {
+    try {
+      const res = await http<{ content?: PackageResponse[] } | PackageResponse[]>(path);
+      const list = Array.isArray(res) ? res : (res?.content ?? []);
+      const filtered = list.filter((p) => p.isActive !== false);
+      if (filtered.length > 0) {
+        cacheSet("packages", filtered);
+        return filtered;
+      }
+      last = filtered;
+    } catch { /* keyingi yo'l */ }
+  }
+  return last;
 }
 
 // ─── EXAM ─────────────────────────────────────────────────────────────────────
@@ -211,6 +277,21 @@ export async function startExam(packageId: number): Promise<ExamResponse> {
   return http<ExamResponse>("/api/v2/exams/start-visible", {
     method: "POST",
     body: JSON.stringify({ packageId }),
+  });
+}
+
+/**
+ * "Real Imtihon" — prava-test bilan bir xil:
+ * /api/v2/exams/marathon/start-visible + {questionCount, durationMinutes}
+ * Paket tanlash kerak emas; defaultlar: 20 ta savol / 20 daqiqa.
+ */
+export async function startRealExam(
+  questionCount = 20,
+  durationMinutes = 20
+): Promise<ExamResponse> {
+  return http<ExamResponse>("/api/v2/exams/marathon/start-visible", {
+    method: "POST",
+    body: JSON.stringify({ questionCount, durationMinutes }),
   });
 }
 
@@ -234,12 +315,32 @@ export async function getExamHistory(page = 0, size = 20) {
 
 // ─── TICKETS ──────────────────────────────────────────────────────────────────
 
-export async function getTickets(): Promise<TicketResponse[]> {
+export async function getTickets(opts?: { force?: boolean }): Promise<TicketResponse[]> {
+  if (!opts?.force) {
+    const c = cacheGet<TicketResponse[]>("tickets");
+    if (c) return c;
+  }
   const res = await http<{ content?: TicketResponse[] } | TicketResponse[]>(
     "/api/v2/tickets?page=0&size=200&sort=ticketNumber,asc"
   );
-  if (Array.isArray(res)) return res;
-  return (res as { content?: TicketResponse[] }).content ?? [];
+  const list = Array.isArray(res) ? res : (res?.content ?? []);
+  if (list.length > 0) cacheSet("tickets", list);
+  return list;
+}
+
+// ─── PREFETCH (app start uchun parallel) ──────────────────────────────────────
+/**
+ * Foydalanuvchi tizimga kirgandan keyin barcha asosiy ma'lumotlarni
+ * parallel ravishda oldindan yuklab kesh'ga joylaydi. Natijada keyingi
+ * ekranlar bir zumda ochiladi.
+ */
+export async function prefetchAll(): Promise<void> {
+  await Promise.allSettled([
+    getTopics(),
+    getTickets(),
+    getPackages(),
+    getMyStats().then((s) => s && cacheSet("stats", s)),
+  ]);
 }
 
 export async function startTicketExam(ticketId: number): Promise<ExamResponse> {

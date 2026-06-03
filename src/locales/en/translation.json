@@ -12,7 +12,9 @@
     "noData": "No data",
     "min": "min",
     "yes": "Yes",
-    "times": "times"
+    "times": "times",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode"
   },
   "license": {
     "title": "Prava Online",
@@ -26,7 +28,13 @@
     "activationPlaceholder": "Enter activation code",
     "activate": "Activate",
     "activating": "Verifying...",
-    "errorEmpty": "Please enter the Activation Code"
+    "errorEmpty": "Please enter the Activation Code",
+    "daysRemaining_one": "{{count}} day left",
+    "daysRemaining_other": "{{count}} days left",
+    "expired": "Expired",
+    "until": "Until",
+    "renew": "Renew",
+    "renewTitle": "Renew activation code"
   },
   "auth": {
     "loginTitle": "Log In",

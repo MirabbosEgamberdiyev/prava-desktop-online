@@ -12,7 +12,9 @@
     "noData": "Маълумот йўқ",
     "min": "дақ",
     "yes": "Ҳа",
-    "times": "марта"
+    "times": "марта",
+    "darkMode": "Тунги режим",
+    "lightMode": "Кундузги режим"
   },
   "license": {
     "title": "Prava Online",
@@ -26,7 +28,13 @@
     "activationPlaceholder": "Activation code ни киритинг",
     "activate": "Фаоллаштириш",
     "activating": "Текширилмоқда...",
-    "errorEmpty": "Activation Code киритинг"
+    "errorEmpty": "Activation Code киритинг",
+    "daysRemaining_one": "{{count}} кун қолди",
+    "daysRemaining_other": "{{count}} кун қолди",
+    "expired": "Муддати тугаган",
+    "until": "Тугайди",
+    "renew": "Янгилаш",
+    "renewTitle": "Активация кодини янгилаш"
   },
   "auth": {
     "loginTitle": "Кириш",

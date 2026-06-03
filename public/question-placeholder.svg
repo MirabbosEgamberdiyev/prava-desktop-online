@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" role="img" aria-label="Prava Online">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Sky/background — works on both themes -->
+  <rect width="480" height="320" fill="url(#sky)" rx="14"/>
+
+  <!-- Sun/horizon glow -->
+  <circle cx="240" cy="170" r="80" fill="#fbbf24" opacity="0.18"/>
+
+  <!-- Road -->
+  <path d="M 60 320 L 200 150 L 280 150 L 420 320 Z" fill="url(#road)"/>
+  <!-- Lane dashes -->
+  <g fill="#fde047">
+    <polygon points="238,160 242,160 244,180 236,180"/>
+    <polygon points="234,195 246,195 250,225 230,225"/>
+    <polygon points="228,245 252,245 258,285 222,285"/>
+  </g>
+  <!-- Road edges -->
+  <line x1="200" y1="150" x2="60"  y2="320" stroke="#ffffff" stroke-width="3" opacity="0.9"/>
+  <line x1="280" y1="150" x2="420" y2="320" stroke="#ffffff" stroke-width="3" opacity="0.9"/>
+
+  <!-- Steering wheel (white for contrast on any background) -->
+  <g transform="translate(240,140)" stroke="#ffffff" fill="none" stroke-width="7" stroke-linecap="round">
+    <circle r="58"/>
+    <circle r="42" stroke-width="3" opacity="0.55"/>
+  </g>
+  <g transform="translate(240,140)" fill="#ffffff">
+    <circle r="14"/>
+    <rect x="-3" y="-58" width="6" height="34" rx="2"/>
+    <rect x="-58" y="-3" width="34" height="6" rx="2"/>
+    <rect x="24"  y="-3" width="34" height="6" rx="2"/>
+    <rect x="-3" y="24"  width="6" height="34" rx="2"/>
+  </g>
+
+  <!-- Brand -->
+  <text x="240" y="252" text-anchor="middle"
+        font-family="'Segoe UI', system-ui, sans-serif"
+        font-size="22" font-weight="800" fill="#ffffff" letter-spacing="3">PRAVA ONLINE</text>
+  <text x="240" y="276" text-anchor="middle"
+        font-family="'Segoe UI', system-ui, sans-serif"
+        font-size="12" fill="#bfdbfe" letter-spacing="1">pravaonline.uz</text>
+</svg>

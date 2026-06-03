@@ -44,7 +44,7 @@
     "windows": {
       "nsis": {
         "installMode": "perMachine",
-        "languages": ["SQI", "Arabic", "Bulgarian", "Dutch", "English", "French", "German", "Greek", "Italian", "Japanese", "Korean", "Persian", "PortugueseBR", "Russian", "Serbian", "SerbianLatin", "SimplifiedChinese", "Spanish", "Thai", "TraditionalChinese", "Turkish", "Ukrainian"],
+        "languages": ["English", "Russian", "Turkish"],
         "displayLanguageSelector": false
       },
       "wix": {}

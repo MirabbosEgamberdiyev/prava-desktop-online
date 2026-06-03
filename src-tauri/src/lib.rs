@@ -1,3 +1,4 @@
+mod activation;
 mod license;
 
 use std::path::PathBuf;
@@ -14,12 +15,25 @@ fn get_machine_id_cmd() -> String {
     license::get_machine_id()
 }
 
+/// Activation code yoki licenseni tekshiradi.
+///
+/// - Agar kalit ichida `.` belgisi bo'lsa → Ed25519 (backend chiqargan format).
+/// - Aks holda → eski AES-GCM license formatiga fallback.
+fn verify_any(key: &str) -> anyhow::Result<license::LicenseStatus> {
+    if activation::is_activation_code(key) {
+        let mid = license::get_machine_id();
+        activation::verify_activation_code(key, &mid)
+    } else {
+        license::verify_license(key)
+    }
+}
+
 #[tauri::command]
 fn activate_license(
     license_key: String,
     state: tauri::State<AppState>,
 ) -> Result<license::LicenseStatus, String> {
-    let status = license::verify_license(&license_key).map_err(|e| e.to_string())?;
+    let status = verify_any(&license_key).map_err(|e| e.to_string())?;
     license::save_license_file(&license_key, &state.app_data_dir).map_err(|e| e.to_string())?;
     *state.license_key.lock().unwrap() = Some(license_key);
     Ok(status)
@@ -28,7 +42,7 @@ fn activate_license(
 #[tauri::command]
 fn check_license(state: tauri::State<AppState>) -> Result<license::LicenseStatus, String> {
     let key = license::load_license_file(&state.app_data_dir).map_err(|e| e.to_string())?;
-    let status = license::verify_license(&key).map_err(|e| e.to_string())?;
+    let status = verify_any(&key).map_err(|e| e.to_string())?;
     *state.license_key.lock().unwrap() = Some(key);
     Ok(status)
 }

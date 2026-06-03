@@ -3,16 +3,16 @@ import { useTranslation } from "react-i18next";
 import i18n from "i18next";
 import {
   UserResponse, QuestionResponse, OptionResponse, LocalizedText,
-  ExamResponse, ExamResultResponse, PackageResponse,
+  ExamResponse, ExamResultResponse,
 } from "../types";
-import { startExam, submitExam, addWrongAnswer, getPackages, toggleSavedQuestion, getSavedQuestions } from "../api";
+import { startRealExam, submitExam, addWrongAnswer, toggleSavedQuestion, getSavedQuestions } from "../api";
 import { API_BASE } from "../api";
 import ThemeToggle from "../components/ThemeToggle";
 import LanguagePicker from "../components/LanguagePicker";
 import {
   IconChevronLeft, IconChevronRight, IconCheck, IconX,
-  IconClock, IconArrowLeft, IconTrophy, IconRefresh, IconSteeringWheel,
-  IconListNumbers, IconPlayerPlay, IconBookmark, IconBookmarkFilled, IconBulb,
+  IconClock, IconArrowLeft, IconTrophy, IconRefresh,
+  IconBookmark, IconBookmarkFilled, IconBulb,
 } from "@tabler/icons-react";
 
 interface Props {
@@ -20,7 +20,11 @@ interface Props {
   onBack: () => void;
 }
 
-type Phase = "setup" | "loading" | "exam" | "result";
+type Phase = "loading" | "exam" | "result";
+
+// prava-test EXAM_DEFAULTS bilan bir xil
+const EXAM_QUESTION_COUNT = 20;
+const EXAM_DURATION_MIN   = 20;
 
 interface Answer {
   selected: number;
@@ -45,13 +49,8 @@ function imgSrc(url?: string): string | null {
 export default function ExamScreen({ onBack }: Props) {
   const { t } = useTranslation();
 
-  // ── Package setup ──────────────────────────────────────────────────────────
-  const [packages, setPackages]       = useState<PackageResponse[]>([]);
-  const [selectedPkg, setSelectedPkg] = useState<PackageResponse | null>(null);
-  const [pkgLoading, setPkgLoading]   = useState(true);
-
   // ── Exam state ─────────────────────────────────────────────────────────────
-  const [phase, setPhase]         = useState<Phase>("setup");
+  const [phase, setPhase]         = useState<Phase>("loading");
   const [exam, setExam]           = useState<ExamResponse | null>(null);
   const [questions, setQuestions] = useState<QuestionResponse[]>([]);
   const [current, setCurrent]     = useState(0);
@@ -69,17 +68,6 @@ export default function ExamScreen({ onBack }: Props) {
   const answersRef = useRef(answers);
   answersRef.current = answers;
 
-  // Load packages once on mount
-  useEffect(() => {
-    getPackages()
-      .then((pkgs) => {
-        setPackages(pkgs);
-        if (pkgs.length > 0) setSelectedPkg(pkgs[0]);
-      })
-      .catch(() => {})
-      .finally(() => setPkgLoading(false));
-  }, []);
-
   // Load saved questions on mount
   useEffect(() => {
     getSavedQuestions()
@@ -95,7 +83,7 @@ export default function ExamScreen({ onBack }: Props) {
     ? Math.max(1, (exam.totalQuestions || 20) - Math.ceil((exam.totalQuestions || 20) * ((exam.passingScore || 90) / 100)))
     : 2;
 
-  const loadExam = useCallback((packageId: number) => {
+  const loadExam = useCallback(() => {
     setPhase("loading");
     setAnswers({});
     answersRef.current = {};
@@ -103,19 +91,25 @@ export default function ExamScreen({ onBack }: Props) {
     setIsTimeUp(false);
     setErrorMsg(null);
     setResult(null);
-    startExam(packageId)
+    startRealExam(EXAM_QUESTION_COUNT, EXAM_DURATION_MIN)
       .then((e) => {
         if (!e.questions || e.questions.length === 0) {
           setErrorMsg(t("exam.noQuestions")); setPhase("result"); return;
         }
         setExam(e);
         setQuestions(e.questions);
-        setTimeLeft((e.durationMinutes || 25) * 60);
+        setTimeLeft((e.durationMinutes || EXAM_DURATION_MIN) * 60);
         setPhase("exam");
         startRef.current = Date.now();
       })
       .catch((err) => { setErrorMsg(String(err)); setPhase("result"); });
   }, [t]);
+
+  // Auto-start exam on mount (Real Imtihon — prava-test bilan bir xil)
+  useEffect(() => {
+    loadExam();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Timer countdown
   useEffect(() => {
@@ -227,71 +221,6 @@ export default function ExamScreen({ onBack }: Props) {
   const timerIsRed    = timeLeft <= 60;
   const timerIsYellow = !timerIsRed && timeLeft <= 300;
 
-  // ─── SETUP ────────────────────────────────────────────────────────────────
-  if (phase === "setup") {
-    return (
-      <div className="marathon-setup-screen">
-        <div className="marathon-setup-card">
-          <div className="marathon-setup-header">
-            <button className="quiz-back-btn" onClick={onBack} style={{ position: "static" }}>
-              <IconArrowLeft size={18} />
-            </button>
-            <h2 className="marathon-setup-title">{t("exam.title")}</h2>
-          </div>
-
-          {pkgLoading ? (
-            <div style={{ padding: "32px", textAlign: "center" }}>
-              <div className="spinner" style={{ margin: "0 auto" }} />
-            </div>
-          ) : packages.length === 0 ? (
-            <p style={{ padding: "20px 16px", color: "var(--text-muted)", textAlign: "center" }}>
-              {t("exam.noPackages")}
-            </p>
-          ) : (
-            <div className="pkg-list">
-              {packages.map((pkg) => (
-                <button
-                  key={pkg.id}
-                  className={`pkg-card${selectedPkg?.id === pkg.id ? " selected" : ""}`}
-                  onClick={() => setSelectedPkg(pkg)}
-                >
-                  <div className="pkg-card-top">
-                    <span className="pkg-name">{pkg.name || `Paket #${pkg.id}`}</span>
-                    {pkg.isFree && (
-                      <span className="pkg-badge-free">{t("exam.free")}</span>
-                    )}
-                  </div>
-                  <div className="pkg-meta">
-                    <span className="pkg-meta-item">
-                      <IconListNumbers size={12} />
-                      {pkg.actualQuestionCount ?? pkg.questionCount ?? 0} {t("common.questions")}
-                    </span>
-                    <span className="pkg-meta-item">
-                      <IconClock size={12} />
-                      {pkg.durationMinutes ?? 0} {t("common.min")}
-                    </span>
-                    <span className="pkg-meta-item">
-                      {t("exam.passingScore")}: {pkg.passingScore ?? 90}%
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <button
-            className="marathon-start-btn"
-            disabled={!selectedPkg || pkgLoading}
-            onClick={() => selectedPkg && loadExam(selectedPkg.id)}
-          >
-            <IconPlayerPlay size={18} />
-            {t("marathon.startExam")}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ─── LOADING ──────────────────────────────────────────────────────────────
   if (phase === "loading") return (
     <div className="loading-screen"><div className="spinner" /><p>{t("common.loading")}</p></div>
@@ -359,7 +288,7 @@ export default function ExamScreen({ onBack }: Props) {
             <button className="exam-result-btn primary" onClick={onBack}>
               <IconArrowLeft size={18} /> {t("common.backToHome")}
             </button>
-            <button className="exam-result-btn" onClick={() => setPhase("setup")}>
+            <button className="exam-result-btn" onClick={() => loadExam()}>
               <IconRefresh size={18} /> {t("exam.retry")}
             </button>
           </div>
@@ -444,13 +373,28 @@ export default function ExamScreen({ onBack }: Props) {
         </div>
         <div className="exam-col-image">
           {imgUrl ? (
-            <img src={imgUrl} alt="" className="exam-question-img" />
-          ) : (
-            <div className="exam-img-placeholder">
-              <IconSteeringWheel size={52} stroke={1} color="var(--border)" />
-              <span className="exam-placeholder-text">pravaonline.uz</span>
-            </div>
-          )}
+            <img
+              src={imgUrl}
+              alt=""
+              className="exam-question-img"
+              onError={(e) => {
+                // Yuklanmasa placeholder ga o'tish
+                const el = e.currentTarget;
+                el.style.display = "none";
+                const ph = el.parentElement?.querySelector(".exam-img-placeholder") as HTMLElement | null;
+                if (ph) ph.style.display = "flex";
+              }}
+            />
+          ) : null}
+          {/* prava-test ImagePlaceholder bilan bir xil: logo.svg + "pravaonline.uz" */}
+          <div
+            className="exam-img-placeholder"
+            style={{ display: imgUrl ? "none" : "flex" }}
+            aria-hidden="true"
+          >
+            <img src="/logo.svg" alt="" className="exam-img-placeholder-logo" />
+            <span className="exam-img-placeholder-text">pravaonline.uz</span>
+          </div>
         </div>
       </div>
 

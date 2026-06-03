@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppScreen, LicenseStatus, UserResponse, TicketResponse } from "./types";
-import { checkLicense } from "./api";
+import { checkLicense, prefetchAll } from "./api";
 import { isLoggedIn, clearTokens } from "./auth";
 import { getMe } from "./api";
 import LicenseScreen from "./screens/LicenseScreen";
@@ -15,6 +15,7 @@ import BiletlarScreen from "./screens/BiletlarScreen";
 import TicketExamScreen from "./screens/TicketExamScreen";
 import WrongAnswersScreen from "./screens/WrongAnswersScreen";
 import SavedQuestionsScreen from "./screens/SavedQuestionsScreen";
+import LicenseBar from "./components/LicenseBar";
 import "./App.css";
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
   const [selectedTopicId, setTopicId]     = useState<number | null>(null);
   const [selectedTicket, setTicket]       = useState<TicketResponse | null>(null);
   const [appReady, setAppReady]           = useState(false);
+  const [renewMode, setRenewMode]         = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -38,6 +40,8 @@ function App() {
               const user = await getMe() as UserResponse;
               setCurrentUser(user);
               setScreen("home");
+              // 3) Foydalanuvchi kelganidan keyin asosiy ma'lumotlarni kesh'ga oldindan yuklash
+              prefetchAll().catch(() => { /* sokin */ });
             } catch {
               clearTokens();
               setScreen("login");
@@ -58,11 +62,18 @@ function App() {
 
   const handleLicenseActivated = async (status: LicenseStatus) => {
     setLicenseStatus(status);
+    setRenewMode(false);
+    // Yangilash rejimidan kelgan bo'lsa, foydalanuvchi allaqachon bor
+    if (renewMode && currentUser) {
+      setScreen("home");
+      return;
+    }
     if (isLoggedIn()) {
       try {
         const user = await getMe() as UserResponse;
         setCurrentUser(user);
         setScreen("home");
+        prefetchAll().catch(() => {});
         return;
       } catch {
         clearTokens();
@@ -74,12 +85,23 @@ function App() {
   const handleLoggedIn = (user: UserResponse) => {
     setCurrentUser(user);
     setScreen("home");
+    prefetchAll().catch(() => {});
   };
 
   const handleLogout = () => {
     clearTokens();
     setCurrentUser(null);
     setScreen("login");
+  };
+
+  const handleRenewLicense = () => {
+    setRenewMode(true);
+    setScreen("license");
+  };
+
+  const handleCancelRenew = () => {
+    setRenewMode(false);
+    setScreen(currentUser ? "home" : "login");
   };
 
   const nav = (s: AppScreen) => setScreen(s);
@@ -105,10 +127,19 @@ function App() {
     );
   }
 
+  // License bar should appear on every post-license screen
+  const showLicenseBar = screen !== "license" && licenseStatus !== null;
+
   return (
     <div className="app">
+      {showLicenseBar && (
+        <LicenseBar status={licenseStatus} onRenew={handleRenewLicense} />
+      )}
       {screen === "license" && (
-        <LicenseScreen onActivated={handleLicenseActivated} />
+        <LicenseScreen
+          onActivated={handleLicenseActivated}
+          onCancel={renewMode ? handleCancelRenew : undefined}
+        />
       )}
       {screen === "login" && (
         <LoginScreen

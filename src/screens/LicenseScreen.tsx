@@ -7,9 +7,10 @@ import LanguagePicker from "../components/LanguagePicker";
 
 interface Props {
   onActivated: (status: LicenseStatus) => void;
+  onCancel?: () => void;
 }
 
-export default function LicenseScreen({ onActivated }: Props) {
+export default function LicenseScreen({ onActivated, onCancel }: Props) {
   const { t } = useTranslation();
   const [activationCode, setActivationCode] = useState("");
   const [machineId, setMachineId] = useState<string>("");
@@ -108,6 +109,18 @@ export default function LicenseScreen({ onActivated }: Props) {
           >
             {loading ? t("license.activating") : t("license.activate")}
           </button>
+
+          {onCancel && (
+            <button
+              type="button"
+              className="activate-btn"
+              style={{ marginTop: 10, background: "transparent", color: "inherit", border: "1px solid currentColor" }}
+              onClick={onCancel}
+              disabled={loading}
+            >
+              {t("common.back", { defaultValue: "Ortga" })}
+            </button>
+          )}
         </form>
       </div>
     </div>

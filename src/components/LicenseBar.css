@@ -1,0 +1,119 @@
+/* Compact pill positioned at top-left, designed to coexist with the page header */
+.license-bar {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1100;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 6px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  font-size: 12px;
+  color: var(--text, #1e293b);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  user-select: none;
+  height: 36px;
+}
+
+.license-bar:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+/* Status dot */
+.license-bar__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Info: days + (tooltip on hover for exp date) */
+.license-bar__info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.license-bar__days {
+  font-weight: 700;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.license-bar__expires {
+  font-size: 10px;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+}
+
+/* Renew button */
+.license-bar__renew {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.license-bar__renew:hover  { background: #1d4ed8; }
+.license-bar__renew:active { background: #1e40af; }
+
+/* Urgency colours */
+.license-bar--ok   .license-bar__icon { background: #dcfce7; color: #166534; }
+.license-bar--ok   .license-bar__days { color: #166534; }
+
+.license-bar--warn .license-bar__icon { background: #fef3c7; color: #92400e; }
+.license-bar--warn .license-bar__days { color: #92400e; }
+.license-bar--warn .license-bar__renew { background: #d97706; }
+.license-bar--warn .license-bar__renew:hover { background: #b45309; }
+
+.license-bar--crit .license-bar__icon { background: #fee2e2; color: #991b1b; }
+.license-bar--crit .license-bar__days { color: #991b1b; }
+.license-bar--crit .license-bar__renew { background: #dc2626; }
+.license-bar--crit .license-bar__renew:hover { background: #b91c1c; }
+.license-bar--crit { animation: lb-pulse 1.8s ease-in-out infinite; }
+
+@keyframes lb-pulse {
+  0%, 100% { box-shadow: 0 2px 10px rgba(220, 38, 38, 0.18); }
+  50%       { box-shadow: 0 4px 18px rgba(220, 38, 38, 0.42); }
+}
+
+/* Dark theme */
+[data-theme="dark"] .license-bar {
+  background: #0f172a;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .license-bar__expires { color: #94a3b8; }
+[data-theme="dark"] .license-bar--ok   .license-bar__icon { background: rgba(34, 197, 94, 0.18); color: #4ade80; }
+[data-theme="dark"] .license-bar--ok   .license-bar__days { color: #4ade80; }
+[data-theme="dark"] .license-bar--warn .license-bar__icon { background: rgba(234, 179, 8, 0.18); color: #fde047; }
+[data-theme="dark"] .license-bar--warn .license-bar__days { color: #fde047; }
+[data-theme="dark"] .license-bar--crit .license-bar__icon { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+[data-theme="dark"] .license-bar--crit .license-bar__days { color: #fca5a5; }
+
+/* Small screens: hide expires line, then renew label */
+@media (max-width: 720px) {
+  .license-bar__expires { display: none; }
+}
+@media (max-width: 480px) {
+  .license-bar__renew span { display: none; }
+  .license-bar__renew { padding: 5px; }
+}

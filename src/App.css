@@ -731,6 +731,11 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
+  /* LicenseBar yuqori chap burchakda joyi (top:10,left:10, ~210px keng) */
+  padding-left: 230px;
+}
+@media (max-width: 760px) {
+  .home-header-inner { padding-left: 88px; }
 }
 
 .home-header-logo img { height: 34px; object-fit: contain; }
@@ -1469,12 +1474,48 @@ body {
   height: 100vh; display: flex; flex-direction: column; background: var(--bg); overflow: hidden;
 }
 
-/* ── Topbar ── */
+/* ── Topbar (YHXX-ga mos minimal) ── */
 .exam-topbar {
-  background: var(--card-bg); border-bottom: 1px solid var(--border);
-  padding: 8px 20px; display: flex; align-items: center; flex-shrink: 0;
+  background: var(--card-bg); border-bottom: 2px solid var(--primary);
+  padding: 10px 20px; display: flex; align-items: center; flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  gap: 12px;
 }
-.exam-topbar-left  { display: flex; align-items: center; gap: 10px; flex: 1; }
+
+/* Imtihon paytida LicenseBar pastga — topbar bilan to'qnashmasligi uchun */
+.app:has(.exam-screen) .license-bar {
+  top: auto;
+  bottom: 16px;
+}
+
+/* Rasm yo'q savollar uchun placeholder — prava-test ImagePlaceholder bilan bir xil */
+.exam-img-placeholder {
+  width: min(460px, 92%);
+  aspect-ratio: 3 / 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border: 1px solid #cbd5e1;
+}
+.exam-img-placeholder-logo {
+  width: 64px; height: 64px; object-fit: contain;
+  opacity: 0.5;
+}
+.exam-img-placeholder-text {
+  font-size: 16px; font-weight: 700; color: #64748b;
+  letter-spacing: 1px; user-select: none;
+}
+[data-theme="dark"] .exam-img-placeholder {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-color: #334155;
+}
+[data-theme="dark"] .exam-img-placeholder-logo { opacity: 0.7; }
+[data-theme="dark"] .exam-img-placeholder-text { color: #94a3b8; }
+.exam-topbar-left  { display: flex; align-items: center; gap: 12px; flex: 1; }
 .exam-topbar-center { flex: 1; display: flex; justify-content: center; }
 .exam-topbar-right { flex: 1; display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 
@@ -1488,12 +1529,20 @@ body {
 [data-theme="dark"] .exam-finish-btn { background: #e0313120; }
 
 .exam-timer {
-  padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: 800;
-  border: 1.5px solid var(--primary); background: var(--primary-light); color: var(--primary);
+  padding: 8px 20px; border-radius: 999px; font-size: 18px; font-weight: 900;
+  border: 2px solid var(--primary); background: var(--primary-light); color: var(--primary);
   font-variant-numeric: tabular-nums; transition: all 0.3s;
+  letter-spacing: 1px; min-width: 92px; text-align: center;
 }
-.exam-timer.red    { border-color: var(--danger); background: #fff5f5; color: var(--danger); }
+.exam-timer.red    {
+  border-color: var(--danger); background: #fff5f5; color: var(--danger);
+  animation: timer-pulse 1s ease-in-out infinite;
+}
 .exam-timer.yellow { border-color: #e67700; background: #fff9db; color: #e67700; }
+@keyframes timer-pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.04); }
+}
 [data-theme="dark"] .exam-timer.red    { background: #e0313120; }
 [data-theme="dark"] .exam-timer.yellow { background: #e6770020; }
 
@@ -1516,8 +1565,8 @@ body {
   display: flex; align-items: flex-start; justify-content: center; gap: 12px;
 }
 .exam-question-text {
-  font-size: 16px; font-weight: 600; color: var(--text);
-  line-height: 1.6; text-align: center; max-width: 900px; flex: 1;
+  font-size: 17px; font-weight: 600; color: var(--text);
+  line-height: 1.55; text-align: center; max-width: 980px; flex: 1;
 }
 
 /* Bookmark tugmasi */

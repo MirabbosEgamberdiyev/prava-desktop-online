@@ -12,7 +12,9 @@
     "noData": "Нет данных",
     "min": "мин",
     "yes": "Да",
-    "times": "раз"
+    "times": "раз",
+    "darkMode": "Тёмная тема",
+    "lightMode": "Светлая тема"
   },
   "license": {
     "title": "Prava Online",
@@ -26,7 +28,15 @@
     "activationPlaceholder": "Введите код активации",
     "activate": "Активировать",
     "activating": "Проверка...",
-    "errorEmpty": "Введите код активации"
+    "errorEmpty": "Введите код активации",
+    "daysRemaining_one": "Остался {{count}} день",
+    "daysRemaining_few": "Осталось {{count}} дня",
+    "daysRemaining_many": "Осталось {{count}} дней",
+    "daysRemaining_other": "Осталось {{count}} дней",
+    "expired": "Срок истёк",
+    "until": "До",
+    "renew": "Обновить",
+    "renewTitle": "Обновить код активации"
   },
   "auth": {
     "loginTitle": "Войти",
