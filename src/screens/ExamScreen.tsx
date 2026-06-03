@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
 import {
@@ -103,15 +103,19 @@ export default function ExamScreen({ onBack }: Props) {
         startRef.current = Date.now();
 
         // ⚡ Performance: barcha savol rasmlarini fon rejimida oldindan yuklash
-        // Browser HTTP keshiga joylaydi — "Keyingi" bosilganda darhol ko'rinadi
+        // Browser HTTP keshiga joylaydi + Image.decode() pixel decoding fonda bajariladi
+        // Natija: "Keyingi" bosilganda darhol ko'rinadi (download yo'q, decode yo'q)
         e.questions.forEach((q) => {
           if (!q.imageUrl) return;
           const url = q.imageUrl.startsWith("http")
             ? q.imageUrl
             : `${API_BASE}${q.imageUrl.startsWith("/") ? "" : "/"}${q.imageUrl}`;
           const img = new Image();
-          // Eslatma: img.src tayinlangach, browser darhol GET so'rovini boshlaydi
           img.src = url;
+          // .decode() bilan pixel decoding fonda yakunlanadi — main thread bloklamaydi
+          if (typeof img.decode === "function") {
+            img.decode().catch(() => { /* expected for some images */ });
+          }
         });
       })
       .catch((err) => { setErrorMsg(String(err)); setPhase("result"); });
@@ -310,14 +314,21 @@ export default function ExamScreen({ onBack }: Props) {
   }
 
   // ─── EXAM ─────────────────────────────────────────────────────────────────
+  // ⚡ Performance: derived qiymatlar memoizatsiya qilinadi — keraksiz hisoblash yo'q
   const q           = questions[current];
-  const opts        = q.options || [];
+  const opts        = useMemo(() => q?.options || [], [q]);
   const answered    = answers[current];
-  const correctIdx  = q.correctOptionIndex ?? 0;
-  const explanation = answered !== undefined ? getLocal(q.explanation) : null;
-  const correct     = Object.values(answers).filter((a) => a.selected === a.correct).length;
-  const wrong       = Object.values(answers).length - correct;
-  const imgUrl      = imgSrc(q.imageUrl);
+  const correctIdx  = q?.correctOptionIndex ?? 0;
+  const explanation = useMemo(
+    () => (answered !== undefined ? getLocal(q?.explanation) : null),
+    [answered, q]
+  );
+  const { correct, wrong } = useMemo(() => {
+    const vals = Object.values(answers);
+    const c = vals.reduce((acc, a) => acc + (a.selected === a.correct ? 1 : 0), 0);
+    return { correct: c, wrong: vals.length - c };
+  }, [answers]);
+  const imgUrl = useMemo(() => imgSrc(q?.imageUrl), [q]);
 
   return (
     <div className="exam-screen">
