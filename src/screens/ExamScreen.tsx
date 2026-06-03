@@ -101,6 +101,18 @@ export default function ExamScreen({ onBack }: Props) {
         setTimeLeft((e.durationMinutes || EXAM_DURATION_MIN) * 60);
         setPhase("exam");
         startRef.current = Date.now();
+
+        // ⚡ Performance: barcha savol rasmlarini fon rejimida oldindan yuklash
+        // Browser HTTP keshiga joylaydi — "Keyingi" bosilganda darhol ko'rinadi
+        e.questions.forEach((q) => {
+          if (!q.imageUrl) return;
+          const url = q.imageUrl.startsWith("http")
+            ? q.imageUrl
+            : `${API_BASE}${q.imageUrl.startsWith("/") ? "" : "/"}${q.imageUrl}`;
+          const img = new Image();
+          // Eslatma: img.src tayinlangach, browser darhol GET so'rovini boshlaydi
+          img.src = url;
+        });
       })
       .catch((err) => { setErrorMsg(String(err)); setPhase("result"); });
   }, [t]);
@@ -372,29 +384,21 @@ export default function ExamScreen({ onBack }: Props) {
           )}
         </div>
         <div className="exam-col-image">
-          {imgUrl ? (
-            <img
-              src={imgUrl}
-              alt=""
-              className="exam-question-img"
-              onError={(e) => {
-                // Yuklanmasa placeholder ga o'tish
-                const el = e.currentTarget;
-                el.style.display = "none";
-                const ph = el.parentElement?.querySelector(".exam-img-placeholder") as HTMLElement | null;
-                if (ph) ph.style.display = "flex";
-              }}
-            />
-          ) : null}
-          {/* prava-test ImagePlaceholder bilan bir xil: logo.svg + "pravaonline.uz" */}
-          <div
-            className="exam-img-placeholder"
-            style={{ display: imgUrl ? "none" : "flex" }}
-            aria-hidden="true"
-          >
-            <img src="/logo.svg" alt="" className="exam-img-placeholder-logo" />
-            <span className="exam-img-placeholder-text">pravaonline.uz</span>
-          </div>
+          <img
+            key={q.id}
+            src={imgUrl || "/question-default.svg"}
+            alt=""
+            className={`exam-question-img${imgUrl ? "" : " is-default"}`}
+            loading="eager"
+            decoding="async"
+            onError={(e) => {
+              const el = e.currentTarget;
+              if (!el.src.endsWith("/question-default.svg")) {
+                el.src = "/question-default.svg";
+                el.classList.add("is-default");
+              }
+            }}
+          />
         </div>
       </div>
 
