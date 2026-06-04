@@ -140,25 +140,31 @@ export async function register(
   lastName?: string,
   verificationCode = "777777"
 ): Promise<AuthResponse> {
-  // Init — xatolik bo'lsa ham davom etamiz (SMS yetib kelmasa ham)
+  // prava-test bilan bir xil payload (email + phoneNumber, biri null bo'lishi mumkin)
+  const payload = {
+    firstName,
+    lastName: lastName || "",
+    email: null as string | null,
+    phoneNumber,
+    password,
+    verificationType: "SMS",
+  };
+
+  // Init — SMS yuborilmasa ham davom etamiz (test rejimida 777777 ishlatamiz)
   try {
     await http("/api/v1/auth/register/init", {
       method: "POST",
-      body: JSON.stringify({ phoneNumber, verificationType: "SMS" }),
+      body: JSON.stringify(payload),
     });
   } catch {
-    // SMS yuborilmasa ham davom etamiz
+    // SMS xato bo'lsa ham davom etamiz
   }
-  return http<AuthResponse>("/api/v1/auth/register/complete", {
+
+  // Backend `code`ni @RequestParam sifatida kutadi — query param sifatida yuboramiz
+  const code = encodeURIComponent(verificationCode);
+  return http<AuthResponse>(`/api/v1/auth/register/complete?code=${code}`, {
     method: "POST",
-    body: JSON.stringify({
-      firstName,
-      lastName: lastName || undefined,
-      phoneNumber,
-      password,
-      verificationType: "SMS",
-      verificationCode,
-    }),
+    body: JSON.stringify(payload),
   });
 }
 

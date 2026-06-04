@@ -1,8 +1,14 @@
-/* Compact pill positioned at top-left, designed to coexist with the page header */
+/* Compact pill positioned at bottom-RIGHT — bu joy hamma ekranda bo'sh:
+     - HomeScreen'da: kartalar bo'lishi mumkin, lekin bar ularning ustida suzadi
+     - LicenseScreen / Login / Register: ko'rinmaydi (App.tsx tomonidan render qilinmaydi)
+     - Exam: pastda yashiriladi (taymer bor, user chalg'imasin)
+     - Marathon / Biletlar / Stats / Topics: bo'sh joy
+   Top-left: "Ortga" tugma bor; top-right: til/tema/user;
+   bottom-left: Exam'da "Oldingi" tugma. Shuning uchun bottom-right tanlandi. */
 .license-bar {
   position: fixed;
-  top: 10px;
-  left: 10px;
+  bottom: 16px;
+  right: 16px;
   z-index: 1100;
   display: inline-flex;
   align-items: center;
@@ -117,3 +123,7 @@
   .license-bar__renew span { display: none; }
   .license-bar__renew { padding: 5px; }
 }
+
+/* Exam screen: license bar yashirin — user imtihondan chalg'imasin.
+   Exam tugagandan keyin avtomatik qaytadi. */
+.app:has(.exam-screen) .license-bar { display: none; }

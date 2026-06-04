@@ -731,11 +731,7 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
-  /* LicenseBar yuqori chap burchakda joyi (top:10,left:10, ~210px keng) */
-  padding-left: 230px;
-}
-@media (max-width: 760px) {
-  .home-header-inner { padding-left: 88px; }
+  /* LicenseBar endi pastki chap burchakda — header padding kerak emas */
 }
 
 .home-header-logo img { height: 34px; object-fit: contain; }
@@ -1482,12 +1478,6 @@ body {
   gap: 12px;
 }
 
-/* Imtihon paytida LicenseBar pastga — topbar bilan to'qnashmasligi uchun */
-.app:has(.exam-screen) .license-bar {
-  top: auto;
-  bottom: 16px;
-}
-
 /* ⚡ Rasm ko'rsatkichi: keng joydan foydalanadi, sifatli render */
 .exam-col-image {
   flex: 1; display: flex; align-items: center; justify-content: center;
@@ -1537,15 +1527,41 @@ body {
   font-variant-numeric: tabular-nums; transition: all 0.3s;
   letter-spacing: 1px; min-width: 92px; text-align: center;
 }
+
+/* MARKAZIY KATTA TAYMER — imtihon paytida eng ko'rinarli element */
+.exam-timer--big {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 28px;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  min-width: 160px;
+  border-width: 3px;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.18);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.exam-timer--big svg { opacity: 0.85; }
+
 .exam-timer.red    {
   border-color: var(--danger); background: #fff5f5; color: var(--danger);
   animation: timer-pulse 1s ease-in-out infinite;
 }
+.exam-timer--big.red {
+  box-shadow: 0 4px 24px rgba(220, 38, 38, 0.42);
+}
 .exam-timer.yellow { border-color: #e67700; background: #fff9db; color: #e67700; }
+.exam-timer--big.yellow {
+  box-shadow: 0 4px 18px rgba(230, 119, 0, 0.28);
+}
 @keyframes timer-pulse {
   0%, 100% { transform: scale(1); }
-  50%       { transform: scale(1.04); }
+  50%       { transform: scale(1.05); }
 }
+[data-theme="dark"] .exam-timer--big { box-shadow: 0 4px 16px rgba(96, 165, 250, 0.25); }
+[data-theme="dark"] .exam-timer--big.red { box-shadow: 0 4px 24px rgba(248, 113, 113, 0.4); }
 [data-theme="dark"] .exam-timer.red    { background: #e0313120; }
 [data-theme="dark"] .exam-timer.yellow { background: #e6770020; }
 

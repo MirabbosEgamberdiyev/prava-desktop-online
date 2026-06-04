@@ -29,9 +29,21 @@ export default function RegisterScreen({ onRegistered, onGoLogin }: Props) {
     setLoading(true);
     setError(null);
     try {
+      // Telefon formati: faqat raqamlarni qoldiramiz (+998 90 123 45 67 → 998901234567)
+      const phoneClean = phoneNumber.trim().replace(/\D/g, "");
+      if (phoneClean.length < 12) {
+        setError(t("auth.phoneRequired"));
+        setLoading(false);
+        return;
+      }
+      if (password.length < 6) {
+        setError(t("auth.passwordRequired"));
+        setLoading(false);
+        return;
+      }
       const res = await register(
         firstName.trim(),
-        phoneNumber.trim(),
+        phoneClean,
         password,
         lastName.trim() || undefined,
         code.trim() || "777777"
@@ -39,7 +51,9 @@ export default function RegisterScreen({ onRegistered, onGoLogin }: Props) {
       saveTokens(res.accessToken, res.refreshToken, res.user);
       onRegistered(res.user);
     } catch (err) {
-      setError(String(err));
+      console.error("[Register] failed:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     } finally {
       setLoading(false);
     }

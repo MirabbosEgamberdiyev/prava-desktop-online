@@ -10,6 +10,7 @@ import {
   IconChevronLeft, IconChevronRight, IconCheck, IconX,
   IconArrowLeft, IconTrophy, IconRefresh, IconSteeringWheel, IconTicket,
   IconBookmark, IconBookmarkFilled, IconBulb,
+  IconClock,
 } from "@tabler/icons-react";
 
 interface Props {
@@ -267,21 +268,25 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
 
   return (
     <div className="exam-screen">
-      {/* ── Top bar ── */}
+      {/* ── Top bar: Finish + Bilet# + Counter (chap) | TAYMER (markaz) | Ball + Til (o'ng) ── */}
       <div className="exam-topbar">
         <div className="exam-topbar-left">
           <button className="exam-finish-btn" onClick={() => triggerFinish(false)}>
             {t("exam.finish")} <IconX size={15} />
           </button>
-          <span className={`exam-timer${timerIsRed ? " red" : timerIsYellow ? " yellow" : ""}`}>
-            {formatTime(timeLeft)}
-          </span>
-        </div>
-        <div className="exam-topbar-center">
           <span className="exam-ticket-label">
             <IconTicket size={14} /> #{ticket.ticketNumber}
           </span>
           <span className="exam-counter">{current + 1} / {questions.length}</span>
+        </div>
+        <div className="exam-topbar-center">
+          <span
+            className={`exam-timer exam-timer--big${timerIsRed ? " red" : timerIsYellow ? " yellow" : ""}`}
+            aria-label="Qolgan vaqt"
+          >
+            <IconClock size={18} stroke={2.4} />
+            {formatTime(timeLeft)}
+          </span>
         </div>
         <div className="exam-topbar-right">
           <span className="exam-score-chip green"><IconCheck size={13} /> {correct}</span>

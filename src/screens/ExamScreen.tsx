@@ -92,33 +92,46 @@ export default function ExamScreen({ onBack }: Props) {
     setErrorMsg(null);
     setResult(null);
     startRealExam(EXAM_QUESTION_COUNT, EXAM_DURATION_MIN)
-      .then((e) => {
-        if (!e.questions || e.questions.length === 0) {
-          setErrorMsg(t("exam.noQuestions")); setPhase("result"); return;
+      .then((raw: unknown) => {
+        // Backend response shaklini turli yo'llar bilan unwrap qilamiz —
+        // shu yo'l bilan {data:{...}} yoki {exam:{...}} aralashmalari uchun ham ishlaydi.
+        const r = raw as Record<string, unknown> | null;
+        const e: any =
+          (r && typeof r === "object" && r.questions) ? r :
+          (r && typeof r === "object" && (r as any).data?.questions) ? (r as any).data :
+          (r && typeof r === "object" && (r as any).exam?.questions) ? (r as any).exam :
+          r;
+
+        if (!e || !e.questions || e.questions.length === 0) {
+          console.warn("[ExamScreen] No questions in response:", raw);
+          setErrorMsg(t("exam.noQuestions"));
+          setPhase("result");
+          return;
         }
         setExam(e);
         setQuestions(e.questions);
-        setTimeLeft((e.durationMinutes || EXAM_DURATION_MIN) * 60);
+        setTimeLeft(((e.durationMinutes as number) || EXAM_DURATION_MIN) * 60);
         setPhase("exam");
         startRef.current = Date.now();
 
         // ⚡ Performance: barcha savol rasmlarini fon rejimida oldindan yuklash
-        // Browser HTTP keshiga joylaydi + Image.decode() pixel decoding fonda bajariladi
-        // Natija: "Keyingi" bosilganda darhol ko'rinadi (download yo'q, decode yo'q)
-        e.questions.forEach((q) => {
-          if (!q.imageUrl) return;
-          const url = q.imageUrl.startsWith("http")
+        e.questions.forEach((q: any) => {
+          if (!q?.imageUrl) return;
+          const url = String(q.imageUrl).startsWith("http")
             ? q.imageUrl
-            : `${API_BASE}${q.imageUrl.startsWith("/") ? "" : "/"}${q.imageUrl}`;
+            : `${API_BASE}${String(q.imageUrl).startsWith("/") ? "" : "/"}${q.imageUrl}`;
           const img = new Image();
           img.src = url;
-          // .decode() bilan pixel decoding fonda yakunlanadi — main thread bloklamaydi
           if (typeof img.decode === "function") {
             img.decode().catch(() => { /* expected for some images */ });
           }
         });
       })
-      .catch((err) => { setErrorMsg(String(err)); setPhase("result"); });
+      .catch((err) => {
+        console.error("[ExamScreen] startRealExam failed:", err);
+        setErrorMsg(String(err?.message || err));
+        setPhase("result");
+      });
   }, [t]);
 
   // Auto-start exam on mount (Real Imtihon — prava-test bilan bir xil)
@@ -332,18 +345,22 @@ export default function ExamScreen({ onBack }: Props) {
 
   return (
     <div className="exam-screen">
-      {/* ── Top bar ── */}
+      {/* ── Top bar: Finish + Counter (chap) | TAYMER (markaz) | Ball + Til (o'ng) ── */}
       <div className="exam-topbar">
         <div className="exam-topbar-left">
           <button className="exam-finish-btn" onClick={() => triggerFinish(false)}>
             {t("exam.finish")} <IconX size={15} />
           </button>
-          <span className={`exam-timer${timerIsRed ? " red" : timerIsYellow ? " yellow" : ""}`}>
-            {formatTime(timeLeft)}
-          </span>
+          <span className="exam-counter">{current + 1} / {questions.length}</span>
         </div>
         <div className="exam-topbar-center">
-          <span className="exam-counter">{current + 1} / {questions.length}</span>
+          <span
+            className={`exam-timer exam-timer--big${timerIsRed ? " red" : timerIsYellow ? " yellow" : ""}`}
+            aria-label="Qolgan vaqt"
+          >
+            <IconClock size={18} stroke={2.4} />
+            {formatTime(timeLeft)}
+          </span>
         </div>
         <div className="exam-topbar-right">
           <span className="exam-score-chip green"><IconCheck size={13} /> {correct}</span>
