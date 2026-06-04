@@ -63,7 +63,7 @@ export default function TopicsScreen({ onBack, onStartMarathon }: Props) {
   useEffect(() => {
     getTopics()
       .then(setTopics)
-      .catch(() => {})
+      .catch((e) => console.warn("[TopicsScreen] getTopics failed:", e))
       .finally(() => setLoading(false));
   }, []);
 

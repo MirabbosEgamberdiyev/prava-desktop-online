@@ -72,7 +72,7 @@ export default function ExamScreen({ onBack }: Props) {
   useEffect(() => {
     getSavedQuestions()
       .then((entries) => setSavedIds(new Set(entries.map((e) => e.questionId))))
-      .catch(() => {});
+      .catch((e) => console.warn("[ExamScreen] side effect failed:", e));
   }, []);
 
   // Reset explanation when question changes
@@ -172,7 +172,7 @@ export default function ExamScreen({ onBack }: Props) {
 
     submitExam({ sessionId: exam.sessionId, answers: answers_arr })
       .then(setResult)
-      .catch(() => {});
+      .catch((e) => console.warn("[ExamScreen] side effect failed:", e));
   }, [exam, questions]);
 
   // Keyboard shortcuts during exam
@@ -197,7 +197,7 @@ export default function ExamScreen({ onBack }: Props) {
           return next;
         });
       })
-      .catch(() => {});
+      .catch((e) => console.warn("[ExamScreen] side effect failed:", e));
   };
 
   const handleToggleExp = () => {
@@ -222,7 +222,7 @@ export default function ExamScreen({ onBack }: Props) {
     const correctIdx = q.correctOptionIndex ?? 0;
     const isCorrect  = optIdx === correctIdx;
     // question obyektini ham uzatamiz — localStorage ga to'g'ri saqlansin
-    if (!isCorrect) addWrongAnswer(q.id, q).catch(() => {});
+    if (!isCorrect) addWrongAnswer(q.id, q).catch((e) => console.warn("[ExamScreen] side effect failed:", e));
 
     const newAns: Record<number, Answer> = {
       ...answers,

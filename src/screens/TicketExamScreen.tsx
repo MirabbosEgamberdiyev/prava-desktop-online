@@ -84,7 +84,7 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
   useEffect(() => {
     getSavedQuestions()
       .then((entries) => setSavedIds(new Set(entries.map((e) => e.questionId))))
-      .catch(() => {});
+      .catch((e) => console.warn("[TicketExam] op failed:", e));
   }, []);
 
   useEffect(() => { setShowExp(false); }, [current]);
@@ -118,7 +118,7 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
     })).filter(a => a.questionId !== 0);
     submitExam({ sessionId, answers: arr })
       .then(setResult)
-      .catch(() => {});
+      .catch((e) => console.warn("[TicketExam] op failed:", e));
   }, [sessionId, questions]);
 
   const handleToggleExp = () => {
@@ -142,7 +142,7 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
           return next;
         });
       })
-      .catch(() => {});
+      .catch((e) => console.warn("[TicketExam] op failed:", e));
   };
 
   useEffect(() => {
@@ -166,7 +166,7 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
 
     const correctIdx = q.correctOptionIndex ?? 0;
     const isCorrect = optIdx === correctIdx;
-    if (!isCorrect) addWrongAnswer(q.id, q).catch(() => {});
+    if (!isCorrect) addWrongAnswer(q.id, q).catch((e) => console.warn("[TicketExam] op failed:", e));
 
     const newAns: Record<number, Answer> = {
       ...answers,

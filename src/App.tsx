@@ -74,7 +74,7 @@ function App() {
         const user = await getMe() as UserResponse;
         setCurrentUser(user);
         setScreen("home");
-        prefetchAll().catch(() => {});
+        prefetchAll().catch((e) => console.warn("[prefetchAll] failed:", e));
         return;
       } catch {
         clearTokens();
@@ -86,7 +86,7 @@ function App() {
   const handleLoggedIn = (user: UserResponse) => {
     setCurrentUser(user);
     setScreen("home");
-    prefetchAll().catch(() => {});
+    prefetchAll().catch((e) => console.warn("[prefetchAll] failed:", e));
   };
 
   const handleLogout = () => {

@@ -58,13 +58,13 @@ export default function MarathonScreen({ topicId, onBack }: Props) {
   answersRef.current = answers;
 
   useEffect(() => {
-    getTopics().then(setTopics).catch(() => {});
+    getTopics().then(setTopics).catch((e) => console.warn("[MarathonScreen] getTopics failed:", e));
   }, []);
 
   useEffect(() => {
     getSavedQuestions()
       .then((entries) => setSavedIds(new Set(entries.map((e) => e.questionId))))
-      .catch(() => {});
+      .catch((e) => console.warn("[MarathonScreen] getSavedQuestions failed:", e));
   }, []);
 
   useEffect(() => { setShowExp(false); }, [current]);
@@ -89,7 +89,11 @@ export default function MarathonScreen({ topicId, onBack }: Props) {
         setQuestions(e.questions);
         setPhase("exam");
       })
-      .catch((err) => { setErrorMsg(String(err)); setPhase("result"); });
+      .catch((err) => {
+        console.error("[MarathonScreen] startMarathon failed:", err);
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+        setPhase("result");
+      });
   }, [selTopic, t]);
 
   const triggerFinish = useCallback(() => {
@@ -101,7 +105,7 @@ export default function MarathonScreen({ topicId, onBack }: Props) {
       questionId: questions[Number(idxStr)]?.id ?? 0,
       selectedOptionIndex: a.selected,
     })).filter(a => a.questionId !== 0);
-    submitExam({ sessionId, answers: arr }).catch(() => {});
+    submitExam({ sessionId, answers: arr }).catch((e) => console.warn("[MarathonScreen] submit failed:", e));
   }, [sessionId, questions]);
 
   const handleSelect = (optIdx: number) => {
@@ -113,7 +117,7 @@ export default function MarathonScreen({ topicId, onBack }: Props) {
 
     const correctIdx = q.correctOptionIndex ?? 0;
     const isCorrect = optIdx === correctIdx;
-    if (!isCorrect) addWrongAnswer(q.id, q).catch(() => {});
+    if (!isCorrect) addWrongAnswer(q.id, q).catch((e) => console.warn("[MarathonScreen] op failed:", e));
 
     const newAns = { ...answers, [current]: { selected: optIdx, correct: correctIdx } };
     setAnswers(newAns);
@@ -147,7 +151,7 @@ export default function MarathonScreen({ topicId, onBack }: Props) {
           return next;
         });
       })
-      .catch(() => {});
+      .catch((e) => console.warn("[MarathonScreen] op failed:", e));
   };
 
   useEffect(() => {

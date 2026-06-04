@@ -84,7 +84,7 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
   const [qrModal, setQrModal] = useState<typeof SOCIAL_LINKS[0] | null>(null);
 
   useEffect(() => {
-    getMyStats().then(setStats).catch(() => {});
+    getMyStats().then(setStats).catch((e) => console.warn("[HomeScreen] stats failed:", e));
   }, []);
 
   const menus = [

@@ -19,7 +19,7 @@ export default function LicenseScreen({ onActivated, onCancel }: Props) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    getMachineId().then(setMachineId).catch(() => {});
+    getMachineId().then(setMachineId).catch((e) => console.warn("[LicenseScreen] getMachineId failed:", e));
   }, []);
 
   const handleActivate = async (e: React.FormEvent) => {

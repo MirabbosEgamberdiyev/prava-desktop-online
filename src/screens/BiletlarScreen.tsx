@@ -32,7 +32,7 @@ export default function BiletlarScreen({ onBack, onStartTicket }: Props) {
   useEffect(() => {
     Promise.all([getTickets(), getMyStats()])
       .then(([tkts, s]) => { setTickets(tkts); setStats(s); })
-      .catch(() => {})
+      .catch((e) => console.warn("[BiletlarScreen] load failed:", e))
       .finally(() => setLoading(false));
   }, []);
 

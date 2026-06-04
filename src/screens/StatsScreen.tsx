@@ -30,7 +30,7 @@ export default function StatsScreen({ onBack }: Props) {
   useEffect(() => {
     getMyStats()
       .then(setStats)
-      .catch(() => {})
+      .catch((e) => console.warn("[StatsScreen] getMyStats failed:", e))
       .finally(() => setLoading(false));
   }, []);
 

@@ -398,7 +398,7 @@ export async function addWrongAnswer(
   // 1) Mahalliy xotirada saqla — har doim ishlaydi
   if (question) localAddWrong(question);
   // 2) API ga yuborish (403 bo'lsa ovoz chiqarmay o'tkazib yuboramiz)
-  http(`/api/v1/app/wrong-answers/${questionId}`, { method: "POST" }).catch(() => {});
+  http(`/api/v1/app/wrong-answers/${questionId}`, { method: "POST" }).catch((e) => console.warn("[api] background call failed:", e));
 }
 
 export async function getWrongAnswers(): Promise<WrongAnswerResponse[]> {
@@ -412,7 +412,7 @@ export async function getWrongAnswers(): Promise<WrongAnswerResponse[]> {
 
 export async function removeWrongAnswer(questionId: number): Promise<void> {
   localRemoveWrong(questionId); // mahalliy o'chirish
-  http(`/api/v1/app/wrong-answers/${questionId}`, { method: "DELETE" }).catch(() => {});
+  http(`/api/v1/app/wrong-answers/${questionId}`, { method: "DELETE" }).catch((e) => console.warn("[api] background call failed:", e));
 }
 
 // ─── SAVED QUESTIONS ──────────────────────────────────────────────────────────
@@ -425,7 +425,7 @@ export async function toggleSavedQuestion(
   // 1) Mahalliy xotirada toggle
   const isNowSaved = localToggleSaved(questionId, question);
   // 2) API ga yuborish (403 bo'lsa o'tkazib yuboramiz)
-  http<boolean>(`/api/v1/app/saved-questions/${questionId}`, { method: "POST" }).catch(() => {});
+  http<boolean>(`/api/v1/app/saved-questions/${questionId}`, { method: "POST" }).catch((e) => console.warn("[api] background call failed:", e));
   return isNowSaved;
 }
 

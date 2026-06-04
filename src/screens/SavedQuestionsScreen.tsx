@@ -48,7 +48,7 @@ export default function SavedQuestionsScreen({ onBack }: Props) {
   useEffect(() => { load(); }, [load]);
 
   const handleRemove = async (questionId: number) => {
-    await toggleSavedQuestion(questionId).catch(() => {});
+    await toggleSavedQuestion(questionId).catch((e) => console.warn("[SavedQuestions] op failed:", e));
     setEntries((prev) => prev.filter((e) => e.questionId !== questionId));
   };
 

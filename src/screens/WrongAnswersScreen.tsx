@@ -48,7 +48,7 @@ export default function WrongAnswersScreen({ onBack }: Props) {
   useEffect(() => { load(); }, [load]);
 
   const handleRemove = async (questionId: number) => {
-    await removeWrongAnswer(questionId).catch(() => {});
+    await removeWrongAnswer(questionId).catch((e) => console.warn("[WrongAnswers] op failed:", e));
     setEntries((prev) => prev.filter((e) => e.questionId !== questionId));
   };
 
