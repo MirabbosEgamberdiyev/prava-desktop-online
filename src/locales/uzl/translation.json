@@ -60,7 +60,16 @@
     "haveAccount": "Akkount bor? Kirish",
     "logout": "Chiqish",
     "loggingIn": "Kirish...",
-    "registering": "Ro'yxatdan o'tilmoqda..."
+    "registering": "Ro'yxatdan o'tilmoqda...",
+    "forgotPassword": "Parolni unutdingizmi?",
+    "forgotTitle": "Parolni tiklash",
+    "sendCode": "Kod yuborish",
+    "sending": "Yuborilmoqda...",
+    "codeSent": "Tasdiqlash kodi yuborildi. SMSni tekshiring.",
+    "codeRequired": "6 xonali kodni kiriting",
+    "newPassword": "Yangi parol",
+    "resetPassword": "Parolni tiklash",
+    "resetting": "Tiklanmoqda..."
   },
   "home": {
     "welcome": "Xush kelibsiz, {{name}}!",

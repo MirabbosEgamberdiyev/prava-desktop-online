@@ -234,6 +234,7 @@ export type AppScreen =
   | "license"
   | "login"
   | "register"
+  | "forgot-password"
   | "home"
   | "exam"
   | "marathon"

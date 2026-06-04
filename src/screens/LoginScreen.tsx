@@ -65,14 +65,42 @@ export default function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
           </div>
           <div className="form-group">
             <label>{t("auth.password")}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t("auth.passwordPlaceholder")}
-              className="license-input"
-              disabled={loading}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPwd ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t("auth.passwordPlaceholder")}
+                className="license-input"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd((s) => !s)}
+                style={{
+                  position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                  background: "transparent", border: "none", cursor: "pointer", fontSize: 14,
+                  color: "var(--text-muted)", lineHeight: 1,
+                }}
+                tabIndex={-1}
+                aria-label="Toggle password visibility"
+              >
+                {showPwd ? "🙈" : "👁"}
+              </button>
+            </div>
+            {onForgotPassword && (
+              <button
+                type="button"
+                onClick={onForgotPassword}
+                style={{
+                  margin: "6px 0 0", padding: 0, background: "transparent", border: "none",
+                  color: "var(--primary)", cursor: "pointer", fontSize: 12, textDecoration: "underline",
+                }}
+                disabled={loading}
+              >
+                {t("auth.forgotPassword", { defaultValue: "Parolni unutdingizmi?" })}
+              </button>
+            )}
           </div>
 
           {error && <div className="error-message">{error}</div>}

@@ -62,7 +62,16 @@
     "haveAccount": "Уже есть аккаунт? Войти",
     "logout": "Выйти",
     "loggingIn": "Вход...",
-    "registering": "Регистрация..."
+    "registering": "Регистрация...",
+    "forgotPassword": "Забыли пароль?",
+    "forgotTitle": "Восстановление пароля",
+    "sendCode": "Отправить код",
+    "sending": "Отправка...",
+    "codeSent": "Код подтверждения отправлен. Проверьте SMS.",
+    "codeRequired": "Введите 6-значный код",
+    "newPassword": "Новый пароль",
+    "resetPassword": "Сбросить пароль",
+    "resetting": "Сброс..."
   },
   "home": {
     "welcome": "Добро пожаловать, {{name}}!",

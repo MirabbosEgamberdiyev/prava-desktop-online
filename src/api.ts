@@ -168,6 +168,32 @@ export async function register(
   });
 }
 
+// ─── PASSWORD RESET ──────────────────────────────────────────────────────────
+// Step 1: SMS/email orqali kod yuborish
+export async function forgotPassword(identifier: string): Promise<void> {
+  await http("/api/v1/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ identifier, verificationType: "SMS" }),
+  });
+}
+
+// Step 2: kod + yangi parol bilan tiklash
+export async function resetPassword(
+  recipient: string,
+  code: string,
+  newPassword: string
+): Promise<void> {
+  await http("/api/v1/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({
+      recipient,
+      code,
+      newPassword,
+      verificationType: "SMS",
+    }),
+  });
+}
+
 export async function logout(): Promise<void> {
   const rt = getRefreshToken();
   try {

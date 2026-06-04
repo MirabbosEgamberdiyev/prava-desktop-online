@@ -60,7 +60,16 @@
     "haveAccount": "Already have an account? Log In",
     "logout": "Log Out",
     "loggingIn": "Logging in...",
-    "registering": "Registering..."
+    "registering": "Registering...",
+    "forgotPassword": "Forgot password?",
+    "forgotTitle": "Reset password",
+    "sendCode": "Send code",
+    "sending": "Sending...",
+    "codeSent": "Verification code sent. Check your SMS.",
+    "codeRequired": "Enter the 6-digit code",
+    "newPassword": "New password",
+    "resetPassword": "Reset password",
+    "resetting": "Resetting..."
   },
   "home": {
     "welcome": "Welcome, {{name}}!",

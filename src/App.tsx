@@ -6,6 +6,7 @@ import { getMe } from "./api";
 import LicenseScreen from "./screens/LicenseScreen";
 import LoginScreen from "./screens/LoginScreen";
 import RegisterScreen from "./screens/RegisterScreen";
+import ForgotPasswordScreen from "./screens/ForgotPasswordScreen";
 import HomeScreen from "./screens/HomeScreen";
 import ExamScreen from "./screens/ExamScreen";
 import MarathonScreen from "./screens/MarathonScreen";
@@ -145,12 +146,19 @@ function App() {
         <LoginScreen
           onLoggedIn={handleLoggedIn}
           onGoRegister={() => setScreen("register")}
+          onForgotPassword={() => setScreen("forgot-password")}
         />
       )}
       {screen === "register" && (
         <RegisterScreen
           onRegistered={handleLoggedIn}
           onGoLogin={() => setScreen("login")}
+        />
+      )}
+      {screen === "forgot-password" && (
+        <ForgotPasswordScreen
+          onDone={() => setScreen("login")}
+          onBack={() => setScreen("login")}
         />
       )}
       {currentUser && screen === "home" && (

@@ -60,7 +60,16 @@
     "haveAccount": "Аккоунт бор? Кириш",
     "logout": "Чиқиш",
     "loggingIn": "Кириш...",
-    "registering": "Рўйхатдан ўтилмоқда..."
+    "registering": "Рўйхатдан ўтилмоқда...",
+    "forgotPassword": "Паролни унутдингизми?",
+    "forgotTitle": "Паролни тиклаш",
+    "sendCode": "Код юбориш",
+    "sending": "Юборилмоқда...",
+    "codeSent": "Тасдиқлаш коди юборилди. СМСни текширинг.",
+    "codeRequired": "6 хонали кодни киритинг",
+    "newPassword": "Янги парол",
+    "resetPassword": "Паролни тиклаш",
+    "resetting": "Тикланмоқда..."
   },
   "home": {
     "welcome": "Хуш келибсиз, {{name}}!",
