@@ -10,6 +10,7 @@ import {
   IconAt, IconDeviceMobile, IconArrowLeft,
   IconMailShare, IconMessageShare,
 } from "@tabler/icons-react";
+import { GoogleLoginBtn, TelegramLoginBtn } from "../components/SocialAuth";
 
 interface Props {
   onRegistered: (user: UserResponse) => void;
@@ -274,6 +275,19 @@ export default function RegisterScreen({ onRegistered, onGoLogin }: Props) {
             >
               {loading ? t("auth.registering") : t("auth.register")}
             </button>
+
+            {/* Social Login */}
+            <div style={{ margin: "16px 0", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+              <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>
+                {t("auth.orContinueWith", { defaultValue: "yoki" })}
+              </span>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <GoogleLoginBtn onSuccess={onRegistered} disabled={loading} />
+              <TelegramLoginBtn onSuccess={onRegistered} disabled={loading} />
+            </div>
           </form>
         )}
 

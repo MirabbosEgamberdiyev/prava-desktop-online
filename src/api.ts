@@ -133,6 +133,23 @@ export async function login(identifier: string, password: string): Promise<AuthR
   });
 }
 
+export async function googleLogin(accessToken: string): Promise<AuthResponse> {
+  return http<AuthResponse>("/api/v1/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ accessToken }),
+  });
+}
+
+export async function telegramLogin(data: {
+  id: number; firstName: string; lastName: string;
+  username: string; photoUrl: string; authDate: number; hash: string;
+}): Promise<AuthResponse> {
+  return http<AuthResponse>("/api/v1/auth/telegram", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function register(
   firstName: string,
   phoneNumber: string,

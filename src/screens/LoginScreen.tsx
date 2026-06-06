@@ -6,6 +6,7 @@ import { UserResponse } from "../types";
 import ThemeToggle from "../components/ThemeToggle";
 import LanguagePicker from "../components/LanguagePicker";
 import { IconUser, IconLock, IconEye, IconEyeOff } from "@tabler/icons-react";
+import { GoogleLoginBtn, TelegramLoginBtn } from "../components/SocialAuth";
 
 interface Props {
   onLoggedIn: (user: UserResponse) => void;
@@ -140,6 +141,19 @@ export default function LoginScreen({ onLoggedIn, onGoRegister, onForgotPassword
             {loading ? t("auth.loggingIn") : t("auth.login")}
           </button>
         </form>
+
+        {/* Social Login */}
+        <div style={{ margin: "16px 0", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+          <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>
+            {t("auth.orContinueWith", { defaultValue: "yoki" })}
+          </span>
+          <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <GoogleLoginBtn onSuccess={onLoggedIn} disabled={loading} />
+          <TelegramLoginBtn onSuccess={onLoggedIn} disabled={loading} />
+        </div>
 
         <div className="machine-id-section">
           <button type="button" className="machine-id-btn" onClick={onGoRegister}>
