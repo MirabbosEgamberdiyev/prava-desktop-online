@@ -15,6 +15,7 @@ import {
   IconPlayerPlayFilled,
   IconBrandInstagram,
   IconBrandTelegram,
+  IconBrandTiktok,
   IconBrandYoutube,
   IconWorld,
   IconAlertTriangle,
@@ -48,6 +49,14 @@ const SOCIAL_LINKS = [
     icon: IconBrandYoutube,
     gradient: "linear-gradient(135deg,#ff6b6b,#cc0000)",
     color: "#ff0000",
+  },
+  {
+    label: "TikTok",
+    handle: "@pravaonlineuz",
+    url: "https://tiktok.com/@pravaonlineuz",
+    icon: IconBrandTiktok,
+    gradient: "linear-gradient(135deg,#25f4ee,#fe2c55)",
+    color: "#000000",
   },
   {
     label: "Website",
