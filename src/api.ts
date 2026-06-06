@@ -62,7 +62,7 @@ export function clearCache(): void {
 }
 
 // ─── Base HTTP fetch ──────────────────────────────────────────────────────────
-async function http<T>(
+export async function http<T>(
   path: string,
   options: RequestInit = {},
   retry = true

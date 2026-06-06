@@ -5,23 +5,30 @@ import { saveTokens } from "../auth";
 import { UserResponse } from "../types";
 import ThemeToggle from "../components/ThemeToggle";
 import LanguagePicker from "../components/LanguagePicker";
+import { IconUser, IconLock, IconEye, IconEyeOff } from "@tabler/icons-react";
 
 interface Props {
   onLoggedIn: (user: UserResponse) => void;
   onGoRegister: () => void;
+  onForgotPassword?: () => void;
 }
 
-export default function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
+export default function LoginScreen({ onLoggedIn, onGoRegister, onForgotPassword }: Props) {
   const { t } = useTranslation();
   const [identifier, setIdentifier] = useState("");
   const [password,   setPassword]   = useState("");
-  const [loading,    setLoading]     = useState(false);
-  const [error,      setError]       = useState<string | null>(null);
+  const [showPwd,    setShowPwd]    = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim() || !password.trim()) {
+    if (!identifier.trim() || identifier.trim().length < 3) {
       setError(t("auth.identifierRequired"));
+      return;
+    }
+    if (!password || password.length < 6) {
+      setError(t("auth.passwordRequired"));
       return;
     }
     setLoading(true);
@@ -31,7 +38,8 @@ export default function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
       saveTokens(res.accessToken, res.refreshToken, res.user);
       onLoggedIn(res.user);
     } catch (err) {
-      setError(String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -51,27 +59,46 @@ export default function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
         </div>
 
         <form onSubmit={handleSubmit} className="license-form">
+          {/* Identifier */}
           <div className="form-group">
             <label>{t("auth.phone")}</label>
-            <input
-              type="text"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder={t("auth.identifierPlaceholder")}
-              className="license-input"
-              disabled={loading}
-              autoFocus
-            />
+            <div style={{ position: "relative" }}>
+              <span style={{
+                position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                color: "var(--text-muted)", display: "flex",
+              }}>
+                <IconUser size={16} />
+              </span>
+              <input
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder={t("auth.identifierPlaceholder")}
+                className="license-input"
+                style={{ paddingLeft: 34 }}
+                disabled={loading}
+                autoFocus
+              />
+            </div>
           </div>
+
+          {/* Password */}
           <div className="form-group">
             <label>{t("auth.password")}</label>
             <div style={{ position: "relative" }}>
+              <span style={{
+                position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                color: "var(--text-muted)", display: "flex",
+              }}>
+                <IconLock size={16} />
+              </span>
               <input
                 type={showPwd ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={t("auth.passwordPlaceholder")}
                 className="license-input"
+                style={{ paddingLeft: 34, paddingRight: 38 }}
                 disabled={loading}
               />
               <button
@@ -79,13 +106,13 @@ export default function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
                 onClick={() => setShowPwd((s) => !s)}
                 style={{
                   position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-                  background: "transparent", border: "none", cursor: "pointer", fontSize: 14,
-                  color: "var(--text-muted)", lineHeight: 1,
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "var(--text-muted)", display: "flex", padding: 4,
                 }}
                 tabIndex={-1}
                 aria-label="Toggle password visibility"
               >
-                {showPwd ? "🙈" : "👁"}
+                {showPwd ? <IconEyeOff size={16} /> : <IconEye size={16} />}
               </button>
             </div>
             {onForgotPassword && (
@@ -108,7 +135,7 @@ export default function LoginScreen({ onLoggedIn, onGoRegister }: Props) {
           <button
             type="submit"
             className="activate-btn"
-            disabled={loading || !identifier.trim() || !password.trim()}
+            disabled={loading || !identifier.trim() || !password}
           >
             {loading ? t("auth.loggingIn") : t("auth.login")}
           </button>
