@@ -14,7 +14,8 @@
     "yes": "Yes",
     "times": "times",
     "darkMode": "Dark mode",
-    "lightMode": "Light mode"
+    "lightMode": "Light mode",
+    "close": "Close"
   },
   "license": {
     "title": "Prava Online",
@@ -69,7 +70,9 @@
     "codeRequired": "Enter the 6-digit code",
     "newPassword": "New password",
     "resetPassword": "Reset password",
-    "resetting": "Resetting..."
+    "resetting": "Resetting...",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "home": {
     "welcome": "Welcome, {{name}}!",
@@ -95,7 +98,9 @@
     "wrongAnswers": "Mistakes",
     "wrongAnswersDesc": "Questions you answered wrong",
     "saved": "Saved",
-    "savedDesc": "Questions you bookmarked"
+    "savedDesc": "Questions you bookmarked",
+    "followUs": "Follow us on social media",
+    "scanQr": "Scan the QR code"
   },
   "exam": {
     "title": "Exam",
@@ -181,5 +186,8 @@
     "timesPassed": "Passed",
     "bestScore": "Best",
     "lastScore": "Last"
+  },
+  "language": {
+    "select": "Select language"
   }
 }

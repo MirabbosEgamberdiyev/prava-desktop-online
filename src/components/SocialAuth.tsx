@@ -82,14 +82,9 @@ export function GoogleLoginBtn({
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
-  const handleClick = useCallback(() => {
-    if (!window.google?.accounts?.oauth2) {
-      setError(t("auth.googleNotLoaded", { defaultValue: "Google yuklanmadi. Internet bilan tekshiring." }));
-      return;
-    }
-
+  const runTokenClient = useCallback(() => {
     setError(null);
-    const client = window.google.accounts.oauth2.initTokenClient({
+    const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: "openid email profile",
       callback: async (response) => {
@@ -110,7 +105,38 @@ export function GoogleLoginBtn({
       },
     });
     client.requestAccessToken();
-  }, [onSuccess, t]);
+  }, [onSuccess]);
+
+  const handleClick = useCallback(() => {
+    // `gsi/client` skripti index.html'da `async defer` bilan yuklanadi —
+    // ilova ochilgan zahoti bosilsa, u hali tayyor bo'lmasligi mumkin.
+    // Telegram tugmasidagi kabi qisqa kutish bilan qayta urinamiz, aks holda
+    // foydalanuvchi shunchaki "ishlamayapti" deb qayta-qayta bosaveradi.
+    if (window.google?.accounts?.oauth2) {
+      runTokenClient();
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+    let attempts = 0;
+    const maxAttempts = 20; // ~4s (20 * 200ms)
+    const poll = () => {
+      attempts += 1;
+      if (window.google?.accounts?.oauth2) {
+        setLoading(false);
+        runTokenClient();
+        return;
+      }
+      if (attempts >= maxAttempts) {
+        setLoading(false);
+        setError(t("auth.googleNotLoaded", { defaultValue: "Google yuklanmadi. Internet bilan tekshiring." }));
+        return;
+      }
+      setTimeout(poll, 200);
+    };
+    poll();
+  }, [runTokenClient, t]);
 
   return (
     <>
@@ -126,7 +152,7 @@ export function GoogleLoginBtn({
           : t("auth.googleLogin", { defaultValue: "Google bilan kirish" })
         }
       </button>
-      {error && <p style={{ color: "#e03131", fontSize: 12, margin: "4px 0 0", textAlign: "center" }}>{error}</p>}
+      {error && <p style={{ color: "var(--danger)", fontSize: 12, margin: "4px 0 0", textAlign: "center" }}>{error}</p>}
     </>
   );
 }
@@ -208,7 +234,7 @@ export function TelegramLoginBtn({
           : t("auth.telegramLogin", { defaultValue: "Telegram bilan kirish" })
         }
       </button>
-      {error && <p style={{ color: "#e03131", fontSize: 12, margin: "4px 0 0", textAlign: "center" }}>{error}</p>}
+      {error && <p style={{ color: "var(--danger)", fontSize: 12, margin: "4px 0 0", textAlign: "center" }}>{error}</p>}
     </>
   );
 }

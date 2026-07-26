@@ -24,6 +24,17 @@ export interface AuthResponse {
   user: UserResponse;
 }
 
+/** Backend: VerificationSentResponse (forgot-password / register init javobi) */
+export interface VerificationSentResponse {
+  recipient?: string;
+  maskedRecipient?: string;
+  expiresInMinutes?: number;
+  retryAfterSeconds?: number;
+  message?: string;
+  testMode?: boolean;
+  testCode?: string;
+}
+
 export interface UserResponse {
   id: number;
   firstName: string;

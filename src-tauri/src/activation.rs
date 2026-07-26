@@ -14,19 +14,24 @@
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{DateTime, Datelike, TimeZone, Utc};
-use ed25519_dalek::{Signature, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
 use crate::license::LicenseStatus;
 
-/// Backend Ed25519LicenseService bilan AYNAN BIR XIL seed (32 bayt).
-/// ⚠️ Bu kalit backend tomonida ham bor — bir xil bo'lishi shart.
-const PRIVATE_SEED: [u8; 32] = [
-    0x07, 0x92, 0xb6, 0xf7, 0x25, 0xd9, 0x44, 0x33, 0xf0, 0x82, 0x92, 0x66, 0x85, 0xae, 0x5c, 0x37,
-    0xe0, 0xd7, 0x6c, 0x1b, 0xf2, 0x45, 0x2f, 0x0b, 0x7b, 0xc5, 0xf6, 0xc0, 0x87, 0xd0, 0x34, 0x56,
+/// Backend Ed25519LicenseService PRIVATE seed'idan olingan PUBLIC key (32 bayt).
+///
+/// ⚠️ MUHIM: bu yerda faqat PUBLIC key turadi. Ilgari bu faylda private seed
+/// bor edi — u bilan istalgan odam binary'dan kalitni ajratib olib, o'zicha
+/// cheksiz muddatli aktivatsiya kodi yasay olardi. Imzo yaratish faqat
+/// backend'da (private seed backend'da qoladi), desktop esa faqat tekshiradi.
+const PUBLIC_KEY: [u8; 32] = [
+    0xfd, 0xd1, 0xa2, 0xd2, 0xca, 0x27, 0xcc, 0x19, 0xe8, 0xe5, 0x5c, 0x01, 0xb2, 0x16, 0x81, 0x0c,
+    0x00, 0x3c, 0x3b, 0x14, 0x44, 0x84, 0xf8, 0xd8, 0x5f, 0xd3, 0x15, 0xd6, 0x1b, 0x61, 0xb7, 0x3e,
 ];
 
-fn verifying_key() -> VerifyingKey {
-    SigningKey::from_bytes(&PRIVATE_SEED).verifying_key()
+fn verifying_key() -> Result<VerifyingKey> {
+    VerifyingKey::from_bytes(&PUBLIC_KEY)
+        .map_err(|e| anyhow!("Ichki xato: public key yaroqsiz: {}", e))
 }
 
 fn epoch() -> DateTime<Utc> {
@@ -71,7 +76,7 @@ pub fn verify_activation_code(token_with_dots: &str, machine_id: &str) -> Result
     // 4. Ed25519 verify
     let signature = Signature::from_slice(sig_bytes)
         .map_err(|e| anyhow!("Imzo formatida xato: {}", e))?;
-    verifying_key()
+    verifying_key()?
         .verify(&msg, &signature)
         .map_err(|_| anyhow!("Activation code yaroqsiz yoki o'zgartirilgan"))?;
 

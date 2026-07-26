@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
-import { UserResponse, WrongAnswerResponse, OptionResponse, LocalizedText } from "../types";
+import { WrongAnswerResponse, OptionResponse, LocalizedText } from "../types";
 import { getWrongAnswers, removeWrongAnswer } from "../api";
 import { API_BASE } from "../api";
 import {
@@ -25,7 +25,6 @@ function imgSrc(url?: string): string | null {
 }
 
 interface Props {
-  user: UserResponse;
   onBack: () => void;
 }
 
@@ -35,32 +34,43 @@ export default function WrongAnswersScreen({ onBack }: Props) {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  // O'chirilayotgan savollar — tugmani ikki marta bosish ikkita DELETE
+  // so'rovini yubormasligi uchun.
+  const [removing, setRemoving] = useState<number[]>([]);
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
     getWrongAnswers()
       .then(setEntries)
-      .catch((err) => setError(String(err)))
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const handleRemove = async (questionId: number) => {
-    await removeWrongAnswer(questionId).catch((e) => console.warn("[WrongAnswers] op failed:", e));
-    setEntries((prev) => prev.filter((e) => e.questionId !== questionId));
+    if (removing.includes(questionId)) return;
+    setRemoving((prev) => [...prev, questionId]);
+    try {
+      await removeWrongAnswer(questionId);
+    } catch (e) {
+      console.warn("[WrongAnswers] op failed:", e);
+    } finally {
+      setEntries((prev) => prev.filter((x) => x.questionId !== questionId));
+      setRemoving((prev) => prev.filter((id) => id !== questionId));
+    }
   };
 
   return (
     <div className="review-screen">
       <header className="review-header">
-        <button className="review-back-btn" onClick={onBack}>
+        <button type="button" className="review-back-btn" onClick={onBack}>
           <IconArrowLeft size={18} stroke={2} />
           {t("common.back")}
         </button>
         <div className="review-header-title">
-          <IconAlertTriangle size={20} stroke={2} color="#e03131" />
+          <IconAlertTriangle size={20} stroke={2} color="var(--danger)" />
           <span>{t("wrongAnswers.title")}</span>
         </div>
         <div className="review-header-count">
@@ -73,24 +83,16 @@ export default function WrongAnswersScreen({ onBack }: Props) {
           <div className="loading-screen"><div className="spinner" /></div>
         ) : error ? (
           <div className="review-empty">
-            <IconAlertTriangle size={48} stroke={1.5} color="#e03131" />
-            <h3 style={{ color: "#e03131" }}>{t("common.error")}</h3>
-            <p style={{ color: "var(--text-muted)", fontSize: 13 }}>{error}</p>
-            <button
-              onClick={load}
-              style={{
-                marginTop: 12, padding: "8px 20px",
-                background: "var(--primary)", color: "#fff",
-                border: "none", borderRadius: 8, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600,
-              }}
-            >
+            <IconAlertTriangle size={48} stroke={1.5} color="var(--danger)" />
+            <h3 className="state-error-title">{t("common.error")}</h3>
+            <p className="state-error-detail">{error}</p>
+            <button type="button" className="retry-btn" onClick={load}>
               <IconRefresh size={15} /> {t("exam.retry")}
             </button>
           </div>
         ) : entries.length === 0 ? (
           <div className="review-empty">
-            <IconCheck size={56} stroke={1.5} color="#2f9e44" />
+            <IconCheck size={56} stroke={1.5} color="var(--success)" />
             <h3>{t("wrongAnswers.emptyTitle")}</h3>
             <p>{t("wrongAnswers.emptySub")}</p>
           </div>
@@ -104,15 +106,34 @@ export default function WrongAnswersScreen({ onBack }: Props) {
 
               return (
                 <div key={entry.questionId} className={`review-card ${isOpen ? "open" : ""}`}>
-                  <div className="review-card-top" onClick={() => setExpanded(isOpen ? null : entry.questionId)}>
+                  {/* Kartochka sarlavhasi ilgari faqat sichqoncha bilan ochilardi
+                      (oddiy <div onClick>). Endi Tab bilan fokuslanadi va
+                      Enter/Space bilan ochiladi. */}
+                  <div
+                    className="review-card-top"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => setExpanded(isOpen ? null : entry.questionId)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setExpanded(isOpen ? null : entry.questionId);
+                      }
+                    }}
+                  >
                     <div className="review-card-badge wrong-badge">
                       {entry.wrongCount}✕
                     </div>
                     <p className="review-card-text">{text}</p>
                     <button
+                      type="button"
                       className="review-remove-btn"
                       onClick={(e) => { e.stopPropagation(); handleRemove(entry.questionId); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      disabled={removing.includes(entry.questionId)}
                       title={t("wrongAnswers.remove")}
+                      aria-label={t("wrongAnswers.remove")}
                     >
                       <IconTrash size={14} stroke={2} />
                     </button>
@@ -135,7 +156,19 @@ export default function WrongAnswersScreen({ onBack }: Props) {
                       </div>
                       {img && (
                         <div className="review-card-img-wrap">
-                          <img src={img} alt="" className="review-card-img" />
+                          {/* Rasm topilmasa "buzilgan rasm" belgisi chiqmasin —
+                              ExamScreen'dagi bilan bir xil zaxira rasm. */}
+                          <img
+                            src={img}
+                            alt=""
+                            className="review-card-img"
+                            loading="lazy"
+                            decoding="async"
+                            onError={(e) => {
+                              const el = e.currentTarget;
+                              if (!el.src.endsWith("/question-default.svg")) el.src = "/question-default.svg";
+                            }}
+                          />
                         </div>
                       )}
                     </div>

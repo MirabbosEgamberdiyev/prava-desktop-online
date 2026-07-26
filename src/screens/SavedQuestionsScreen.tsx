@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
-import { SavedQuestionResponse, OptionResponse, LocalizedText, UserResponse } from "../types";
+import { SavedQuestionResponse, OptionResponse, LocalizedText } from "../types";
 import { getSavedQuestions, toggleSavedQuestion } from "../api";
 import { API_BASE } from "../api";
 import {
@@ -25,7 +25,6 @@ function imgSrc(url?: string): string | null {
 }
 
 interface Props {
-  user: UserResponse;
   onBack: () => void;
 }
 
@@ -35,32 +34,43 @@ export default function SavedQuestionsScreen({ onBack }: Props) {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  // Toggle so'rovi ikki marta ketmasin — aks holda ikkinchi POST savolni
+  // qaytadan saqlanganlar ro'yxatiga qo'shib qo'yardi.
+  const [removing, setRemoving] = useState<number[]>([]);
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
     getSavedQuestions()
       .then(setEntries)
-      .catch((err) => setError(String(err)))
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const handleRemove = async (questionId: number) => {
-    await toggleSavedQuestion(questionId).catch((e) => console.warn("[SavedQuestions] op failed:", e));
-    setEntries((prev) => prev.filter((e) => e.questionId !== questionId));
+    if (removing.includes(questionId)) return;
+    setRemoving((prev) => [...prev, questionId]);
+    try {
+      await toggleSavedQuestion(questionId);
+    } catch (e) {
+      console.warn("[SavedQuestions] op failed:", e);
+    } finally {
+      setEntries((prev) => prev.filter((x) => x.questionId !== questionId));
+      setRemoving((prev) => prev.filter((id) => id !== questionId));
+    }
   };
 
   return (
     <div className="review-screen">
       <header className="review-header">
-        <button className="review-back-btn" onClick={onBack}>
+        <button type="button" className="review-back-btn" onClick={onBack}>
           <IconArrowLeft size={18} stroke={2} />
           {t("common.back")}
         </button>
         <div className="review-header-title">
-          <IconBookmark size={20} stroke={2} color="#1971c2" />
+          <IconBookmark size={20} stroke={2} color="var(--primary)" />
           <span>{t("saved.title")}</span>
         </div>
         <div className="review-header-count">
@@ -73,24 +83,16 @@ export default function SavedQuestionsScreen({ onBack }: Props) {
           <div className="loading-screen"><div className="spinner" /></div>
         ) : error ? (
           <div className="review-empty">
-            <IconAlertTriangle size={48} stroke={1.5} color="#e03131" />
-            <h3 style={{ color: "#e03131" }}>{t("common.error")}</h3>
-            <p style={{ color: "var(--text-muted)", fontSize: 13 }}>{error}</p>
-            <button
-              onClick={load}
-              style={{
-                marginTop: 12, padding: "8px 20px",
-                background: "var(--primary)", color: "#fff",
-                border: "none", borderRadius: 8, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600,
-              }}
-            >
+            <IconAlertTriangle size={48} stroke={1.5} color="var(--danger)" />
+            <h3 className="state-error-title">{t("common.error")}</h3>
+            <p className="state-error-detail">{error}</p>
+            <button type="button" className="retry-btn" onClick={load}>
               <IconRefresh size={15} /> {t("exam.retry")}
             </button>
           </div>
         ) : entries.length === 0 ? (
           <div className="review-empty">
-            <IconBookmark size={56} stroke={1.5} color="#1971c2" />
+            <IconBookmark size={56} stroke={1.5} color="var(--primary)" />
             <h3>{t("saved.emptyTitle")}</h3>
             <p>{t("saved.emptySub")}</p>
           </div>
@@ -104,15 +106,32 @@ export default function SavedQuestionsScreen({ onBack }: Props) {
 
               return (
                 <div key={entry.questionId} className={`review-card ${isOpen ? "open" : ""}`}>
-                  <div className="review-card-top" onClick={() => setExpanded(isOpen ? null : entry.questionId)}>
+                  {/* Sarlavha klaviatura bilan ham ochiladi (ilgari faqat onClick) */}
+                  <div
+                    className="review-card-top"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => setExpanded(isOpen ? null : entry.questionId)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setExpanded(isOpen ? null : entry.questionId);
+                      }
+                    }}
+                  >
                     <div className="review-card-badge saved-badge">
                       <IconBookmark size={13} stroke={2} />
                     </div>
                     <p className="review-card-text">{text}</p>
                     <button
+                      type="button"
                       className="review-remove-btn"
                       onClick={(e) => { e.stopPropagation(); handleRemove(entry.questionId); }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      disabled={removing.includes(entry.questionId)}
                       title={t("saved.remove")}
+                      aria-label={t("saved.remove")}
                     >
                       <IconBookmarkOff size={14} stroke={2} />
                     </button>
@@ -135,7 +154,17 @@ export default function SavedQuestionsScreen({ onBack }: Props) {
                       </div>
                       {img && (
                         <div className="review-card-img-wrap">
-                          <img src={img} alt="" className="review-card-img" />
+                          <img
+                            src={img}
+                            alt=""
+                            className="review-card-img"
+                            loading="lazy"
+                            decoding="async"
+                            onError={(e) => {
+                              const el = e.currentTarget;
+                              if (!el.src.endsWith("/question-default.svg")) el.src = "/question-default.svg";
+                            }}
+                          />
                         </div>
                       )}
                     </div>

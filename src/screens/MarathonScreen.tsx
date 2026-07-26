@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
-import { UserResponse, QuestionResponse, OptionResponse, LocalizedText, TopicResponse } from "../types";
+import { QuestionResponse, OptionResponse, LocalizedText, TopicResponse } from "../types";
 import { getTopics, startMarathon, submitExam, addWrongAnswer, toggleSavedQuestion, getSavedQuestions } from "../api";
 import { API_BASE } from "../api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -13,7 +13,6 @@ import {
 } from "@tabler/icons-react";
 
 interface Props {
-  user: UserResponse;
   topicId: number | null;
   onBack: () => void;
 }
@@ -73,6 +72,12 @@ export default function MarathonScreen({ topicId, onBack }: Props) {
     activeQnumRef.current?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
   }, [current]);
 
+  // Unmount'da kutayotgan auto-advance timeout'ini tozalash (aks holda
+  // ekran almashgach setCurrent unmount qilingan komponentda chaqiriladi)
+  useEffect(() => () => {
+    if (autoRef.current) clearTimeout(autoRef.current);
+  }, []);
+
   const startExamFn = useCallback(() => {
     setPhase("loading");
     setAnswers({});
@@ -94,7 +99,9 @@ export default function MarathonScreen({ topicId, onBack }: Props) {
         setErrorMsg(err instanceof Error ? err.message : String(err));
         setPhase("result");
       });
-  }, [selTopic, t]);
+    // ⚠️ questionCount dep'lar ro'yxatida bo'lishi SHART — bo'lmasa foydalanuvchi
+    // 40/60/100 tanlasa ham eskirgan closure har doim 20 ta savol so'ragan.
+  }, [selTopic, questionCount, t]);
 
   const triggerFinish = useCallback(() => {
     if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; }
@@ -277,7 +284,10 @@ export default function MarathonScreen({ topicId, onBack }: Props) {
   }
 
   // ── EXAM ────────────────────────────────────────────────────────────────────
-  const q            = questions[current];
+  const q = questions[current];
+  if (!q) return (
+    <div className="loading-screen"><div className="spinner" /><p>{t("common.loading")}</p></div>
+  );
   const opts         = q.options || [];
   const answered     = answers[current];
   const correctIdx   = q.correctOptionIndex ?? 0;

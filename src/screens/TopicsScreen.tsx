@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
-import { UserResponse, TopicResponse, LocalizedText } from "../types";
+import { TopicResponse, LocalizedText } from "../types";
 import { getTopics } from "../api";
+import { useTheme } from "../ThemeContext";
 import {
   IconArrowLeft, IconSearch, IconBook2,
   IconPlayerPlay, IconListNumbers,
 } from "@tabler/icons-react";
 
 interface Props {
-  user: UserResponse;
   onBack: () => void;
   onStartMarathon: (topicId: number) => void;
 }
@@ -67,27 +67,43 @@ export default function TopicsScreen({ onBack, onStartMarathon }: Props) {
       .finally(() => setLoading(false));
   }, []);
 
-  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  // ⚠️ Ilgari bu qiymat render vaqtida to'g'ridan-to'g'ri DOM'dan o'qilardi
+  // (document.documentElement.getAttribute). U holda mavzu almashtirilganda
+  // bu ekran qayta render bo'lmasdi va kartochkalar eski palitrada qolib ketardi.
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
-  const filtered = topics.filter((tp) =>
-    topicName(tp).toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return topics;
+    return topics.filter((tp) => topicName(tp).toLowerCase().includes(q));
+    // i18n.language ham hisobga olinadi: til almashsa mavzu nomlari o'zgaradi
+    // va filtr natijasi ham qayta hisoblanishi kerak.
+  }, [topics, search, i18n.language]);
 
   return (
     <div className="topics-screen">
       <div className="topics-header">
-        <button className="quiz-back-btn" onClick={onBack}>
+        <button type="button" className="quiz-back-btn" onClick={onBack} aria-label={t("common.back")}>
           <IconArrowLeft size={18} />
         </button>
         <h2 className="topics-title">{t("topics.title")}</h2>
-        {!loading && <span className="topics-count-chip">{topics.length}</span>}
+        {/* Qidiruv yoqilganda chip topilganlar sonini ko'rsatadi — ilgari
+            har doim umumiy son turardi va ro'yxatdagi son bilan mos kelmasdi. */}
+        {!loading && <span className="topics-count-chip">{search.trim() ? filtered.length : topics.length}</span>}
         <div className="topics-search-wrap">
           <IconSearch size={15} className="topics-search-icon" />
           <input
+            type="search"
             className="topics-search-input"
             placeholder={t("topics.search")}
+            aria-label={t("topics.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              // Escape — qidiruvni tozalash (desktopda kutiladigan xatti-harakat)
+              if (e.key === "Escape" && search) { e.preventDefault(); setSearch(""); }
+            }}
           />
         </div>
       </div>
@@ -118,7 +134,12 @@ export default function TopicsScreen({ onBack, onStartMarathon }: Props) {
                   <IconListNumbers size={13} />
                   {topic.questionCount ?? 0} {t("common.questions")}
                 </div>
-                <button className="tpc-btn" onClick={() => onStartMarathon(topic.id)}>
+                <button
+                  type="button"
+                  className="tpc-btn"
+                  onClick={() => onStartMarathon(topic.id)}
+                  aria-label={`${t("topics.startMarathon")} — ${topicName(topic)}`}
+                >
                   <IconPlayerPlay size={14} />
                   {t("topics.startMarathon")}
                 </button>

@@ -14,7 +14,8 @@
     "yes": "Ҳа",
     "times": "марта",
     "darkMode": "Тунги режим",
-    "lightMode": "Кундузги режим"
+    "lightMode": "Кундузги режим",
+    "close": "Ёпиш"
   },
   "license": {
     "title": "Prava Online",
@@ -69,7 +70,9 @@
     "codeRequired": "6 хонали кодни киритинг",
     "newPassword": "Янги парол",
     "resetPassword": "Паролни тиклаш",
-    "resetting": "Тикланмоқда..."
+    "resetting": "Тикланмоқда...",
+    "showPassword": "Паролни кўрсатиш",
+    "hidePassword": "Паролни яшириш"
   },
   "home": {
     "welcome": "Хуш келибсиз, {{name}}!",
@@ -95,7 +98,9 @@
     "wrongAnswers": "Хатолар",
     "wrongAnswersDesc": "Хато жавоб берилган саволлар",
     "saved": "Сақланган",
-    "savedDesc": "Сиз сақлаган саволлар"
+    "savedDesc": "Сиз сақлаган саволлар",
+    "followUs": "Бизни ижтимоий тармоқларда кузатинг",
+    "scanQr": "QR кодни сканерланг"
   },
   "exam": {
     "title": "Имтиҳон",
@@ -181,5 +186,8 @@
     "timesPassed": "Ўтганлар",
     "bestScore": "Энг яхши",
     "lastScore": "Охирги"
+  },
+  "language": {
+    "select": "Тилни танлаш"
   }
 }

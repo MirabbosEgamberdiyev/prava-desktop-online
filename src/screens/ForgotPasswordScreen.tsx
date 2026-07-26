@@ -15,6 +15,9 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
   const { t } = useTranslation();
   const [step, setStep]         = useState<Step>("request");
   const [identifier, setId]     = useState("");
+  // Kod aynan qaysi manzilga yuborilgani — backend qaytargan kanonik qiymat.
+  // Reset so'rovida shuni yuborish shart, aks holda kod tekshiruvi topilmaydi.
+  const [recipient, setRecipient] = useState("");
   const [code, setCode]         = useState("");
   const [newPassword, setNew]   = useState("");
   const [showPwd, setShowPwd]   = useState(false);
@@ -24,6 +27,7 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
 
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return; // ikki marta yuborishdan himoya
     const phone = identifier.trim().replace(/\D/g, "");
     if (phone.length < 12) {
       setError(t("auth.phoneRequired"));
@@ -32,9 +36,10 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
     setLoading(true);
     setError(null);
     try {
-      await forgotPassword(phone);
+      const res = await forgotPassword(phone);
       setInfo(t("auth.codeSent", { defaultValue: "Tasdiqlash kodi yuborildi" }));
       setId(phone);
+      setRecipient(res?.recipient || phone);
       setStep("verify");
     } catch (err) {
       console.error("[ForgotPassword] request failed:", err);
@@ -46,12 +51,13 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return; // ikki marta yuborishdan himoya
     if (code.length < 6) { setError(t("auth.codeRequired", { defaultValue: "6 xonali kod kiriting" })); return; }
     if (newPassword.length < 6) { setError(t("auth.passwordRequired")); return; }
     setLoading(true);
     setError(null);
     try {
-      await resetPassword(identifier, code.trim(), newPassword);
+      await resetPassword(recipient || identifier, code.trim(), newPassword);
       onDone();
     } catch (err) {
       console.error("[ResetPassword] failed:", err);
@@ -81,7 +87,7 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
               <input
                 type="text"
                 value={identifier}
-                onChange={(e) => setId(e.target.value)}
+                onChange={(e) => { setId(e.target.value); if (error) setError(null); }}
                 placeholder="+998 90 123 45 67"
                 className="license-input"
                 disabled={loading}
@@ -99,8 +105,7 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
             </button>
             <button
               type="button"
-              className="activate-btn"
-              style={{ marginTop: 10, background: "transparent", color: "inherit", border: "1px solid currentColor" }}
+              className="activate-btn activate-btn--secondary"
               onClick={onBack}
               disabled={loading}
             >
@@ -109,7 +114,7 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
           </form>
         ) : (
           <form onSubmit={handleReset} className="license-form">
-            {info && <div className="error-message" style={{ background: "rgba(34,197,94,.1)", borderColor: "#22c55e", color: "#16a34a" }}>{info}</div>}
+            {info && <div className="success-message" role="status">{info}</div>}
 
             <div className="form-group">
               <label>{t("auth.verificationCode")} *</label>
@@ -119,7 +124,7 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
                 pattern="[0-9]{6}"
                 maxLength={6}
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(e) => { setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); if (error) setError(null); }}
                 placeholder="123456"
                 className="license-input"
                 disabled={loading}
@@ -135,7 +140,7 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
                 <input
                   type={showPwd ? "text" : "password"}
                   value={newPassword}
-                  onChange={(e) => setNew(e.target.value)}
+                  onChange={(e) => { setNew(e.target.value); if (error) setError(null); }}
                   placeholder={t("auth.passwordPlaceholder")}
                   className="license-input"
                   disabled={loading}
@@ -150,6 +155,7 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
                     color: "var(--text-muted)",
                   }}
                   tabIndex={-1}
+                  aria-label={showPwd ? t("auth.hidePassword", { defaultValue: "Parolni yashirish" }) : t("auth.showPassword", { defaultValue: "Parolni ko'rsatish" })}
                 >
                   {showPwd ? "🙈" : "👁"}
                 </button>
@@ -165,9 +171,8 @@ export default function ForgotPasswordScreen({ onDone, onBack }: Props) {
             </button>
             <button
               type="button"
-              className="activate-btn"
-              style={{ marginTop: 10, background: "transparent", color: "inherit", border: "1px solid currentColor" }}
-              onClick={() => { setStep("request"); setError(null); setInfo(null); }}
+              className="activate-btn activate-btn--secondary"
+              onClick={() => { setStep("request"); setError(null); setInfo(null); setCode(""); setNew(""); }}
               disabled={loading}
             >
               {t("common.back")}

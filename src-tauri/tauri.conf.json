@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' https://accounts.google.com https://telegram.org; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https: http:; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost ws://localhost:1421 http://localhost:8080 http://164.68.100.190:8080 https://pravaonline.uz https://accounts.google.com https://oauth.telegram.org; frame-src https://accounts.google.com https://oauth.telegram.org https://telegram.org; object-src 'none'; base-uri 'self'; form-action 'self'"
     }
   },
   "bundle": {

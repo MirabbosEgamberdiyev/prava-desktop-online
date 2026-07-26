@@ -14,7 +14,8 @@
     "yes": "Да",
     "times": "раз",
     "darkMode": "Тёмная тема",
-    "lightMode": "Светлая тема"
+    "lightMode": "Светлая тема",
+    "close": "Закрыть"
   },
   "license": {
     "title": "Prava Online",
@@ -71,7 +72,9 @@
     "codeRequired": "Введите 6-значный код",
     "newPassword": "Новый пароль",
     "resetPassword": "Сбросить пароль",
-    "resetting": "Сброс..."
+    "resetting": "Сброс...",
+    "showPassword": "Показать пароль",
+    "hidePassword": "Скрыть пароль"
   },
   "home": {
     "welcome": "Добро пожаловать, {{name}}!",
@@ -97,7 +100,9 @@
     "wrongAnswers": "Ошибки",
     "wrongAnswersDesc": "Вопросы с неверными ответами",
     "saved": "Сохранённые",
-    "savedDesc": "Отмеченные вами вопросы"
+    "savedDesc": "Отмеченные вами вопросы",
+    "followUs": "Подписывайтесь на нас в соцсетях",
+    "scanQr": "Отсканируйте QR-код"
   },
   "exam": {
     "title": "Экзамен",
@@ -183,5 +188,8 @@
     "timesPassed": "Сдано",
     "bestScore": "Лучший",
     "lastScore": "Последний"
+  },
+  "language": {
+    "select": "Выбор языка"
   }
 }

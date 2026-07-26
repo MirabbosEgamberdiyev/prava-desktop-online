@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppScreen, LicenseStatus, UserResponse, TicketResponse } from "./types";
-import { checkLicense, prefetchAll } from "./api";
+import { checkLicense, prefetchAll, clearCache, logout, SESSION_EXPIRED_EVENT } from "./api";
 import { isLoggedIn, clearTokens } from "./auth";
 import { getMe } from "./api";
 import LicenseScreen from "./screens/LicenseScreen";
@@ -61,6 +61,19 @@ function App() {
     init();
   }, []);
 
+  // Sessiya tugaganda (refresh ham ishlamadi) — ilovani qayta yuklamasdan
+  // login ekraniga yumshoq o'tish. Listener unmount'da olib tashlanadi.
+  useEffect(() => {
+    const onExpired = () => {
+      setCurrentUser(null);
+      setTicket(null);
+      setTopicId(null);
+      setScreen("login");
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
+
   const handleLicenseActivated = async (status: LicenseStatus) => {
     setLicenseStatus(status);
     setRenewMode(false);
@@ -90,8 +103,15 @@ function App() {
   };
 
   const handleLogout = () => {
+    // Serverdagi refresh token'ni ham bekor qilamiz — ilgari faqat mahalliy
+    // tokenlar o'chirilardi va refresh token serverda tirik qolaverardi.
+    logout().catch((e) => console.warn("[App] logout failed:", e));
     clearTokens();
+    // Keshda oldingi foydalanuvchining statistikasi/biletlari qolib ketmasin
+    clearCache();
     setCurrentUser(null);
+    setTicket(null);
+    setTopicId(null);
     setScreen("login");
   };
 
@@ -169,44 +189,40 @@ function App() {
         />
       )}
       {currentUser && screen === "exam" && (
-        <ExamScreen user={currentUser} onBack={goHome} />
+        <ExamScreen onBack={goHome} />
       )}
       {currentUser && screen === "marathon" && (
         <MarathonScreen
-          user={currentUser}
           topicId={selectedTopicId}
           onBack={() => { setTopicId(null); goHome(); }}
         />
       )}
       {currentUser && screen === "topics" && (
         <TopicsScreen
-          user={currentUser}
           onBack={goHome}
           onStartMarathon={startMarathonByTopic}
         />
       )}
       {currentUser && screen === "stats" && (
-        <StatsScreen user={currentUser} onBack={goHome} />
+        <StatsScreen onBack={goHome} />
       )}
       {currentUser && screen === "biletlar" && (
         <BiletlarScreen
-          user={currentUser}
           onBack={goHome}
           onStartTicket={startTicketExam}
         />
       )}
       {currentUser && selectedTicket && screen === "ticket-exam" && (
         <TicketExamScreen
-          user={currentUser}
           ticket={selectedTicket}
           onBack={() => setScreen("biletlar")}
         />
       )}
       {currentUser && screen === "wrong-answers" && (
-        <WrongAnswersScreen user={currentUser} onBack={goHome} />
+        <WrongAnswersScreen onBack={goHome} />
       )}
       {currentUser && screen === "saved-questions" && (
-        <SavedQuestionsScreen user={currentUser} onBack={goHome} />
+        <SavedQuestionsScreen onBack={goHome} />
       )}
     </div>
   );

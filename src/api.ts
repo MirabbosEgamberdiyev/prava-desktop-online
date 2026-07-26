@@ -6,6 +6,7 @@ import type {
   ExamResponse, ExamResultResponse, SubmitAnswerRequest,
   TicketResponse, ComprehensiveStatisticsResponse,
   WrongAnswerResponse, SavedQuestionResponse, PackageResponse,
+  VerificationSentResponse,
 } from "./types";
 import {
   localAddWrong, localGetWrongs, localRemoveWrong,
@@ -62,6 +63,21 @@ export function clearCache(): void {
 }
 
 // ─── Base HTTP fetch ──────────────────────────────────────────────────────────
+
+/** Server javob bermasa so'rov abadiy osilib qolmasin (tugma "yuklanmoqda"da qotadi) */
+const REQUEST_TIMEOUT_MS = 20_000;
+
+/** Sessiya tugaganda App shu hodisani eshitib login ekraniga o'tadi. */
+export const SESSION_EXPIRED_EVENT = "prava:session-expired";
+
+/** Tarmoq xatosi — foydalanuvchiga "Failed to fetch" emas, tushunarli matn ko'rsatamiz. */
+export class NetworkError extends Error {
+  constructor(message = "Serverga ulanib bo'lmadi. Internet aloqasini tekshiring.") {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
 export async function http<T>(
   path: string,
   options: RequestInit = {},
@@ -77,14 +93,35 @@ export async function http<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal ?? controller.signal,
+    });
+  } catch (e) {
+    // fetch faqat tarmoq/abort xatolarida reject qiladi (HTTP 4xx/5xx da emas)
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new NetworkError("So'rov vaqti tugadi. Server javob bermayapti.");
+    }
+    throw new NetworkError();
+  } finally {
+    clearTimeout(timeout);
+  }
 
   // Token muddati tugagan → refresh qilib qaytadan urinish
   if (res.status === 401 && retry) {
     const refreshed = await tryRefresh();
     if (refreshed) return http<T>(path, options, false);
+    // Ilgari bu yerda window.location.reload() bor edi — imtihon o'rtasida
+    // butun ilova qayta yuklanib, javoblar yo'qolardi. Endi App hodisani
+    // eshitadi va yumshoq qilib login ekraniga o'tkazadi.
     clearTokens();
-    window.location.reload();
+    clearCache();
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     throw new Error("session_expired");
   }
 
@@ -105,23 +142,39 @@ export async function http<T>(
   return (json?.data ?? json) as T;
 }
 
-async function tryRefresh(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (!res.ok) return false;
-    const json = await res.json();
-    const data: AuthResponse = json.data ?? json;
-    saveTokens(data.accessToken, data.refreshToken, data.user);
-    return true;
-  } catch {
-    return false;
-  }
+/**
+ * Bir vaqtning o'zida bir nechta so'rov 401 olsa, refresh faqat BIR marta
+ * yuborilishi kerak — aks holda backend refresh token'ni rotatsiya qilsa,
+ * parallel urinishlar bir-birining tokenini bekor qilib, foydalanuvchini
+ * tizimdan chiqarib yuboradi.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return false;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return false;
+      const json = await res.json();
+      const data: AuthResponse = json.data ?? json;
+      if (!data?.accessToken || !data?.refreshToken) return false;
+      saveTokens(data.accessToken, data.refreshToken, data.user);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      // Keyingi 401 yangi refresh urinishini boshlay olsin
+      setTimeout(() => { refreshInFlight = null; }, 0);
+    }
+  })();
+  return refreshInFlight;
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -186,9 +239,14 @@ export async function register(
 }
 
 // ─── PASSWORD RESET ──────────────────────────────────────────────────────────
-// Step 1: SMS/email orqali kod yuborish
-export async function forgotPassword(identifier: string): Promise<void> {
-  await http("/api/v1/auth/forgot-password", {
+// Step 1: SMS/email orqali kod yuborish.
+// ⚠️ Backend kodni foydalanuvchining BAZADAGI telefon raqamiga yuboradi va
+// tasdiqlash yozuvini ham o'sha raqamga bog'laydi. Foydalanuvchi kiritgan
+// matn boshqacha formatda bo'lsa (masalan "+998..." vs "998..."), 2-qadamda
+// verifyCode topa olmay "kod noto'g'ri" deb qaytarardi. Shuning uchun javobdagi
+// kanonik `recipient` ni qaytaramiz va reset'da o'shani ishlatamiz.
+export async function forgotPassword(identifier: string): Promise<VerificationSentResponse> {
+  return http<VerificationSentResponse>("/api/v1/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ identifier, verificationType: "SMS" }),
   });

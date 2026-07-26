@@ -51,7 +51,9 @@ fn check_license(state: tauri::State<AppState>) -> Result<license::LicenseStatus
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
+        // tauri_plugin_shell olib tashlandi: frontend uni umuman ishlatmaydi,
+        // lekin `shell:allow-open` ruxsati ochiq turgani IPC hujum yuzasini
+        // keraksiz kengaytirardi (ixtiyoriy URL/fayl ochish).
         .setup(|app| {
             let app_data_dir = app
                 .path()

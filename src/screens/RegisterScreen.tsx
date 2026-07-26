@@ -28,11 +28,13 @@ function getPasswordStrength(password: string): number {
   return strength;
 }
 
+// Dizayn tokenlari — hardcode qilingan hex emas, shunda dark mode'da ham
+// to'g'ri (yorqinroq) variantlar ishlatiladi.
 function getStrengthColor(strength: number): string {
-  if (strength <= 25) return "#e03131";
-  if (strength <= 50) return "#e67700";
-  if (strength <= 75) return "#fcc419";
-  return "#2f9e44";
+  if (strength <= 25) return "var(--danger)";
+  if (strength <= 50) return "var(--warning)";
+  if (strength <= 75) return "var(--warning)";
+  return "var(--success)";
 }
 
 export default function RegisterScreen({ onRegistered, onGoLogin }: Props) {
@@ -292,8 +294,13 @@ export default function RegisterScreen({ onRegistered, onGoLogin }: Props) {
         )}
 
         {/* ── STEP 2: OTP Verification ── */}
+        {/* <form> — shunda Enter bosilganda ham kod tasdiqlanadi (ilgari oddiy
+            <div> edi va klaviaturadan yakunlab bo'lmasdi) */}
         {step === 2 && (
-          <div className="license-form">
+          <form
+            className="license-form"
+            onSubmit={(e) => { e.preventDefault(); if (!loading && code.length >= 6) handleComplete(); }}
+          >
             <div style={{ textAlign: "center", marginBottom: 16 }}>
               <div style={{
                 width: 60, height: 60, borderRadius: "50%", margin: "0 auto 12px",
@@ -363,9 +370,8 @@ export default function RegisterScreen({ onRegistered, onGoLogin }: Props) {
             {error && <div className="error-message">{error}</div>}
 
             <button
-              type="button" className="activate-btn"
+              type="submit" className="activate-btn"
               disabled={loading || code.length < 6}
-              onClick={handleComplete}
             >
               {loading ? t("auth.registering") : t("auth.confirm", { defaultValue: "Tasdiqlash" })}
             </button>
@@ -383,7 +389,7 @@ export default function RegisterScreen({ onRegistered, onGoLogin }: Props) {
               <IconArrowLeft size={14} />
               {t("common.back")}
             </button>
-          </div>
+          </form>
         )}
 
         <div className="machine-id-section">

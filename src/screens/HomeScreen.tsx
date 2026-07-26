@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { UserResponse, ComprehensiveStatisticsResponse, AppScreen } from "../types";
 import ThemeToggle from "../components/ThemeToggle";
@@ -25,6 +25,8 @@ import {
   IconX,
 } from "@tabler/icons-react";
 
+// Brend ranglari — bular dizayn tokeni emas, ijtimoiy tarmoqlarning
+// o'z ranglari, shuning uchun ataylab hardcoded.
 const SOCIAL_LINKS = [
   {
     label: "Instagram",
@@ -32,7 +34,6 @@ const SOCIAL_LINKS = [
     url: "https://www.instagram.com/pravaonlineuz/",
     icon: IconBrandInstagram,
     gradient: "linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)",
-    color: "#e1306c",
   },
   {
     label: "Telegram",
@@ -40,7 +41,6 @@ const SOCIAL_LINKS = [
     url: "https://t.me/pravaonlineuz",
     icon: IconBrandTelegram,
     gradient: "linear-gradient(135deg,#48cae4,#0096c7)",
-    color: "#0088cc",
   },
   {
     label: "YouTube",
@@ -48,7 +48,6 @@ const SOCIAL_LINKS = [
     url: "https://www.youtube.com/@pravaonlineuz",
     icon: IconBrandYoutube,
     gradient: "linear-gradient(135deg,#ff6b6b,#cc0000)",
-    color: "#ff0000",
   },
   {
     label: "TikTok",
@@ -56,7 +55,6 @@ const SOCIAL_LINKS = [
     url: "https://tiktok.com/@pravaonlineuz",
     icon: IconBrandTiktok,
     gradient: "linear-gradient(135deg,#25f4ee,#fe2c55)",
-    color: "#000000",
   },
   {
     label: "Website",
@@ -64,7 +62,6 @@ const SOCIAL_LINKS = [
     url: "https://pravaonline.uz/",
     icon: IconWorld,
     gradient: "linear-gradient(135deg,#4dabf7,#1971c2)",
-    color: "#1971c2",
   },
 ];
 
@@ -90,11 +87,37 @@ interface Props {
 export default function HomeScreen({ user, onLogout, onNav }: Props) {
   const { t } = useTranslation();
   const [stats, setStats] = useState<ComprehensiveStatisticsResponse | null>(null);
+  // Statistika kelguncha 0 / 0% ko'rsatilardi — foydalanuvchi buni haqiqiy
+  // natija deb o'ylardi. Endi yuklanayotgani "—" bilan bildiriladi.
+  const [statsLoading, setStatsLoading] = useState(true);
   const [qrModal, setQrModal] = useState<typeof SOCIAL_LINKS[0] | null>(null);
+  const qrCloseRef = useRef<HTMLButtonElement>(null);
+  // Modal yopilgach fokus qaysi tugmadan kelgan bo'lsa, o'sha yerga qaytadi.
+  const qrOpenerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    getMyStats().then(setStats).catch((e) => console.warn("[HomeScreen] stats failed:", e));
+    let alive = true;
+    getMyStats()
+      .then((s) => { if (alive) setStats(s); })
+      .catch((e) => console.warn("[HomeScreen] stats failed:", e))
+      .finally(() => { if (alive) setStatsLoading(false); });
+    return () => { alive = false; };
   }, []);
+
+  // Esc bilan QR modalni yopish — desktop ilovada kutiladigan xatti-harakat.
+  // Listener modal ochiq bo'lgandagina qo'shiladi va albatta olib tashlanadi.
+  // Ochilganda fokus yopish tugmasiga o'tadi (aks holda Tab modal ortidagi
+  // sahifa bo'ylab yurib ketardi), yopilganda esa ochgan tugmaga qaytadi.
+  useEffect(() => {
+    if (!qrModal) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setQrModal(null); };
+    window.addEventListener("keydown", onKey);
+    qrCloseRef.current?.focus();
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      qrOpenerRef.current?.focus();
+    };
+  }, [qrModal]);
 
   const menus = [
     { icon: <IconPencil size={28} stroke={1.5} color="#fff" />, label: t("home.exam"), desc: t("home.examDesc"), color: "#7950f2", gradient: "linear-gradient(135deg,#9775fa,#7950f2)", screen: "exam" as AppScreen, featured: true },
@@ -111,20 +134,19 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
   const avgScore      = stats?.summary?.averageScore ?? 0;
   const passRate      = stats?.summary?.passRate ?? 0;
 
+  const dash = "—";
   const statItems = [
     {
       icon: <IconTicket size={20} color="#fff" />,
       gradient: "linear-gradient(135deg,#38d9a9,#0c8599)",
-      value: String(totalExams),
+      value: statsLoading ? dash : String(totalExams),
       label: t("stats.totalExams"),
-      sub: null,
     },
     {
       icon: <IconCheck size={20} color="#fff" />,
       gradient: "linear-gradient(135deg,#9775fa,#7950f2)",
-      value: `${Math.round(avgScore)}%`,
+      value: statsLoading ? dash : `${Math.round(avgScore)}%`,
       label: t("stats.avgScore"),
-      sub: null,
     },
     {
       icon: <IconTargetArrow size={20} color="#fff" />,
@@ -133,9 +155,8 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
         : passRate >= 40
         ? "linear-gradient(135deg,#ffa94d,#e67700)"
         : "linear-gradient(135deg,#ff6b6b,#e03131)",
-      value: `${Math.round(passRate)}%`,
+      value: statsLoading ? dash : `${Math.round(passRate)}%`,
       label: t("stats.passRate"),
-      sub: null,
     },
   ];
 
@@ -151,7 +172,7 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
           <div className="home-header-right">
             <LanguagePicker />
             <ThemeToggle />
-            <button className="user-switcher" onClick={onLogout} title={t("auth.logout")}>
+            <button type="button" className="user-switcher" onClick={onLogout} title={t("auth.logout")} aria-label={t("auth.logout")}>
               <div className="user-switcher-avatar" style={{ background: getColor(user.firstName) }}>
                 {getInitials(user.firstName, user.lastName)}
               </div>
@@ -171,17 +192,22 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
           </div>
 
           <div className="home-stats-bar">
+            {/* Ilgari <div onClick> edi: sichqonchasiz foydalanuvchi bu
+                kartochkalarga umuman yeta olmasdi. Endi haqiqiy <button>. */}
             {statItems.map((s, i) => (
-              <div key={i} className="home-stat" onClick={() => onNav("stats")} style={{ cursor: "pointer" }}>
+              <button
+                key={i}
+                type="button"
+                className="home-stat"
+                onClick={() => onNav("stats")}
+                aria-label={`${s.label}: ${s.value}`}
+              >
                 <div className="home-stat-icon" style={{ background: s.gradient }}>{s.icon}</div>
                 <div>
-                  <div className="home-stat-value">
-                    {s.value}
-                    {s.sub && <span className="home-stat-sub">{s.sub}</span>}
-                  </div>
+                  <div className="home-stat-value">{s.value}</div>
                   <div className="home-stat-label">{s.label}</div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -189,6 +215,7 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
             {menus.map((m, i) => (
               <button
                 key={m.screen}
+                type="button"
                 className={`home-menu-card${m.featured ? " featured" : ""}`}
                 onClick={() => onNav(m.screen)}
                 style={{ "--accent": m.color } as React.CSSProperties}
@@ -210,14 +237,15 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
           {/* Footer */}
           <footer className="home-footer">
             <div className="home-footer-inner">
-              <p className="home-footer-title">Bizni ijtimoiy tarmoqlarda kuzating</p>
+              <p className="home-footer-title">{t("home.followUs")}</p>
               <div className="home-footer-cards">
                 {SOCIAL_LINKS.map((s) => (
                   <button
                     key={s.label}
+                    type="button"
                     className="home-footer-btn"
                     style={{ background: s.gradient }}
-                    onClick={() => setQrModal(s)}
+                    onClick={(e) => { qrOpenerRef.current = e.currentTarget; setQrModal(s); }}
                   >
                     <s.icon size={20} stroke={1.8} color="#fff" />
                     <span>{s.label}</span>
@@ -230,7 +258,13 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
           {/* QR Modal */}
           {qrModal && (
             <div className="modal-overlay" onClick={() => setQrModal(null)}>
-              <div className="qr-modal-card" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="qr-modal-card"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label={qrModal.label}
+              >
                 <div className="qr-modal-header" style={{ background: qrModal.gradient }}>
                   <qrModal.icon size={24} stroke={1.8} color="#fff" />
                   <span className="qr-modal-platform">{qrModal.label}</span>
@@ -250,9 +284,17 @@ export default function HomeScreen({ user, onLogout, onNav }: Props) {
                     }}
                   />
                   <div className="qr-modal-url">{qrModal.handle}</div>
-                  <p className="qr-modal-hint">QR kodni skanerlang</p>
+                  <p className="qr-modal-hint">{t("home.scanQr")}</p>
                 </div>
-                <button className="qr-modal-close" onClick={() => setQrModal(null)}>✕</button>
+                <button
+                  ref={qrCloseRef}
+                  type="button"
+                  className="qr-modal-close"
+                  onClick={() => setQrModal(null)}
+                  aria-label={t("common.close")}
+                >
+                  ✕
+                </button>
               </div>
             </div>
           )}

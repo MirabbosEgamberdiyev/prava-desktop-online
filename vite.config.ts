@@ -27,8 +27,9 @@ export default defineConfig(async () => ({
           "i18n": ["i18next", "react-i18next"],
           // Tabler icons alohida — bir marta yuklanadi
           "icons":  ["@tabler/icons-react"],
-          // Tauri API alohida
-          "tauri":  ["@tauri-apps/api", "@tauri-apps/plugin-opener", "@tauri-apps/plugin-shell"],
+          // Tauri API alohida (plugin-opener/plugin-shell frontendda
+          // umuman import qilinmaydi — ro'yxatdan olib tashlandi)
+          "tauri":  ["@tauri-apps/api"],
         },
       },
     },

@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
 import {
-  UserResponse, QuestionResponse, OptionResponse, LocalizedText,
+  QuestionResponse, OptionResponse, LocalizedText,
   ExamResponse, ExamResultResponse,
 } from "../types";
 import { startRealExam, submitExam, addWrongAnswer, toggleSavedQuestion, getSavedQuestions } from "../api";
@@ -16,7 +16,6 @@ import {
 } from "@tabler/icons-react";
 
 interface Props {
-  user: UserResponse;
   onBack: () => void;
 }
 
@@ -67,6 +66,8 @@ export default function ExamScreen({ onBack }: Props) {
   const autoRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
   answersRef.current = answers;
+  // Taymer effekti eskirgan closure'ni ushlab qolmasligi uchun finish'ni ref orqali chaqiramiz
+  const finishRef  = useRef<(timeUp?: boolean) => void>(() => {});
 
   // Load saved questions on mount
   useEffect(() => {
@@ -140,25 +141,34 @@ export default function ExamScreen({ onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Timer countdown
+  // Timer countdown — setState updater'i SOF bo'lishi shart.
+  // Ilgari updater ichida setIsTimeUp/triggerFinish chaqirilardi: StrictMode
+  // updater'ni ikki marta chaqirgani uchun imtihon ikki marta yakunlanishi
+  // (ikki marta submit) mumkin edi.
   useEffect(() => {
     if (phase !== "exam") return;
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          setIsTimeUp(true);
-          triggerFinish(true);
-          return 0;
-        }
-        return prev - 1;
-      });
+    const id = setInterval(() => {
+      setTimeLeft((prev) => (prev <= 0 ? 0 : prev - 1));
     }, 1000);
-    return () => clearInterval(timerRef.current!);
+    timerRef.current = id;
+    return () => { clearInterval(id); timerRef.current = null; };
   }, [phase]);
 
+  // Vaqt tugadi → yakunlash (side effect alohida effektda, updater ichida emas)
+  useEffect(() => {
+    if (phase !== "exam" || timeLeft > 0) return;
+    setIsTimeUp(true);
+    finishRef.current(true);
+  }, [phase, timeLeft]);
+
+  // Ekrandan chiqilganda kutayotgan auto-advance timeout'ini tozalash
+  useEffect(() => () => {
+    if (autoRef.current) clearTimeout(autoRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
+
   const triggerFinish = useCallback((timeUp = false) => {
-    clearInterval(timerRef.current!);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; }
     const curAnswers = answersRef.current;
     if (!timeUp) setIsTimeUp(false);
@@ -174,6 +184,7 @@ export default function ExamScreen({ onBack }: Props) {
       .then(setResult)
       .catch((e) => console.warn("[ExamScreen] side effect failed:", e));
   }, [exam, questions]);
+  finishRef.current = triggerFinish;
 
   // Keyboard shortcuts during exam
   useEffect(() => {
@@ -327,21 +338,23 @@ export default function ExamScreen({ onBack }: Props) {
   }
 
   // ─── EXAM ─────────────────────────────────────────────────────────────────
-  // ⚡ Performance: derived qiymatlar memoizatsiya qilinadi — keraksiz hisoblash yo'q
-  const q           = questions[current];
-  const opts        = useMemo(() => q?.options || [], [q]);
-  const answered    = answers[current];
-  const correctIdx  = q?.correctOptionIndex ?? 0;
-  const explanation = useMemo(
-    () => (answered !== undefined ? getLocal(q?.explanation) : null),
-    [answered, q]
+  // ⚠️ Bu yerda useMemo/useHook ISHLATIB BO'LMAYDI — yuqorida "loading" va
+  // "result" uchun erta `return` bor. Hook'lar shartli chaqirilsa React
+  // "Rendered more hooks than during the previous render" xatosi bilan
+  // ilovani butunlay yiqitadi (loading → exam o'tishida). Oddiy hisoblash
+  // bu yerda arzon, shuning uchun memoizatsiyasiz qoldiramiz.
+  const q = questions[current];
+  if (!q) return (
+    <div className="loading-screen"><div className="spinner" /><p>{t("common.loading")}</p></div>
   );
-  const { correct, wrong } = useMemo(() => {
-    const vals = Object.values(answers);
-    const c = vals.reduce((acc, a) => acc + (a.selected === a.correct ? 1 : 0), 0);
-    return { correct: c, wrong: vals.length - c };
-  }, [answers]);
-  const imgUrl = useMemo(() => imgSrc(q?.imageUrl), [q]);
+  const opts        = q.options || [];
+  const answered    = answers[current];
+  const correctIdx  = q.correctOptionIndex ?? 0;
+  const explanation = answered !== undefined ? getLocal(q.explanation) : null;
+  const answerVals  = Object.values(answers);
+  const correct     = answerVals.reduce((acc, a) => acc + (a.selected === a.correct ? 1 : 0), 0);
+  const wrong       = answerVals.length - correct;
+  const imgUrl      = imgSrc(q.imageUrl);
 
   return (
     <div className="exam-screen">

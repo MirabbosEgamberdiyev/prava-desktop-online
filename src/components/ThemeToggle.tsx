@@ -7,11 +7,19 @@ export default function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
   const { t } = useTranslation();
 
+  const label = theme === "light" ? t("common.darkMode") : t("common.lightMode");
+
   return (
+    // type="button" muhim: bu tugma form ichidagi topbar'da ham ishlatiladi
+    // (ForgotPassword/Login/Register), aks holda Enter bosilganda formani
+    // yuborib yuborishi mumkin edi.
     <button
+      type="button"
       className="theme-toggle"
       onClick={toggleTheme}
-      title={theme === "light" ? t("common.darkMode") : t("common.lightMode")}
+      title={label}
+      aria-label={label}
+      aria-pressed={theme === "dark"}
     >
       {theme === "light"
         ? <IconMoon size={18} stroke={2} />

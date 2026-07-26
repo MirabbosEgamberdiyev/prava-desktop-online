@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { activateLicense, getMachineId } from "../api";
 import { LicenseStatus } from "../types";
@@ -17,9 +17,15 @@ export default function LicenseScreen({ onActivated, onCancel }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     getMachineId().then(setMachineId).catch((e) => console.warn("[LicenseScreen] getMachineId failed:", e));
+  }, []);
+
+  // "Nusxalandi" timeout'ini unmount'da tozalash
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
   }, []);
 
   const handleActivate = async (e: React.FormEvent) => {
@@ -36,17 +42,28 @@ export default function LicenseScreen({ onActivated, onCancel }: Props) {
       const status = await activateLicense(activationCode.trim());
       onActivated(status);
     } catch (err) {
-      setError(err as string);
+      // Tauri invoke string bilan reject qiladi, lekin Error/obyekt ham kelishi
+      // mumkin — normallashtirmasak ekranda "[object Object]" chiqib qolardi.
+      setError(
+        typeof err === "string" ? err
+        : err instanceof Error ? err.message
+        : t("license.errorInvalid", { defaultValue: "Aktivatsiya kodi noto'g'ri" })
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  const markCopied = () => {
+    setCopied(true);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(machineId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      markCopied();
     } catch {
       const ta = document.createElement("textarea");
       ta.value = machineId;
@@ -54,8 +71,7 @@ export default function LicenseScreen({ onActivated, onCancel }: Props) {
       ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      markCopied();
     }
   };
 

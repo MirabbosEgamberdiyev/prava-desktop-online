@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
-import { UserResponse, TicketResponse, QuestionResponse, OptionResponse, LocalizedText, ExamResultResponse } from "../types";
+import { TicketResponse, QuestionResponse, OptionResponse, LocalizedText, ExamResultResponse } from "../types";
 import { startTicketExam, submitExam, addWrongAnswer, toggleSavedQuestion, getSavedQuestions } from "../api";
 import { API_BASE } from "../api";
 import ThemeToggle from "../components/ThemeToggle";
@@ -14,7 +14,6 @@ import {
 } from "@tabler/icons-react";
 
 interface Props {
-  user: UserResponse;
   ticket: TicketResponse;
   onBack: () => void;
 }
@@ -45,7 +44,7 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
   const [questions, setQuestions] = useState<QuestionResponse[]>([]);
   const [current, setCurrent]     = useState(0);
   const [answers, setAnswers]     = useState<Record<number, Answer>>({});
-  const [timeLeft, setTimeLeft]   = useState((ticket.durationMinutes ?? 25) * 60);
+  const [timeLeft, setTimeLeft]   = useState((ticket.durationMinutes || 25) * 60);
   const [isTimeUp, setIsTimeUp]   = useState(false);
   const [errorMsg, setErrorMsg]   = useState<string | null>(null);
   const [result, setResult]       = useState<ExamResultResponse | null>(null);
@@ -56,6 +55,8 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
   const autoRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
   answersRef.current = answers;
+  // Taymer effekti eskirgan closure'ni ushlab qolmasligi uchun finish'ni ref orqali chaqiramiz
+  const finishRef  = useRef<(timeUp?: boolean) => void>(() => {});
 
   const loadQuestions = useCallback(() => {
     setPhase("loading");
@@ -63,7 +64,7 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
     answersRef.current = {};
     setCurrent(0);
     setIsTimeUp(false);
-    setTimeLeft((ticket.durationMinutes ?? 25) * 60);
+    setTimeLeft((ticket.durationMinutes || 25) * 60);
     setErrorMsg(null);
     setResult(null);
 
@@ -89,24 +90,33 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
 
   useEffect(() => { setShowExp(false); }, [current]);
 
+  // Taymer — setState updater'i SOF bo'lishi shart (StrictMode uni ikki marta
+  // chaqiradi; ilgari updater ichida triggerFinish bo'lgani uchun imtihon
+  // ikki marta submit qilinishi mumkin edi).
   useEffect(() => {
     if (phase !== "exam") return;
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          setIsTimeUp(true);
-          triggerFinish(true);
-          return 0;
-        }
-        return prev - 1;
-      });
+    const id = setInterval(() => {
+      setTimeLeft((prev) => (prev <= 0 ? 0 : prev - 1));
     }, 1000);
-    return () => clearInterval(timerRef.current!);
+    timerRef.current = id;
+    return () => { clearInterval(id); timerRef.current = null; };
   }, [phase]);
 
+  // Vaqt tugadi → yakunlash
+  useEffect(() => {
+    if (phase !== "exam" || timeLeft > 0) return;
+    setIsTimeUp(true);
+    finishRef.current(true);
+  }, [phase, timeLeft]);
+
+  // Unmount'da kutayotgan timer/timeout'larni tozalash
+  useEffect(() => () => {
+    if (autoRef.current) clearTimeout(autoRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
+
   const triggerFinish = useCallback((timeUp = false) => {
-    clearInterval(timerRef.current!);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; }
     if (!timeUp) setIsTimeUp(false);
     setPhase("result");
@@ -120,6 +130,7 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
       .then(setResult)
       .catch((e) => console.warn("[TicketExam] op failed:", e));
   }, [sessionId, questions]);
+  finishRef.current = triggerFinish;
 
   const handleToggleExp = () => {
     const willOpen = !showExp;
@@ -257,7 +268,10 @@ export default function TicketExamScreen({ ticket, onBack }: Props) {
   }
 
   // ─── EXAM ───
-  const q          = questions[current];
+  const q = questions[current];
+  if (!q) return (
+    <div className="loading-screen"><div className="spinner" /><p>{t("common.loading")}</p></div>
+  );
   const opts       = q.options || [];
   const answered   = answers[current];
   const correctIdx = q.correctOptionIndex ?? 0;

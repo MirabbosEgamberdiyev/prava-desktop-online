@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
-import { UserResponse, ComprehensiveStatisticsResponse, LocalizedText } from "../types";
+import { ComprehensiveStatisticsResponse, LocalizedText } from "../types";
 import { getMyStats } from "../api";
 import {
   IconArrowLeft, IconTrophy, IconCheck, IconX, IconTicket,
-  IconChartBar, IconBook2,
+  IconChartBar, IconBook2, IconAlertTriangle, IconRefresh,
 } from "@tabler/icons-react";
 
-interface Props { user: UserResponse; onBack: () => void; }
+interface Props { onBack: () => void; }
 
 type Tab = "summary" | "tickets" | "topics";
 
@@ -26,34 +26,57 @@ export default function StatsScreen({ onBack }: Props) {
   const [tab, setTab]         = useState<Tab>("summary");
   const [stats, setStats]     = useState<ComprehensiveStatisticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  // ⚠️ Ilgari so'rov muvaffaqiyatsiz bo'lsa xato yutib yuborilardi va ekran
+  // "hali imtihon topshirmagansiz" deb ko'rsatardi — foydalanuvchi statistikasi
+  // yo'qolgandek tuyulardi. Endi xato holati va "qayta urinish" bor.
+  const [error, setError]     = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
     getMyStats()
       .then(setStats)
-      .catch((e) => console.warn("[StatsScreen] getMyStats failed:", e))
+      .catch((e) => {
+        console.warn("[StatsScreen] getMyStats failed:", e);
+        setError(e instanceof Error ? e.message : String(e));
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="stats-screen">
       <header className="stats-header">
-        <button className="quiz-back-btn" style={{ position: "static" }} onClick={onBack}>
+        <button type="button" className="quiz-back-btn" style={{ position: "static" }} onClick={onBack} aria-label={t("common.back")}>
           <IconArrowLeft size={18} />
         </button>
         <h2 className="stats-header-title">{t("stats.title")}</h2>
       </header>
 
       {/* Tabs */}
-      <div className="stats-tabs">
-        <button className={`stats-tab-btn${tab === "summary" ? " active" : ""}`} onClick={() => setTab("summary")}>
+      <div className="stats-tabs" role="tablist" aria-label={t("stats.title")}>
+        <button
+          type="button" role="tab" aria-selected={tab === "summary"}
+          className={`stats-tab-btn${tab === "summary" ? " active" : ""}`}
+          onClick={() => setTab("summary")}
+        >
           <IconChartBar size={15} />
           {t("stats.tabSummary")}
         </button>
-        <button className={`stats-tab-btn${tab === "tickets" ? " active" : ""}`} onClick={() => setTab("tickets")}>
+        <button
+          type="button" role="tab" aria-selected={tab === "tickets"}
+          className={`stats-tab-btn${tab === "tickets" ? " active" : ""}`}
+          onClick={() => setTab("tickets")}
+        >
           <IconTicket size={15} />
           {t("stats.tabTickets")}
         </button>
-        <button className={`stats-tab-btn${tab === "topics" ? " active" : ""}`} onClick={() => setTab("topics")}>
+        <button
+          type="button" role="tab" aria-selected={tab === "topics"}
+          className={`stats-tab-btn${tab === "topics" ? " active" : ""}`}
+          onClick={() => setTab("topics")}
+        >
           <IconBook2 size={15} />
           {t("stats.tabTopics")}
         </button>
@@ -61,6 +84,15 @@ export default function StatsScreen({ onBack }: Props) {
 
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
+      ) : error ? (
+        <div className="empty-state" style={{ marginTop: 60 }}>
+          <div className="empty-state-icon"><IconAlertTriangle size={48} stroke={1.5} color="var(--danger)" /></div>
+          <p className="empty-state-text state-error-title">{t("common.error")}</p>
+          <p className="empty-state-sub state-error-detail">{error}</p>
+          <button type="button" className="retry-btn" onClick={load}>
+            <IconRefresh size={15} /> {t("exam.retry")}
+          </button>
+        </div>
       ) : (
         <div className="stats-content">
           <div className="stats-container">
@@ -81,25 +113,25 @@ export default function StatsScreen({ onBack }: Props) {
                         icon={<IconTrophy size={22} />}
                         value={String(stats.summary.totalExams ?? 0)}
                         label={t("stats.totalExams")}
-                        color="#7950f2"
+                        color="var(--accent-purple)"
                       />
                       <SummaryCard
                         icon={<IconCheck size={22} />}
                         value={`${Math.round(stats.summary.averageScore ?? 0)}%`}
                         label={t("stats.avgScore")}
-                        color="#2f9e44"
+                        color="var(--success)"
                       />
                       <SummaryCard
                         icon={<IconCheck size={22} />}
                         value={String(stats.summary.correctAnswers ?? 0)}
                         label={t("stats.totalCorrect")}
-                        color="#1971c2"
+                        color="var(--primary)"
                       />
                       <SummaryCard
                         icon={<IconX size={22} />}
                         value={String(stats.summary.wrongAnswers ?? 0)}
                         label={t("stats.totalWrong")}
-                        color="#e03131"
+                        color="var(--danger)"
                       />
                     </div>
 
@@ -109,13 +141,22 @@ export default function StatsScreen({ onBack }: Props) {
                         <span>{t("stats.passRate")}</span>
                         <span style={{ color: "var(--primary)" }}>{Math.round(stats.summary.passRate ?? 0)}%</span>
                       </div>
-                      <div style={{ height: 10, borderRadius: 99, background: "var(--border)", overflow: "hidden" }}>
+                      <div
+                        role="progressbar"
+                        aria-label={t("stats.passRate")}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={Math.round(stats.summary.passRate ?? 0)}
+                        style={{ height: 10, borderRadius: 99, background: "var(--border)", overflow: "hidden" }}
+                      >
                         <div style={{
                           height: "100%", borderRadius: 99,
-                          width: `${stats.summary.passRate ?? 0}%`,
+                          // 0..100 oralig'idan chiqib ketmasin (backend 100 dan
+                          // katta qiymat qaytarsa bar konteynerdan oshib ketardi)
+                          width: `${Math.min(100, Math.max(0, stats.summary.passRate ?? 0))}%`,
                           background: (stats.summary.passRate ?? 0) >= 70
-                            ? "linear-gradient(90deg,#69db7c,#2f9e44)"
-                            : "linear-gradient(90deg,#ffa94d,#e67700)",
+                            ? "var(--success)"
+                            : "var(--warning)",
                           transition: "width 0.6s ease",
                         }} />
                       </div>
