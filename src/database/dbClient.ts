@@ -226,6 +226,24 @@ export const dbClient = {
     });
   },
 
+  async abandonExamSession(localId: string): Promise<void> {
+    const db = await openIndexedDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("exam_sessions", "readwrite");
+      const store = tx.objectStore("exam_sessions");
+      const getReq = store.get(localId);
+      getReq.onsuccess = () => {
+        const existing = getReq.result;
+        if (existing) {
+          const updated = { ...existing, status: "ABANDONED", completed_at: Date.now() };
+          store.put(updated);
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+
   // ── USER PROGRESS ──
   async saveUserProgress(progress: DbUserProgress): Promise<void> {
     await idbTx("user_progress", "readwrite", (store) => store.put(progress));

@@ -50,7 +50,9 @@ export interface DbExamSession {
   time_remaining_seconds: number;
   started_at: number;
   completed_at: number | null;
-  answers_json: string; // JSON: Record<number, number> (questionId -> selectedOptionIdx)
+  answers_json: string; // JSON: Record<number, { selected: number; correct: number }>
+  questions_json?: string; // JSON: Array<OfflineQuestion>
+  current_index?: number;
   synced: number; // 0 = not synced, 1 = synced
 }
 
@@ -157,6 +159,8 @@ export const SQLITE_INIT_SCRIPTS: string[] = [
     started_at INTEGER NOT NULL,
     completed_at INTEGER,
     answers_json TEXT NOT NULL DEFAULT '{}',
+    questions_json TEXT,
+    current_index INTEGER NOT NULL DEFAULT 0,
     synced INTEGER NOT NULL DEFAULT 0
   );`,
 

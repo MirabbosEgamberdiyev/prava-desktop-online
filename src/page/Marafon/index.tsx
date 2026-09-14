@@ -25,6 +25,9 @@ import ImageZoomModal, { ZoomableImage } from "../../components/common/ImageZoom
 import GamificationResult from "../../components/quiz/GamificationResult";
 import QuizReviewModal from "../../components/quiz/QuizReviewModal";
 import TestSetupCard from "../../components/quiz/TestSetupCard";
+import { dbClient } from "../../database";
+import { generateUUID } from "../../sync";
+import { showToast } from "../../utils/notificationUtils";
 import SEO from "../../components/common/SEO";
 import {
   IconChevronLeft,
@@ -125,39 +128,103 @@ export default function Marafon_Page() {
     });
   }, [current]);
 
-  const startExam = useCallback(() => {
-    setPhase("loading");
-    setAnswers({});
-    answersRef.current = {};
-    setCurrent(0);
-    setErrorMsg(null);
+  const localSessionIdRef = useRef<string>(generateUUID());
 
-    const maxQ =
-      selTopic != null
-        ? topics.find((t) => t.id === selTopic)?.question_count ?? 0
-        : topics.reduce((s, t) => s + (t.question_count || 0), 0);
+  const startExam = useCallback(
+    async (forceFresh = false) => {
+      setPhase("loading");
+      setAnswers({});
+      answersRef.current = {};
+      setCurrent(0);
+      setErrorMsg(null);
 
-    const chosenOption = COUNT_OPTIONS[countIdx];
-    const limit =
-      chosenOption === 0
-        ? (maxQ > 0 ? maxQ : 1190)
-        : (maxQ > 0 ? Math.min(chosenOption, maxQ) : chosenOption);
+      // Crash recovery: check for existing active marathon session
+      if (!forceFresh) {
+        try {
+          const active = await dbClient.getActiveExamSession("MARATHON");
+          if (
+            active &&
+            active.questions_json &&
+            Date.now() - active.started_at < 24 * 60 * 60 * 1000
+          ) {
+            const restoredQs: OfflineQuestion[] = JSON.parse(active.questions_json);
+            const restoredAns: Record<number, Answer> = JSON.parse(active.answers_json || "{}");
 
-    getMarathonQuestions(selTopic ?? undefined, limit)
-      .then((qs) => {
+            if (restoredQs.length > 0) {
+              localSessionIdRef.current = active.local_id;
+              setQuestions(restoredQs);
+              setAnswers(restoredAns);
+              answersRef.current = restoredAns;
+              setCurrent(active.current_index || 0);
+              setPhase("exam");
+
+              showToast({
+                id: "marathon-crash-restored",
+                dedupeKey: "marathon-crash-restored",
+                title: t("marathon.sessionRestored", "Marafon tiklandi"),
+                message: t(
+                  "marathon.sessionRestoredDesc",
+                  "Avvalgi yakunlanmagan marafon holati avtomatik tiklandi"
+                ),
+                color: "blue",
+              });
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("Lokal marafon sessiyasini tiklashda xatolik:", err);
+        }
+      }
+
+      // Fresh marathon session
+      try {
+        const maxQ =
+          selTopic != null
+            ? topics.find((t) => t.id === selTopic)?.question_count ?? 0
+            : topics.reduce((s, t) => s + (t.question_count || 0), 0);
+
+        const chosenOption = COUNT_OPTIONS[countIdx];
+        const limit =
+          chosenOption === 0
+            ? maxQ > 0 ? maxQ : 1190
+            : maxQ > 0 ? Math.min(chosenOption, maxQ) : chosenOption;
+
+        const qs = await getMarathonQuestions(selTopic ?? undefined, limit);
         if (qs.length === 0) {
           setErrorMsg(t("marathon.noQuestions", "Savollar topilmadi"));
           setPhase("result");
           return;
         }
+
+        const newId = generateUUID();
+        localSessionIdRef.current = newId;
         setQuestions(qs);
         setPhase("exam");
-      })
-      .catch((e) => {
+
+        await dbClient.saveExamSession({
+          local_id: newId,
+          server_id: getActiveMarathonSessionId(),
+          exam_type: "MARATHON",
+          status: "IN_PROGRESS",
+          total_questions: qs.length,
+          correct_answers: 0,
+          score: 0,
+          duration_seconds: 0,
+          time_remaining_seconds: 0,
+          started_at: Date.now(),
+          completed_at: null,
+          answers_json: "{}",
+          questions_json: JSON.stringify(qs),
+          current_index: 0,
+          synced: 0,
+        });
+      } catch (e) {
         setErrorMsg(String(e));
         setPhase("result");
-      });
-  }, [selTopic, countIdx, topics, t]);
+      }
+    },
+    [selTopic, countIdx, topics, t]
+  );
 
   const triggerFinish = useCallback(() => {
     if (autoRef.current) {
@@ -169,6 +236,18 @@ export default function Marafon_Page() {
     const total = questions.length;
     const score = total > 0 ? Math.round((correct / total) * 100) : 0;
     setPhase("result");
+
+    // Mark session completed in local database
+    dbClient
+      .completeExamSession(localSessionIdRef.current, {
+        status: "COMPLETED",
+        correct_answers: correct,
+        score,
+        duration_seconds: 0,
+        completed_at: Date.now(),
+      })
+      .catch(() => {});
+
     saveExamResult({
       userId,
       score,
@@ -210,6 +289,30 @@ export default function Marafon_Page() {
     setAnswers(newAns);
     answersRef.current = newAns;
 
+    const correctSoFar = Object.values(newAns).filter((a) => a.selected === a.correct).length;
+    const scoreSoFar = Math.round((correctSoFar / questions.length) * 100);
+
+    // Persist real-time marathon progress to local database
+    dbClient
+      .saveExamSession({
+        local_id: localSessionIdRef.current,
+        server_id: getActiveMarathonSessionId(),
+        exam_type: "MARATHON",
+        status: "IN_PROGRESS",
+        total_questions: questions.length,
+        correct_answers: correctSoFar,
+        score: scoreSoFar,
+        duration_seconds: 0,
+        time_remaining_seconds: 0,
+        started_at: Date.now(),
+        completed_at: null,
+        answers_json: JSON.stringify(newAns),
+        questions_json: JSON.stringify(questions),
+        current_index: current,
+        synced: 0,
+      })
+      .catch(() => {});
+
     if (current < questions.length - 1) {
       autoRef.current = setTimeout(() => setCurrent((c) => c + 1), 800);
     }
@@ -242,12 +345,50 @@ export default function Marafon_Page() {
     });
   };
 
-  // F1–F5 and 1–5 keyboard shortcuts
+  const handleFinishClick = useCallback(() => {
+    const answeredCount = Object.keys(answers).length;
+    if (answeredCount < questions.length) {
+      setConfirmFinishOpen(true);
+    } else {
+      triggerFinish();
+    }
+  }, [answers, questions.length, triggerFinish]);
+
+  // Full Desktop Keyboard Navigation (1-5, F1-F5, Arrows, Space, Enter, Esc)
   useEffect(() => {
     if (phase !== "exam") return;
     const handleKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (zoomSrc) {
+          setZoomSrc(null);
+        } else if (confirmFinishOpen) {
+          setConfirmFinishOpen(false);
+        }
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (confirmFinishOpen) {
+          setConfirmFinishOpen(false);
+          triggerFinish();
+        } else {
+          handleFinishClick();
+        }
+        return;
+      }
+
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (answers[current] !== undefined) {
+          setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
+        }
+        return;
+      }
 
       const map: Record<string, number> = {
         F1: 0, F2: 1, F3: 2, F4: 3, F5: 4,
@@ -257,13 +398,18 @@ export default function Marafon_Page() {
         e.preventDefault();
         handleSelect(map[e.key]);
       }
-      if (e.key === "ArrowLeft") setCurrent((c) => Math.max(0, c - 1));
-      if (e.key === "ArrowRight")
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setCurrent((c) => Math.max(0, c - 1));
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
         setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
+      }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [phase, answers, current, questions.length]);
+  }, [phase, answers, current, questions.length, zoomSrc, confirmFinishOpen, triggerFinish]);
 
   // ─── SETUP ───
   if (phase === "setup") {
@@ -413,14 +559,7 @@ export default function Marafon_Page() {
           <div className="exam-topbar-left">
             <button
               className="exam-finish-btn"
-              onClick={() => {
-                const answeredCount = Object.keys(answers).length;
-                if (answeredCount < questions.length) {
-                  setConfirmFinishOpen(true);
-                } else {
-                  triggerFinish();
-                }
-              }}
+              onClick={handleFinishClick}
               type="button"
             >
               {t("activeTest.finishTest", "Yakunlash")} <IconX size={15} />

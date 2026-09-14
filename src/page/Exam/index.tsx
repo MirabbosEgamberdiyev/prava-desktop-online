@@ -21,6 +21,9 @@ import LanguagePicker from "../../components/language/LanguagePicker";
 import SEO from "../../components/common/SEO";
 import GamificationResult from "../../components/quiz/GamificationResult";
 import QuizReviewModal from "../../components/quiz/QuizReviewModal";
+import { dbClient } from "../../database";
+import { generateUUID } from "../../sync";
+import { showToast } from "../../utils/notificationUtils";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -86,31 +89,98 @@ export default function Exam_Page() {
     el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [current]);
 
-  const loadQuestions = useCallback(() => {
-    setPhase("loading");
-    setAnswers({});
-    answersRef.current = {};
-    setCurrent(0);
-    setIsTimeUp(false);
-    setTimeLeft(questionCount * 60);
-    setErrorMsg(null);
+  const localSessionIdRef = useRef<string>(generateUUID());
 
-    getExamQuestions(questionCount)
-      .then((qs) => {
+  const loadQuestions = useCallback(
+    async (forceFresh = false) => {
+      setPhase("loading");
+      setAnswers({});
+      answersRef.current = {};
+      setCurrent(0);
+      setIsTimeUp(false);
+      setTimeLeft(questionCount * 60);
+      setErrorMsg(null);
+
+      // Crash recovery: check for existing active exam session in SQLite / IndexedDB
+      if (!forceFresh) {
+        try {
+          const active = await dbClient.getActiveExamSession("EXAM");
+          if (
+            active &&
+            active.questions_json &&
+            active.time_remaining_seconds > 10 &&
+            Date.now() - active.started_at < 60 * 60 * 1000
+          ) {
+            const restoredQs: OfflineQuestion[] = JSON.parse(active.questions_json);
+            const restoredAns: Record<number, Answer> = JSON.parse(active.answers_json || "{}");
+
+            if (restoredQs.length > 0) {
+              localSessionIdRef.current = active.local_id;
+              setQuestions(restoredQs);
+              setAnswers(restoredAns);
+              answersRef.current = restoredAns;
+              setCurrent(active.current_index || 0);
+              setTimeLeft(active.time_remaining_seconds);
+              startTimeRef.current = active.started_at;
+              setPhase("exam");
+
+              showToast({
+                id: "exam-crash-restored",
+                dedupeKey: "exam-crash-restored",
+                title: t("exam.sessionRestored", "Sessiya tiklandi"),
+                message: t(
+                  "exam.sessionRestoredDesc",
+                  "Avvalgi yakunlanmagan imtihon holati avtomatik tiklandi"
+                ),
+                color: "blue",
+              });
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("Lokal imtihon tiklashda xatolik:", err);
+        }
+      }
+
+      // Fresh exam session
+      try {
+        const qs = await getExamQuestions(questionCount);
         if (qs.length === 0) {
           setErrorMsg(t("exam.noQuestions", "Savollar topilmadi"));
           setPhase("result");
           return;
         }
+
+        const newId = generateUUID();
+        localSessionIdRef.current = newId;
         setQuestions(qs);
         setPhase("exam");
         startTimeRef.current = Date.now();
-      })
-      .catch((e) => {
+
+        await dbClient.saveExamSession({
+          local_id: newId,
+          server_id: getActiveExamSessionId(),
+          exam_type: "EXAM",
+          status: "IN_PROGRESS",
+          total_questions: qs.length,
+          correct_answers: 0,
+          score: 0,
+          duration_seconds: 0,
+          time_remaining_seconds: questionCount * 60,
+          started_at: Date.now(),
+          completed_at: null,
+          answers_json: "{}",
+          questions_json: JSON.stringify(qs),
+          current_index: 0,
+          synced: 0,
+        });
+      } catch (e) {
         setErrorMsg(String(e));
         setPhase("result");
-      });
-  }, [questionCount, t]);
+      }
+    },
+    [questionCount, t]
+  );
 
   useEffect(() => {
     loadQuestions();
@@ -131,6 +201,17 @@ export default function Exam_Page() {
       setSavedScore(score);
       if (!timeUp) setIsTimeUp(false);
       setPhase("result");
+
+      // Mark session completed in local crash-recovery database
+      dbClient
+        .completeExamSession(localSessionIdRef.current, {
+          status: "COMPLETED",
+          correct_answers: correct,
+          score,
+          duration_seconds: duration,
+          completed_at: Date.now(),
+        })
+        .catch(() => {});
 
       saveExamResult({
         userId,
@@ -194,6 +275,30 @@ export default function Exam_Page() {
     };
     setAnswers(newAns);
     answersRef.current = newAns;
+
+    const correctSoFar = Object.values(newAns).filter((a) => a.selected === a.correct).length;
+    const scoreSoFar = Math.round((correctSoFar / questions.length) * 100);
+
+    // Persist real-time progress to local database for crash resistance
+    dbClient
+      .saveExamSession({
+        local_id: localSessionIdRef.current,
+        server_id: getActiveExamSessionId(),
+        exam_type: "EXAM",
+        status: "IN_PROGRESS",
+        total_questions: questions.length,
+        correct_answers: correctSoFar,
+        score: scoreSoFar,
+        duration_seconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
+        time_remaining_seconds: timeLeft,
+        started_at: startTimeRef.current,
+        completed_at: null,
+        answers_json: JSON.stringify(newAns),
+        questions_json: JSON.stringify(questions),
+        current_index: current,
+        synced: 0,
+      })
+      .catch(() => {});
 
     // MAX_WRONG limit check: (10 savolga 1 ta xato)
     const wrongNow = Object.values(newAns).filter((a) => a.selected !== a.correct).length;
@@ -328,7 +433,7 @@ export default function Exam_Page() {
             title={t("exam.officialTitle", "Rasmiy DTM Imtihon Simulyatori")}
             badge={`${total} ${t("activeTest.questionsCount", "savol")} • ${MAX_WRONG} ${t("exam.maxWrongAllowed", "tagacha xato")}`}
             isTimeUp={isTimeUp}
-            onRetry={loadQuestions}
+            onRetry={() => loadQuestions(true)}
             onReviewMistakes={() => setReviewOpen(true)}
             onHome={onBack}
           />
