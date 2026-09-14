@@ -4,29 +4,22 @@ import { useAuth } from "../../auth/AuthContext";
 import { useTranslation } from "react-i18next";
 import ColorMode from "../../components/other/ColorMode";
 import LanguagePicker from "../../components/language/LanguagePicker";
+import UserMenuButton from "../../components/nav/UserMenuButton";
+import { LicenseBar } from "../../components/desktop/LicenseBar";
 import SEO from "../../components/common/SEO";
 import { getFullStats } from "../../services/desktopAdapter";
 import type { FullStats, AppScreen } from "../../types/desktop";
-import { QRCodeSVG } from "../../components/common/QRCodeSVG";
-import { Menu } from "@mantine/core";
 import {
   IconBook2,
   IconPencil,
   IconRun,
   IconChartBar,
-  IconLogout,
   IconTicket,
-  IconBrandInstagram,
-  IconBrandTelegram,
-  IconBrandYoutube,
   IconAlertTriangle,
   IconBookmark,
   IconTargetArrow,
   IconTrophy,
   IconHistory,
-  IconSettings,
-  IconChevronDown,
-  IconKey,
   IconFlame,
   IconArrowRight,
   IconCheck,
@@ -42,61 +35,14 @@ const WEAK_TOPICS_CONFIG = [
   { id: 4, key: "firstAid", wrongCount: 5 },
 ];
 
-const SOCIAL_LINKS = [
-  {
-    label: "Telegram",
-    handle: "@pravaonlineuz",
-    url: "https://t.me/pravaonlineuz",
-    icon: IconBrandTelegram,
-    gradient: "linear-gradient(135deg,#48cae4,#0096c7)",
-    color: "#0088cc",
-  },
-  {
-    label: "Instagram",
-    handle: "@pravaonlineuz",
-    url: "https://www.instagram.com/pravaonlineuz/",
-    icon: IconBrandInstagram,
-    gradient: "linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)",
-    color: "#e1306c",
-  },
-  {
-    label: "YouTube",
-    handle: "@pravaonlineuz",
-    url: "https://www.youtube.com/@pravaonlineuz",
-    icon: IconBrandYoutube,
-    gradient: "linear-gradient(135deg,#ff6b6b,#cc0000)",
-    color: "#ff0000",
-  },
-];
-
-const COLORS = [
-  "#1971c2", "#2f9e44", "#e03131", "#7950f2",
-  "#e67700", "#0c8599", "#c2255c", "#5c7cfa",
-];
-
-function getColor(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return COLORS[Math.abs(h) % COLORS.length];
-}
-
-function getInitials(name: string) {
-  const parts = (name || "").trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
-  }
-  return (name?.charAt(0) || "U").toUpperCase();
-}
-
 const EXAM_OPTIONS = [20, 40, 50, 60, 80, 100];
 
 export default function User_Page() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
   useLanguage();
 
-  const [qrModal, setQrModal] = useState<typeof SOCIAL_LINKS[0] | null>(null);
   const [showExamPicker, setShowExamPicker] = useState(false);
   const [stats, setStats] = useState<FullStats | null>(null);
 
@@ -267,72 +213,13 @@ export default function User_Page() {
               </span>
             </div>
 
-            {/* Right Zone Controls: Language Switcher, Theme Toggle, User Profile */}
-            <div className="home-header-right">
-              {/* Language Dropdown Selector */}
-              <LanguagePicker />
-
-              {/* Dark / Light Mode Switch */}
+            {/* Right Zone Controls: License, Theme, Language, User Profile */}
+            <div className="home-header-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <LicenseBar />
               <ColorMode />
-
+              <LanguagePicker />
               <div className="navbar-divider" aria-hidden="true" />
-
-              {/* User Dropdown */}
-              <Menu withinPortal shadow="md" width={220} position="bottom-end" radius="md">
-                <Menu.Target>
-                  <button
-                    className="user-switcher"
-                    type="button"
-                    aria-label={displayName}
-                  >
-                    <div
-                      className="user-switcher-avatar"
-                      style={{ background: getColor(displayName) }}
-                    >
-                      {getInitials(displayName)}
-                    </div>
-                    <span className="user-switcher-name">{displayName}</span>
-                    <IconChevronDown size={14} stroke={2} style={{ opacity: 0.6 }} />
-                  </button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Label>{displayName}</Menu.Label>
-                  <Menu.Item
-                    leftSection={<IconSettings size={16} />}
-                    onClick={() => navigate("/settings")}
-                  >
-                    {t("nav.settings", "Sozlamalar")}
-                  </Menu.Item>
-                  <Menu.Item
-                    leftSection={<IconHistory size={16} />}
-                    onClick={() => navigate("/history")}
-                  >
-                    {t("dashboard.tools.history.title")}
-                  </Menu.Item>
-                  <Menu.Item
-                    leftSection={<IconTrophy size={16} />}
-                    onClick={() => navigate("/leaderboard")}
-                  >
-                    {t("dashboard.tools.rating.title")}
-                  </Menu.Item>
-                  {(user?.role === "SUPER_ADMIN" || user?.role === "ADMIN") && (
-                    <Menu.Item
-                      leftSection={<IconKey size={16} />}
-                      onClick={() => navigate("/admin/activation-codes")}
-                    >
-                      {t("nav.activationCodes", "Aktivatsiya kodlari")}
-                    </Menu.Item>
-                  )}
-                  <Menu.Divider />
-                  <Menu.Item
-                    color="red"
-                    leftSection={<IconLogout size={16} />}
-                    onClick={logout}
-                  >
-                    {t("auth.logout", "Chiqish")}
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
+              <UserMenuButton />
             </div>
           </div>
         </header>
@@ -659,67 +546,15 @@ export default function User_Page() {
             </section>
 
             {/* ================= 6. FOOTER ================= */}
-            <footer className="home-footer">
-              <div className="home-footer-inner">
-                <p className="home-footer-title">{t("dashboard.footerFollow")}</p>
-                <div className="home-footer-cards">
-                  {SOCIAL_LINKS.map((item) => (
-                    <button
-                      key={item.label}
-                      className="home-footer-btn"
-                      style={{ "--btn-gradient": item.gradient } as React.CSSProperties}
-                      onClick={() => setQrModal(item)}
-                      type="button"
-                    >
-                      <item.icon size={20} stroke={1.8} style={{ color: item.color }} />
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <p style={{ marginTop: 18, textAlign: "center", fontSize: "12px", color: "var(--text-muted)", margin: "18px 0 0 0" }}>
-                  © {new Date().getFullYear()} PravaOnline. {t("dashboard.allRightsReserved")}
+            <footer className="home-footer" style={{ marginTop: 40, borderTop: "1px solid var(--border)", padding: "20px 0" }}>
+              <div className="home-footer-inner" style={{ textAlign: "center" }}>
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
+                  © {new Date().getFullYear()} PravaOnline. {t("dashboard.allRightsReserved", "Barcha huquqlar himoyalangan")}
                 </p>
               </div>
             </footer>
           </div>
         </main>
-
-        {/* QR Code Modal for Social Channels */}
-        {qrModal && (
-          <div className="modal-overlay" onClick={() => setQrModal(null)}>
-            <div className="qr-modal-card" onClick={(e) => e.stopPropagation()}>
-              <div className="qr-modal-header" style={{ background: qrModal.gradient }}>
-                <qrModal.icon size={24} stroke={1.8} color="#fff" />
-                <span className="qr-modal-platform">{qrModal.label}</span>
-              </div>
-              <div className="qr-modal-body">
-                <QRCodeSVG
-                  value={qrModal.url}
-                  size={180}
-                  bgColor="transparent"
-                  fgColor="currentColor"
-                  level="M"
-                  imageSettings={{
-                    src: "/logo.svg",
-                    width: 36,
-                    height: 36,
-                    excavate: true,
-                  }}
-                />
-                <div className="qr-modal-url">{qrModal.handle}</div>
-                <p className="qr-modal-hint">{t("dashboard.scanQrCode")}</p>
-              </div>
-              <button
-                className="qr-modal-close"
-                onClick={() => setQrModal(null)}
-                type="button"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Exam Count Picker Modal */}
         {showExamPicker && (

@@ -4,16 +4,6 @@
  */
 
 const prefetchMap: Record<string, () => Promise<unknown>> = {
-  "/": () => import("../page/Home"),
-  "/partners": () => import("../page/Partners"),
-  "/pricing": () => import("../page/Pricing"),
-  "/downloads": () => import("../page/Downloads"),
-  "/about": () => import("../page/About"),
-  "/contact": () => import("../page/Contact"),
-  "/faq": () => import("../page/FAQ"),
-  "/terms": () => import("../page/Legal/Terms"),
-  "/privacy": () => import("../page/Legal/Privacy"),
-  "/try-exam": () => import("../page/GuestExam"),
   "/auth/login": () => import("../page/Auth/login"),
   "/auth/register": () => import("../page/Auth/register"),
   "/auth/forgot-password": () => import("../page/Auth/forgot-password"),

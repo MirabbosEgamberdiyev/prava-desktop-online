@@ -248,6 +248,30 @@ export async function getMarathonQuestions(topicId?: number, count = 100): Promi
   return [];
 }
 
+// ── OFFLINE CACHE HELPERS ───────────────────────────────────────────────────
+const OFFLINE_CACHE_KEYS = {
+  TOPICS: "prava_cache_topics_v1",
+  TICKETS: "prava_cache_tickets_v1",
+  STATS: "prava_cache_stats_v1",
+};
+
+function getCachedData<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedData<T>(key: string, data: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // quota exceeded or private mode
+  }
+}
+
 export async function getTickets(): Promise<OfflineTicket[]> {
   try {
     const res = await api.get<{
@@ -255,7 +279,7 @@ export async function getTickets(): Promise<OfflineTicket[]> {
     }>("/api/v2/tickets?page=0&size=100&sortBy=ticketNumber&direction=ASC");
     const list = res.data?.data?.content || res.data?.data?.tickets || [];
     if (list.length > 0) {
-      return list.map((tk: any) => ({
+      const tickets: OfflineTicket[] = list.map((tk: any) => ({
         id: tk.id,
         topic_id: tk.topicId ?? null,
         ticket_number: tk.ticketNumber ?? tk.number ?? tk.id,
@@ -268,9 +292,15 @@ export async function getTickets(): Promise<OfflineTicket[]> {
         question_count: tk.questionCount ?? 20,
         is_blocked: tk.isBlocked ?? false,
       }));
+      setCachedData(OFFLINE_CACHE_KEYS.TICKETS, tickets);
+      return tickets;
     }
   } catch {
-    // fallback: 70 tickets
+    // API failed, try offline cached tickets
+    const cached = getCachedData<OfflineTicket[]>(OFFLINE_CACHE_KEYS.TICKETS);
+    if (cached && cached.length > 0) {
+      return cached;
+    }
   }
 
   // Standalone fallback: 60 bilet
@@ -316,7 +346,7 @@ export async function getTopics(): Promise<OfflineTopic[]> {
       data: any[];
     }>("/api/v1/admin/topics/active");
     if (Array.isArray(res.data?.data)) {
-      return res.data.data.map((tp: any) => ({
+      const topics: OfflineTopic[] = res.data.data.map((tp: any) => ({
         id: tp.id,
         code: tp.code || null,
         name_uzl: typeof tp.name === "object" ? tp.name?.uzl : (tp.name || tp.nameUzl || ""),
@@ -325,9 +355,15 @@ export async function getTopics(): Promise<OfflineTopic[]> {
         name_ru: typeof tp.name === "object" ? tp.name?.ru : (tp.nameRu || ""),
         question_count: tp.questionCount ?? tp.questionsCount ?? 20,
       }));
+      setCachedData(OFFLINE_CACHE_KEYS.TOPICS, topics);
+      return topics;
     }
   } catch {
-    // fallback
+    // API failed, try offline cached topics
+    const cached = getCachedData<OfflineTopic[]>(OFFLINE_CACHE_KEYS.TOPICS);
+    if (cached && cached.length > 0) {
+      return cached;
+    }
   }
   return [];
 }
@@ -345,9 +381,11 @@ export async function getFullStats(_userId?: number): Promise<FullStats> {
     const res = await api.get("/api/v2/my-statistics");
     if (res.data?.data) {
       serverStats = res.data.data;
+      setCachedData(OFFLINE_CACHE_KEYS.STATS, serverStats);
     }
   } catch {
-    // Offline or unauthenticated fallback
+    // Offline or unauthenticated fallback: load last cached statistics
+    serverStats = getCachedData<any>(OFFLINE_CACHE_KEYS.STATS);
   }
 
   const serverTicketMap = new Map<number, any>();
