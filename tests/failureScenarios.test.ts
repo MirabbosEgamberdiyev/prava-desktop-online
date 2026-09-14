@@ -25,7 +25,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ConflictResolver } from "../src/sync/conflictResolver";
 import { generateUUID, OutboxQueue } from "../src/sync/outboxQueue";
 import { networkModeManager } from "../src/sync/networkModeManager";
-import { QrAuthService } from "../src/api/qrAuthService";
+import { QrAuthService, QrServiceUnavailableError } from "../src/api/qrAuthService";
+import api from "../src/api/api";
 import { getImageUrl } from "../src/utils/imageUtils";
 import type { DbOutboxItem } from "../src/database/schema";
 
@@ -303,14 +304,30 @@ describe("18 Production Failure & Chaos Scenarios", () => {
     unsub();
   });
 
-  // 16. QR Pairing Session Expiry
-  it("Scenario 16: QR pairing session expires when TTL passes", async () => {
+  // 16. QR Pairing Session & Error Classification
+  it("Scenario 16: QR pairing session handles backend responses and typed error classification", async () => {
+    // 16a: Successful backend session
+    vi.spyOn(api, "post").mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          sessionId: "live_sess_123",
+          qrPayload: "prava://pair?sessionId=live_sess_123",
+          expiresIn: 90,
+        },
+      },
+    } as any);
+
     const session = await QrAuthService.initSession();
-    expect(session.sessionId).toBeTruthy();
+    expect(session.sessionId).toBe("live_sess_123");
     expect(session.expiresIn).toBe(90);
 
-    const status = await QrAuthService.checkStatus(session.sessionId);
-    expect(["PENDING", "EXPIRED", "APPROVED"]).toContain(status.status);
+    // 16b: Backend 500 error throws typed QrServiceUnavailableError (no fake credentials)
+    vi.spyOn(api, "post").mockRejectedValueOnce({
+      response: { status: 500, data: { message: "Internal server error" } },
+    });
+
+    await expect(QrAuthService.initSession()).rejects.toThrow(QrServiceUnavailableError);
   });
 
   // 17. Multi-User Session Isolation

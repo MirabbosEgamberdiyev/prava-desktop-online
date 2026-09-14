@@ -148,7 +148,11 @@ const Register_Page = () => {
       setCountdown(60);
       setCode("");
     } catch (error: unknown) {
-      const msg = getErrorMessage(error, t("register.errorMessage"));
+      let msg = getErrorMessage(error, t("register.errorMessage"));
+      const isEmail = values.verificationType === "EMAIL";
+      if (!isEmail && (msg.includes("yuborib bo'lmadi") || (error as any)?.response?.status === 400)) {
+        msg = "SMS xizmati vaqtincha ishlamayapti. Iltimos, Email orqali ro'yxatdan o'ting.";
+      }
       setErrorMessage(msg);
       showToast({
         id: "auth-register-init-error",
@@ -191,7 +195,11 @@ const Register_Page = () => {
         withBorder: true,
       });
     } catch (error: unknown) {
-      const msg = getErrorMessage(error, t("register.errorMessage"));
+      let msg = getErrorMessage(error, t("register.errorMessage"));
+      const isEmail = form.values.verificationType === "EMAIL";
+      if (!isEmail && (msg.includes("yuborib bo'lmadi") || (error as any)?.response?.status === 400)) {
+        msg = "SMS xizmati vaqtincha ishlamayapti. Iltimos, Email orqali ro'yxatdan o'ting.";
+      }
       setErrorMessage(msg);
       showToast({
         id: "auth-register-resend-error",
@@ -465,6 +473,29 @@ const Register_Page = () => {
                     ]}
                   />
                 </Box>
+
+                {!isEmailMode && (
+                  <Alert
+                    icon={<IconAlertCircle size={15} />}
+                    color="yellow"
+                    variant="light"
+                    radius="md"
+                    p="xs"
+                  >
+                    <Text size="xs">
+                      SMS shlyuzida texnik profilaktika o'tkazilmoqda. Tasdiqlash kodini zudlik bilan olish uchun{" "}
+                      <Text
+                        span
+                        fw={700}
+                        style={{ cursor: "pointer", textDecoration: "underline" }}
+                        onClick={() => handleVerificationTypeChange("EMAIL")}
+                      >
+                        Email orqali ro'yxatdan o'tish
+                      </Text>{" "}
+                      tavsiya etiladi.
+                    </Text>
+                  </Alert>
+                )}
 
                 {/* Contact field based on mode */}
                 {isEmailMode ? (

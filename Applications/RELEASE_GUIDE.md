@@ -4,9 +4,9 @@
 
 | Fayl Nomi | Format | Hajmi | SHA-256 Checksum | Tavsif |
 | :--- | :--- | :--- | :--- | :--- |
-| **`Prava Online_1.0.0_x64-setup.exe`** | NSIS Installer | **3.56 MB** | `237EA3120B3AB4F56018B64F88193B7DBF5347D97E194BCC8B5766FA9CE5E779` | Windows uchun qulay o'rnatuvchi (Desktop yorlig'i, Start Menu va uninstaller bilan) |
-| **`Prava Online_1.0.0_x64_en-US.msi`** | WiX MSI | **4.68 MB** | `4C60EB9A4858B0DDE92F91C1CE142A6E9CBE477ECE78B34E4D9100D61DFC57FA` | Korporativ tarqatish va avtomatlashtirilgan o'rnatishlar uchun Windows Installer |
-| **`prava-desktop-online.exe`** | Portable Executable | **10.68 MB** | `F0A1BFFEDC6EADDF9576BC39FD46E4E8126FE1B260E40ACFE7A9986D1B8C4202` | O'rnatishsiz to'g'ridan-to'g'ri ishga tushuvchi portativ dastur |
+| **`Prava Online_1.0.0_x64-setup.exe`** | NSIS Installer | **3.56 MB** | `C7A9CE7F64BEF77F769A3DEE02278481B1447714FB1D973F5636C52852E4F013` | Windows uchun qulay o'rnatuvchi (Desktop yorlig'i, Start Menu va uninstaller bilan) |
+| **`Prava Online_1.0.0_x64_en-US.msi`** | WiX MSI | **4.68 MB** | `523D8B475D2171D3875B639D7B45D7B27004536B5690E771F81B8C35A3A9CB82` | Korporativ tarqatish va avtomatlashtirilgan o'rnatishlar uchun Windows Installer |
+| **`prava-desktop-online.exe`** | Portable Executable | **10.68 MB** | `2E273BD0D2A2D4D41EF2A3173E8EC2BF3049C5EB7907E9385DD504DED725BD00` | O'rnatishsiz to'g'ridan-to'g'ri ishga tushuvchi portativ dastur |
 
 ---
 
@@ -34,10 +34,10 @@
    - **OFFLINE_ONLY**: Barcha tarmoq so'rovlari to'xtatiladi, internet sarflanmaydi. 100% lokal bazada 0 ms kechikish bilan ishlaydi.
    - Rejimlar o'rtasida navigatsiya paneli yoki Sozlamalardan 1 bosish orqali almashish imkoniyati.
 
-4. **QR Kod Orqali Qurilmani Bog'lash Protokoli (Device Pairing)**:
-   - Mobil ilovadan Desktop ilovaga bir zumda kirish (`POST /api/v1/auth/qr/init`).
-   - Dinamik 90 soniyalik QR kod, radar animatsiyasi va avtomatik autentifikatsiya.
-   - Oflayn yoki ishlab chiqish jarayonida uzluksiz sinov uchun sandbox fallback mexanizmi.
+4. **QR Kod Orqali Qurilmani Bog'lash Protokoli (Device Pairing) — To'liq Hardening**:
+   - Mobil ilovadan Desktop ilovaga kirish (`POST /api/v1/auth/qr/init`).
+   - Hech qanday soxta ("Demo") tugmalarsiz toza ishlab chiqarish arxitekturasi.
+   - Serverda ushbu endpoint hali sozlanmagan bo'lsa, qizil xatolik toasti chiqmasdan, toza va estetik xabarnoma hamda real ishlayotgan **Telegram Bot (@pravaonlineuzbot)** yoki **Parol** orqali kirish muqobillari ko'rsatiladi.
 
 5. **Faol Qurilmalar Boshqaruvi va Masofadan Sessiyani Tugatish**:
    - Sozlamalar -> "Qurilmalar" bo'limida barcha ulangan qurilmalar ro'yxati (Desktop, Mobile, oxirgi faollik vaqti, joriy qurilma belgisi).

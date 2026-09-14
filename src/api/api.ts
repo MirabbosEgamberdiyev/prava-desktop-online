@@ -187,6 +187,9 @@ api.interceptors.response.use(
           "/api/v1/app/saved-questions",     // Local fallback mavjud
           "/api/v2/my-statistics",           // Local fallback mavjud
           "/api/v2/exams/history",           // Local fallback mavjud
+          "/api/v1/auth/qr",                 // QR auth service handles status and fallback
+          "/api/v1/auth/devices",            // Devices page handles session management
+          "/api/v1/auth/register",           // Register page handles inline validation/alerts
         ];
         const isSelfHandled = SELF_HANDLED_URLS.some((u) => requestUrl.includes(u));
         if (!isSelfHandled) {
@@ -211,6 +214,9 @@ api.interceptors.response.use(
         "/api/v2/tickets",
         "/api/v2/topics",
         "/api/v2/exams/submit",
+        "/api/v1/auth/qr",
+        "/api/v1/auth/devices",
+        "/api/v1/auth/register",
       ];
       const isSelfHandled = SELF_HANDLED.some((u) => requestUrl.includes(u));
       if (!isSelfHandled) {

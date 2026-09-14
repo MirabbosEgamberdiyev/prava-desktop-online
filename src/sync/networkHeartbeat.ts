@@ -137,7 +137,8 @@ class NetworkHeartbeat {
       }
 
       this.consecutiveFailures++;
-      if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES || !navigator.onLine) {
+      const isBrowserOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES || isBrowserOffline) {
         this.updateStatus(false, null);
       }
       return false;

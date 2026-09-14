@@ -230,7 +230,7 @@ const Login_Page = () => {
           />
 
           {loginMethod === "qr" ? (
-            <QrLoginCard />
+            <QrLoginCard onSwitchToPassword={() => setLoginMethod("password")} />
           ) : (
             <>
               {errorMessage && (
