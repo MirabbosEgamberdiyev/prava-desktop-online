@@ -17,7 +17,8 @@ import { ScrollManager } from "./components/common/ScrollManager";
 function ApiErrorListener() {
   const { t } = useTranslation();
   const lastToastRef = useRef<Record<string, number>>({});
-  const COOLDOWN_MS = 60_000; // 1 minute cooldown per endpoint
+  const lastNetworkToastRef = useRef<number>(0);
+  const COOLDOWN_MS = 30_000;
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -25,11 +26,36 @@ function ApiErrorListener() {
         status: number;
         message: string;
         url?: string;
+        isOffline?: boolean;
       };
+
+      const now = Date.now();
+
+      // Network / Connectivity errors deduplication (GLOBAL across all endpoints)
+      if (detail.status === 0) {
+        if (now - lastNetworkToastRef.current < 20_000) {
+          return; // Skip duplicate network toast
+        }
+        lastNetworkToastRef.current = now;
+
+        const isActuallyOffline =
+          detail.isOffline ?? (typeof navigator !== "undefined" && !navigator.onLine);
+
+        notifications.show({
+          title: isActuallyOffline
+            ? t("errors.noInternetTitle", "Internet aloqasi yo‘q")
+            : t("common.error", "Xatolik"),
+          message: isActuallyOffline
+            ? t("errors.networkError", "Internetga ulanishni tekshiring")
+            : (detail.message || t("errors.serverError", "Server bilan aloqa uzildi")),
+          color: isActuallyOffline ? "red" : "orange",
+          autoClose: 5000,
+        });
+        return;
+      }
 
       // Deduplication: skip if same endpoint showed toast recently
       const endpoint = detail.url || `status-${detail.status}`;
-      const now = Date.now();
       if (now - (lastToastRef.current[endpoint] || 0) < COOLDOWN_MS) return;
       lastToastRef.current[endpoint] = now;
 
@@ -44,13 +70,6 @@ function ApiErrorListener() {
         notifications.show({
           title: t("common.error"),
           message: detail.message || t("errors.serverError"),
-          color: "red",
-          autoClose: 5000,
-        });
-      } else if (detail.status === 0) {
-        notifications.show({
-          title: t("errors.noInternetTitle"),
-          message: detail.message || t("errors.networkError"),
           color: "red",
           autoClose: 5000,
         });

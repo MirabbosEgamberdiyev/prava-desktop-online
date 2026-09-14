@@ -331,22 +331,52 @@ export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQue
     if (res.data?.data?.sessionId) {
       activeTicketSessionId = res.data.data.sessionId;
     }
-    if (res.data?.data?.questions) {
+    if (res.data?.data?.questions && res.data.data.questions.length > 0) {
       return res.data.data.questions.map(normalizeQuestion);
     }
   } catch {
-    // fallback
+    try {
+      const res2 = await api.post<{
+        data: { sessionId?: number; questions: any[] };
+      }>("/api/v2/tickets/start-secure", { ticketId });
+      if (res2.data?.data?.sessionId) {
+        activeTicketSessionId = res2.data.data.sessionId;
+      }
+      if (res2.data?.data?.questions && res2.data.data.questions.length > 0) {
+        return res2.data.data.questions.map(normalizeQuestion);
+      }
+    } catch {
+      // ignore
+    }
   }
   return [];
 }
 
 export async function getTopics(): Promise<OfflineTopic[]> {
   try {
-    const res = await api.get<{
-      data: any[];
-    }>("/api/v1/admin/topics/active");
-    if (Array.isArray(res.data?.data)) {
-      const topics: OfflineTopic[] = res.data.data.map((tp: any) => ({
+    let list: any[] = [];
+    try {
+      const res = await api.get<{ data: any[] }>("/api/v1/admin/topics/active");
+      if (Array.isArray(res.data?.data)) {
+        list = res.data.data;
+      }
+    } catch {
+      try {
+        const res2 = await api.get<{ data: any[] }>("/api/v1/admin/topics/with-questions");
+        if (Array.isArray(res2.data?.data)) {
+          list = res2.data.data;
+        }
+      } catch {
+        // try simple
+        const res3 = await api.get<{ data: any[] }>("/api/v1/admin/topics/simple");
+        if (Array.isArray(res3.data?.data)) {
+          list = res3.data.data;
+        }
+      }
+    }
+
+    if (list.length > 0) {
+      const topics: OfflineTopic[] = list.map((tp: any) => ({
         id: tp.id,
         code: tp.code || null,
         name_uzl: typeof tp.name === "object" ? tp.name?.uzl : (tp.name || tp.nameUzl || ""),

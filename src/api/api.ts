@@ -183,12 +183,26 @@ api.interceptors.response.use(
           );
         }
       }
-    } else if (error.code === "ERR_NETWORK" || !error.response) {
-      window.dispatchEvent(
-        new CustomEvent("api-error", {
-          detail: { status: 0, message: i18n.t("errors.networkError"), url: requestUrl },
-        }),
-      );
+    } else if (!axios.isCancel(error) && error.code !== "ERR_CANCELED") {
+      const SELF_HANDLED = [
+        "/auth/logout",
+        "/api/v2/exams/active",
+        "/api/v1/auth/me",
+      ];
+      const isSelfHandled = SELF_HANDLED.some((u) => requestUrl.includes(u));
+      if (!isSelfHandled) {
+        const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+        window.dispatchEvent(
+          new CustomEvent("api-error", {
+            detail: {
+              status: 0,
+              isOffline,
+              message: isOffline ? i18n.t("errors.networkError") : i18n.t("errors.serverError"),
+              url: requestUrl,
+            },
+          }),
+        );
+      }
     }
 
     const originalRequest = error.config as InternalAxiosRequestConfig & {
