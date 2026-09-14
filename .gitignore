@@ -25,3 +25,8 @@ desktop.ini
 # Logs
 *.log
 npm-debug.log*
+
+# Release binaries
+dist-release/
+*.exe
+*.msi
