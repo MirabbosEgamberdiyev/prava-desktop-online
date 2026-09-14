@@ -253,16 +253,72 @@ export function QuizContent({
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (["F1", "F2", "F3", "F4", "F5"].includes(e.key)) {
+      // 1. Ignore if typing inside form inputs
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) {
+        return;
+      }
+
+      // 2. Escape: close modals or explanation
+      if (e.key === "Escape") {
+        if (imageModalOpened) {
+          e.preventDefault();
+          setImageModalOpened(false);
+          return;
+        }
+        if (explanationOpen) {
+          e.preventDefault();
+          setExplanationOpen(false);
+          return;
+        }
+      }
+
+      // If a blocking modal is open, ignore quiz hotkeys
+      if (imageModalOpened || resultModalOpened) return;
+
+      // 3. Space: toggle explanation if answered
+      if (e.key === " " || e.code === "Space") {
+        if (showExplanation && selectedAnswers[activeQuiz] !== undefined) {
+          e.preventDefault();
+          setExplanationOpen((prev) => !prev);
+          return;
+        }
+      }
+
+      // 4. Enter: advance to next question
+      if (e.key === "Enter") {
+        if (selectedAnswers[activeQuiz] !== undefined && !isLastQuestion) {
+          e.preventDefault();
+          goToNextQuestion();
+          return;
+        }
+      }
+
+      // 5. Select Option: 1-5 and F1-F5
+      const map: Record<string, number> = {
+        F1: 0, F2: 1, F3: 2, F4: 3, F5: 4,
+        "1": 0, "2": 1, "3": 2, "4": 3, "5": 4,
+      };
+      if (e.key in map) {
         e.preventDefault();
-        const optionIndex = parseInt(e.key.replace("F", "")) - 1;
+        const optionIndex = map[e.key];
         const options = currentQuestion?.options || [];
         if (optionIndex < options.length) {
           handleSelectAnswer(activeQuiz, optionIndex);
         }
+        return;
       }
-      if (e.key === "ArrowLeft" && !isFirstQuestion) goToPrevQuestion();
-      if (e.key === "ArrowRight" && !isLastQuestion) goToNextQuestion();
+
+      // 6. Navigation: ArrowLeft / ArrowRight
+      if (e.key === "ArrowLeft" && !isFirstQuestion) {
+        e.preventDefault();
+        goToPrevQuestion();
+      }
+      if (e.key === "ArrowRight" && !isLastQuestion) {
+        e.preventDefault();
+        goToNextQuestion();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -275,6 +331,10 @@ export function QuizContent({
     isLastQuestion,
     goToNextQuestion,
     goToPrevQuestion,
+    imageModalOpened,
+    resultModalOpened,
+    explanationOpen,
+    showExplanation,
   ]);
 
   const handleSelectAnswer = (questionIndex: number, optionIndex: number) => {

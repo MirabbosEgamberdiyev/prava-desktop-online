@@ -318,13 +318,18 @@ api.interceptors.response.use(
         }
 
         throw new Error("No access token in refresh response");
-      } catch (refreshError) {
+      } catch (refreshError: any) {
         processQueue(refreshError, null);
-        Cookies.remove(ACCESS_TOKEN_KEY);
-        Cookies.remove(REFRESH_TOKEN_KEY);
-        Cookies.remove(USER_DATA_KEY);
-        window.dispatchEvent(new CustomEvent("auth-token-expired"));
-        window.dispatchEvent(new CustomEvent("auth-logout"));
+        const status = refreshError?.response?.status;
+        // Only log out if the backend explicitly rejected the refresh token (400, 401, 403)
+        // If it was a network drop, timeout, or server 5xx, preserve tokens so offline mode remains active!
+        if (status === 400 || status === 401 || status === 403) {
+          Cookies.remove(ACCESS_TOKEN_KEY);
+          Cookies.remove(REFRESH_TOKEN_KEY);
+          Cookies.remove(USER_DATA_KEY);
+          window.dispatchEvent(new CustomEvent("auth-token-expired"));
+          window.dispatchEvent(new CustomEvent("auth-logout"));
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

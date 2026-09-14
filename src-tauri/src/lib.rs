@@ -35,7 +35,8 @@ fn activate_license(
 ) -> Result<license::LicenseStatus, String> {
     let status = verify_any(&license_key).map_err(|e| e.to_string())?;
     license::save_license_file(&license_key, &state.app_data_dir).map_err(|e| e.to_string())?;
-    *state.license_key.lock().unwrap() = Some(license_key);
+    let mut lock = state.license_key.lock().unwrap_or_else(|e| e.into_inner());
+    *lock = Some(license_key);
     Ok(status)
 }
 
@@ -43,7 +44,8 @@ fn activate_license(
 fn check_license(state: tauri::State<AppState>) -> Result<license::LicenseStatus, String> {
     let key = license::load_license_file(&state.app_data_dir).map_err(|e| e.to_string())?;
     let status = verify_any(&key).map_err(|e| e.to_string())?;
-    *state.license_key.lock().unwrap() = Some(key);
+    let mut lock = state.license_key.lock().unwrap_or_else(|e| e.into_inner());
+    *lock = Some(key);
     Ok(status)
 }
 

@@ -296,19 +296,30 @@ export default function TicketExamPage() {
 
   useEffect(() => {
     if (phase !== "exam") return;
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          setIsTimeUp(true);
-          triggerFinish(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const startSnapshot = Date.now();
+    const startRemaining = timeLeft;
+
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - startSnapshot) / 1000);
+      const remaining = Math.max(0, startRemaining - elapsed);
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setIsTimeUp(true);
+        triggerFinish(true);
+      }
+    };
+
+    timerRef.current = setInterval(tick, 1000);
+
+    const handleFocus = () => tick();
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("system-resumed-from-sleep", handleFocus);
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("system-resumed-from-sleep", handleFocus);
     };
   }, [phase, triggerFinish]);
 

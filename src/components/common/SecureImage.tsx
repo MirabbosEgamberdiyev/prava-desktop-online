@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { getImageUrl } from "../../utils/imageUtils";
+import SteeringWheelPlaceholder from "./SteeringWheelPlaceholder";
 
 interface Props {
   path: string;
@@ -10,8 +11,14 @@ interface Props {
 }
 
 export default function SecureImage({ path, alt = "", className, style, onOpen }: Props) {
-  if (!path) {
-    return <div className="secure-img-placeholder" style={style} />;
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [path]);
+
+  if (!path || hasError) {
+    return <SteeringWheelPlaceholder />;
   }
 
   const src = getImageUrl(path) || path;
@@ -23,6 +30,7 @@ export default function SecureImage({ path, alt = "", className, style, onOpen }
       className={className}
       draggable={false}
       onContextMenu={(e) => e.preventDefault()}
+      onError={() => setHasError(true)}
       onClick={onOpen ? () => onOpen(src) : undefined}
       style={{ ...style, ...(onOpen ? { cursor: "zoom-in" } : {}) }}
     />

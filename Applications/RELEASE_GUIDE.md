@@ -4,9 +4,9 @@
 
 | Fayl Nomi | Format | Hajmi | SHA-256 Checksum | Tavsif |
 | :--- | :--- | :--- | :--- | :--- |
-| **`Prava Online_1.0.0_x64-setup.exe`** | NSIS Installer | **3.55 MB** | `CEE2986C06193E50D11294124E986E49F4135D94BBB1654F58F99DDA6CCDA05D` | Windows uchun qulay o'rnatuvchi (Desktop yorlig'i, Start Menu va uninstaller bilan) |
-| **`Prava Online_1.0.0_x64_en-US.msi`** | WiX MSI | **4.67 MB** | `D7A6363715B0DD214BCBD89AD59A4EB08ABED04FBBBE60A3AED066D220BC3E01` | Korporativ tarqatish va avtomatlashtirilgan o'rnatishlar uchun Windows Installer |
-| **`prava-desktop-online.exe`** | Portable Executable | **10.67 MB** | `6715DFCE50CBDED8697D523A362A9E913C128F0E0BCE6369950BF634DED6730E` | O'rnatishsiz to'g'ridan-to'g'ri ishga tushuvchi portativ dastur |
+| **`Prava Online_1.0.0_x64-setup.exe`** | NSIS Installer | **3.55 MB** | `0D4A7D5F4EE779E2054D817E06ED1F78FEA702B6EF0B1BA82FF7998564C7A459` | Windows uchun qulay o'rnatuvchi (Desktop yorlig'i, Start Menu va uninstaller bilan) |
+| **`Prava Online_1.0.0_x64_en-US.msi`** | WiX MSI | **4.67 MB** | `A6AD3323F6E89652B523E34C4E065D1EF6B9D5E972304E8AED66679C0768B8FB` | Korporativ tarqatish va avtomatlashtirilgan o'rnatishlar uchun Windows Installer |
+| **`prava-desktop-online.exe`** | Portable Executable | **10.67 MB** | `1CD98089D209FCC92B9F3AB3028B8D8CFCB8D650E621AA7CC9E3E4A8E6DEB20D` | O'rnatishsiz to'g'ridan-to'g'ri ishga tushuvchi portativ dastur |
 
 ---
 
