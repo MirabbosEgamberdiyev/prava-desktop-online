@@ -42,6 +42,7 @@ interface GoogleAccountsId {
     auto_select?: boolean;
     context?: string;
     itp_support?: boolean;
+    use_fedcm_for_prompt?: boolean;
   }): void;
   prompt(momentListener?: (notification: PromptMomentNotification) => void): void;
   cancel(): void;
@@ -152,9 +153,10 @@ export function GoogleOneTap() {
           client_id: ENV.GOOGLE_CLIENT_ID,
           callback: callbackWrapper,
           cancel_on_tap_outside: false,
-          auto_select: true,
+          auto_select: false,
           context: "signin",
           itp_support: true,
+          use_fedcm_for_prompt: false,
         });
         gsiInitializedRef.current = true;
       }

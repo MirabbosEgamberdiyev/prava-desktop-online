@@ -67,6 +67,20 @@ pub fn run() {
                 license_key: Mutex::new(None),
             });
 
+            // Asosiy oyna yaratish — Google va Telegram OAuth popup (window.open) uchun ruxsat bilan:
+            tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+                .title("Prava Online - Haydovchilik imtihoniga tayyorlanish")
+                .inner_size(1280.0, 800.0)
+                .min_inner_size(1024.0, 700.0)
+                .resizable(true)
+                .fullscreen(false)
+                .center()
+                .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
+                .on_new_window(|_url, _features| {
+                    tauri::webview::NewWindowResponse::Allow
+                })
+                .build()?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
