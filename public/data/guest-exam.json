@@ -1,0 +1,487 @@
+{
+  "totalQuestions": 20,
+  "durationMinutes": 20,
+  "passingScore": 72,
+  "questions": [
+    {
+      "id": 9001,
+      "order": 1,
+      "text": {
+        "uzl": "Yo'l harakati qoidalariga ko'ra, haydovchi yo'lning qaysi tomonida harakatlanishi kerak?",
+        "uzc": "Йўл ҳаракати қоидаларига кўра, ҳайдовчи йўлнинг қайси томонида ҳаракатланиши керак?",
+        "en": "According to traffic rules, on which side of the road should the driver drive?",
+        "ru": "Согласно ПДД, по какой стороне дороги должен двигаться водитель?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90011, "index": 0, "text": { "uzl": "Chap tomonda", "uzc": "Чап томонда", "en": "On the left side", "ru": "По левой стороне" } },
+        { "id": 90012, "index": 1, "text": { "uzl": "O'ng tomonda", "uzc": "Ўнг томонда", "en": "On the right side", "ru": "По правой стороне" } },
+        { "id": 90013, "index": 2, "text": { "uzl": "Yo'lning o'rtasida", "uzc": "Йўлнинг ўртасида", "en": "In the middle of the road", "ru": "По середине дороги" } },
+        { "id": 90014, "index": 3, "text": { "uzl": "Istalgan tomonda", "uzc": "Исталган томонда", "en": "On any side", "ru": "По любой стороне" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "O'zbekistonda o'ng tomonlama harakat qoidasi amal qiladi.",
+        "uzc": "Ўзбекистонда ўнг томонлама ҳаракат қоидаси амал қилади.",
+        "en": "In Uzbekistan, right-hand traffic rules apply.",
+        "ru": "В Узбекистане действует правостороннее движение."
+      }
+    },
+    {
+      "id": 9002,
+      "order": 2,
+      "text": {
+        "uzl": "Qizil svetofor signali nimani bildiradi?",
+        "uzc": "Қизил светофор сигнали нимани билдиради?",
+        "en": "What does a red traffic light signal mean?",
+        "ru": "Что означает красный сигнал светофора?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90021, "index": 0, "text": { "uzl": "Harakatlanish mumkin", "uzc": "Ҳаракатланиш мумкин", "en": "You may proceed", "ru": "Можно двигаться" } },
+        { "id": 90022, "index": 1, "text": { "uzl": "Ehtiyot bo'lib o'tish mumkin", "uzc": "Эҳтиёт бўлиб ўтиш мумкин", "en": "You may proceed with caution", "ru": "Можно проехать с осторожностью" } },
+        { "id": 90023, "index": 2, "text": { "uzl": "To'xtash kerak", "uzc": "Тўхташ керак", "en": "You must stop", "ru": "Необходимо остановиться" } },
+        { "id": 90024, "index": 3, "text": { "uzl": "Tezlikni kamaytirish kerak", "uzc": "Тезликни камайтириш керак", "en": "You must slow down", "ru": "Необходимо снизить скорость" } }
+      ],
+      "correctOptionIndex": 2,
+      "explanation": {
+        "uzl": "Qizil svetofor signali harakatni taqiqlaydi. Barcha transport vositalari to'xtashi kerak.",
+        "uzc": "Қизил светофор сигнали ҳаракатни тақиқлайди.",
+        "en": "A red traffic light prohibits movement. All vehicles must stop.",
+        "ru": "Красный сигнал светофора запрещает движение."
+      }
+    },
+    {
+      "id": 9003,
+      "order": 3,
+      "text": {
+        "uzl": "Piyodalar o'tish joyidan o'tayotganda haydovchi nima qilishi kerak?",
+        "uzc": "Пиёдалар ўтиш жойидан ўтаётганда ҳайдовчи нима қилиши керак?",
+        "en": "What should a driver do when pedestrians are crossing at a crosswalk?",
+        "ru": "Что должен делать водитель, когда пешеходы переходят по пешеходному переходу?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90031, "index": 0, "text": { "uzl": "Signal berish kerak", "uzc": "Сигнал бериш керак", "en": "Honk the horn", "ru": "Подать сигнал" } },
+        { "id": 90032, "index": 1, "text": { "uzl": "Piyodalarga yo'l berish kerak", "uzc": "Пиёдаларга йўл бериш керак", "en": "Give way to pedestrians", "ru": "Уступить дорогу пешеходам" } },
+        { "id": 90033, "index": 2, "text": { "uzl": "Tezlikni oshirish kerak", "uzc": "Тезликни оширишкерак", "en": "Speed up", "ru": "Увеличить скорость" } },
+        { "id": 90034, "index": 3, "text": { "uzl": "Chetlab o'tish kerak", "uzc": "Четлаб ўтиш керак", "en": "Drive around them", "ru": "Объехать их" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "Haydovchi piyodalar o'tish joyida piyodalarga yo'l berishi shart.",
+        "uzc": "Ҳайдовчи пиёдалар ўтиш жойида пиёдаларга йўл бериши шарт.",
+        "en": "The driver must yield to pedestrians at crosswalks.",
+        "ru": "Водитель обязан уступить дорогу пешеходам на пешеходном переходе."
+      }
+    },
+    {
+      "id": 9004,
+      "order": 4,
+      "text": {
+        "uzl": "Aholi yashaydigan joyda transport vositasining ruxsat etilgan eng yuqori tezligi qancha?",
+        "uzc": "Аҳоли яшайдиган жойда транспорт воситасининг рухсат этилган энг юқори тезлиги қанча?",
+        "en": "What is the maximum permitted speed in residential areas?",
+        "ru": "Какова максимально допустимая скорость в населённом пункте?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90041, "index": 0, "text": { "uzl": "40 km/soat", "uzc": "40 км/соат", "en": "40 km/h", "ru": "40 км/ч" } },
+        { "id": 90042, "index": 1, "text": { "uzl": "50 km/soat", "uzc": "50 км/соат", "en": "50 km/h", "ru": "50 км/ч" } },
+        { "id": 90043, "index": 2, "text": { "uzl": "60 km/soat", "uzc": "60 км/соат", "en": "60 km/h", "ru": "60 км/ч" } },
+        { "id": 90044, "index": 3, "text": { "uzl": "70 km/soat", "uzc": "70 км/соат", "en": "70 km/h", "ru": "70 км/ч" } }
+      ],
+      "correctOptionIndex": 2,
+      "explanation": {
+        "uzl": "Aholi yashaydigan joylarda transport vositalarining ruxsat etilgan eng yuqori tezligi 60 km/soat.",
+        "uzc": "Аҳоли яшайдиган жойларда рухсат этилган энг юқори тезлик 60 км/соат.",
+        "en": "The maximum permitted speed in residential areas is 60 km/h.",
+        "ru": "Максимально допустимая скорость в населённом пункте — 60 км/ч."
+      }
+    },
+    {
+      "id": 9005,
+      "order": 5,
+      "text": {
+        "uzl": "Xavfsizlik kamari taqish qachon majburiy?",
+        "uzc": "Хавфсизлик камари тақиш қачон мажбурий?",
+        "en": "When is wearing a seatbelt mandatory?",
+        "ru": "Когда обязательно пристёгиваться ремнём безопасности?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90051, "index": 0, "text": { "uzl": "Faqat shahar tashqarisida", "uzc": "Фақат шаҳар ташқарисида", "en": "Only outside the city", "ru": "Только за городом" } },
+        { "id": 90052, "index": 1, "text": { "uzl": "Faqat magistral yo'llarda", "uzc": "Фақат магистрал йўлларда", "en": "Only on highways", "ru": "Только на магистралях" } },
+        { "id": 90053, "index": 2, "text": { "uzl": "Har doim", "uzc": "Ҳар доим", "en": "Always", "ru": "Всегда" } },
+        { "id": 90054, "index": 3, "text": { "uzl": "Faqat haydovchiga", "uzc": "Фақат ҳайдовчига", "en": "Only for the driver", "ru": "Только для водителя" } }
+      ],
+      "correctOptionIndex": 2,
+      "explanation": {
+        "uzl": "Xavfsizlik kamari har doim, barcha yo'nalishlarda taqilishi shart.",
+        "uzc": "Хавфсизлик камари ҳар доим тақилиши шарт.",
+        "en": "Seatbelts must be worn at all times on all roads.",
+        "ru": "Ремень безопасности обязателен всегда и на всех дорогах."
+      }
+    },
+    {
+      "id": 9006,
+      "order": 6,
+      "text": {
+        "uzl": "Aylana harakatli chorrahada kim birinchi bo'lib o'tadi?",
+        "uzc": "Айлана ҳаракатли чорраҳада ким биринчи бўлиб ўтади?",
+        "en": "Who has priority at a roundabout?",
+        "ru": "Кто имеет приоритет на кольцевом перекрёстке?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90061, "index": 0, "text": { "uzl": "O'ngdan kelayotgan transport", "uzc": "Ўнгдан келаётган транспорт", "en": "Vehicle from the right", "ru": "Транспорт справа" } },
+        { "id": 90062, "index": 1, "text": { "uzl": "Aylana harakatdagi transport", "uzc": "Айлана ҳаракатдаги транспорт", "en": "Vehicle already in the roundabout", "ru": "Транспорт на кольце" } },
+        { "id": 90063, "index": 2, "text": { "uzl": "Chapdan kelayotgan transport", "uzc": "Чапдан келаётган транспорт", "en": "Vehicle from the left", "ru": "Транспорт слева" } },
+        { "id": 90064, "index": 3, "text": { "uzl": "Katta transport vositasi", "uzc": "Катта транспорт воситаси", "en": "Larger vehicle", "ru": "Более крупное транспортное средство" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "Aylana harakatdagi transport vositalariga yo'l berish kerak.",
+        "uzc": "Айлана ҳаракатдаги транспорт воситаларига йўл бериш керак.",
+        "en": "Vehicles already in the roundabout have priority.",
+        "ru": "Транспорт на кольце имеет приоритет."
+      }
+    },
+    {
+      "id": 9007,
+      "order": 7,
+      "text": {
+        "uzl": "Qaysi hollarda qo'shimcha signal (burilish chirog'i) yoqish kerak?",
+        "uzc": "Қайси ҳолларда қўшимча сигнал (бурилиш чироғи) ёқиш керак?",
+        "en": "When must you use turn signals?",
+        "ru": "Когда нужно включать указатель поворота?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90071, "index": 0, "text": { "uzl": "Faqat burilishda", "uzc": "Фақат бурилишда", "en": "Only when turning", "ru": "Только при повороте" } },
+        { "id": 90072, "index": 1, "text": { "uzl": "Burilishda, qayta tizilishda va to'xtashda", "uzc": "Бурилишда, қайта тизилишда ва тўхташда", "en": "When turning, changing lanes, and stopping", "ru": "При повороте, перестроении и остановке" } },
+        { "id": 90073, "index": 2, "text": { "uzl": "Faqat magistral yo'lda", "uzc": "Фақат магистрал йўлда", "en": "Only on highways", "ru": "Только на магистралях" } },
+        { "id": 90074, "index": 3, "text": { "uzl": "Faqat tunda", "uzc": "Фақат тунда", "en": "Only at night", "ru": "Только ночью" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "Burilish chirog'i burilish, qayta tizilish, to'xtash va boshqa manyovrlar oldidan yoqilishi shart.",
+        "uzc": "Бурилиш чироғи бурилиш, қайта тизилиш ва тўхташ олдидан ёқилиши шарт.",
+        "en": "Turn signals must be used before turning, changing lanes, stopping, and other maneuvers.",
+        "ru": "Указатель поворота должен быть включён перед поворотом, перестроением и остановкой."
+      }
+    },
+    {
+      "id": 9008,
+      "order": 8,
+      "text": {
+        "uzl": "Magistral yo'lda ruxsat etilgan eng yuqori tezlik qancha?",
+        "uzc": "Магистрал йўлда рухсат этилган энг юқори тезлик қанча?",
+        "en": "What is the maximum permitted speed on a highway?",
+        "ru": "Какова максимально допустимая скорость на автомагистрали?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90081, "index": 0, "text": { "uzl": "80 km/soat", "uzc": "80 км/соат", "en": "80 km/h", "ru": "80 км/ч" } },
+        { "id": 90082, "index": 1, "text": { "uzl": "100 km/soat", "uzc": "100 км/соат", "en": "100 km/h", "ru": "100 км/ч" } },
+        { "id": 90083, "index": 2, "text": { "uzl": "110 km/soat", "uzc": "110 км/соат", "en": "110 km/h", "ru": "110 км/ч" } },
+        { "id": 90084, "index": 3, "text": { "uzl": "120 km/soat", "uzc": "120 км/соат", "en": "120 km/h", "ru": "120 км/ч" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "Magistral yo'lda ruxsat etilgan eng yuqori tezlik 100 km/soat.",
+        "uzc": "Магистрал йўлда рухсат этилган энг юқори тезлик 100 км/соат.",
+        "en": "The maximum permitted speed on highways is 100 km/h.",
+        "ru": "Максимально допустимая скорость на автомагистрали — 100 км/ч."
+      }
+    },
+    {
+      "id": 9009,
+      "order": 9,
+      "text": {
+        "uzl": "Mast holatda transport vositasini boshqarish uchun qanday jazo belgilangan?",
+        "uzc": "Маст ҳолатда транспорт воситасини бошқариш учун қандай жазо белгиланган?",
+        "en": "What is the penalty for driving under the influence of alcohol?",
+        "ru": "Какое наказание предусмотрено за управление транспортом в состоянии алкогольного опьянения?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90091, "index": 0, "text": { "uzl": "Jarima va haydovchilik guvohnomasini olib qo'yish", "uzc": "Жарима ва ҳайдовчилик гувоҳномасини олиб қўйиш", "en": "Fine and license suspension", "ru": "Штраф и лишение водительских прав" } },
+        { "id": 90092, "index": 1, "text": { "uzl": "Faqat jarima", "uzc": "Фақат жарима", "en": "Only a fine", "ru": "Только штраф" } },
+        { "id": 90093, "index": 2, "text": { "uzl": "Faqat ogohlantirish", "uzc": "Фақат огоҳлантириш", "en": "Only a warning", "ru": "Только предупреждение" } },
+        { "id": 90094, "index": 3, "text": { "uzl": "Jazo belgilanmagan", "uzc": "Жазо белгиланмаган", "en": "No penalty", "ru": "Наказание не предусмотрено" } }
+      ],
+      "correctOptionIndex": 0,
+      "explanation": {
+        "uzl": "Mast holatda haydash jiddiy huquqbuzarlik bo'lib, jarima va guvohnomani olib qo'yish bilan jazolanadi.",
+        "uzc": "Маст ҳолатда ҳайдаш жиддий ҳуқуқбузарлик.",
+        "en": "Driving under the influence is a serious offense punishable by fine and license suspension.",
+        "ru": "Вождение в нетрезвом виде — серьёзное правонарушение, наказывается штрафом и лишением прав."
+      }
+    },
+    {
+      "id": 9010,
+      "order": 10,
+      "text": {
+        "uzl": "Tuman paytida qaysi chirog'larni yoqish kerak?",
+        "uzc": "Туман пайтида қайси чироқларни ёқиш керак?",
+        "en": "Which lights should be turned on during fog?",
+        "ru": "Какие фары нужно включить в тумане?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90101, "index": 0, "text": { "uzl": "Uzoq nurli chirog'lar", "uzc": "Узоқ нурли чироқлар", "en": "High beam headlights", "ru": "Дальний свет" } },
+        { "id": 90102, "index": 1, "text": { "uzl": "Yaqin nurli chirog'lar va tuman chirog'lari", "uzc": "Яқин нурли чироқлар ва туман чироқлари", "en": "Low beam headlights and fog lights", "ru": "Ближний свет и противотуманные фары" } },
+        { "id": 90103, "index": 2, "text": { "uzl": "Faqat gabarit chirog'lar", "uzc": "Фақат габарит чироқлар", "en": "Only parking lights", "ru": "Только габаритные огни" } },
+        { "id": 90104, "index": 3, "text": { "uzl": "Chirog'lar yoqish shart emas", "uzc": "Чироқлар ёқиш шарт эмас", "en": "No lights required", "ru": "Включать свет не обязательно" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "Tuman paytida yaqin nurli chirog'lar va tuman chirog'larini yoqish kerak.",
+        "uzc": "Туман пайтида яқин нурли ва туман чироқларини ёқиш керак.",
+        "en": "During fog, use low beam headlights and fog lights.",
+        "ru": "В тумане необходимо включить ближний свет и противотуманные фары."
+      }
+    },
+    {
+      "id": 9011,
+      "order": 11,
+      "text": {
+        "uzl": "Tormoz yo'li nima?",
+        "uzc": "Тормоз йўли нима?",
+        "en": "What is braking distance?",
+        "ru": "Что такое тормозной путь?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90111, "index": 0, "text": { "uzl": "Haydovchi xavfni ko'rganidan to'xtagunicha bosib o'tgan masofa", "uzc": "Ҳайдовчи хавфни кўрганидан тўхтагунича босиб ўтган масофа", "en": "Distance from seeing danger to full stop", "ru": "Расстояние от обнаружения опасности до полной остановки" } },
+        { "id": 90112, "index": 1, "text": { "uzl": "Tormoz pedaliga bosilganidan to'xtagunicha bosib o'tgan masofa", "uzc": "Тормоз педалига босилганидан тўхтагунича масофа", "en": "Distance from pressing brake to full stop", "ru": "Расстояние от нажатия на тормоз до полной остановки" } },
+        { "id": 90113, "index": 2, "text": { "uzl": "Transport to'xtagandan keyingi masofa", "uzc": "Транспорт тўхтагандан кейинги масофа", "en": "Distance after vehicle stops", "ru": "Расстояние после остановки" } },
+        { "id": 90114, "index": 3, "text": { "uzl": "Signal berish masofasi", "uzc": "Сигнал бериш масофаси", "en": "Distance for signaling", "ru": "Расстояние подачи сигнала" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "Tormoz yo'li - tormoz pedaliga bosilgan paytdan transport to'liq to'xtagunicha bosib o'tadigan masofa.",
+        "uzc": "Тормоз йўли — тормоз педалига босилган пайтдан тўлиқ тўхтагунича масофа.",
+        "en": "Braking distance is the distance from when the brake pedal is pressed until the vehicle fully stops.",
+        "ru": "Тормозной путь — расстояние от нажатия на педаль тормоза до полной остановки."
+      }
+    },
+    {
+      "id": 9012,
+      "order": 12,
+      "text": {
+        "uzl": "Qaysi belgi asosiy yo'lni ko'rsatadi?",
+        "uzc": "Қайси белги асосий йўлни кўрсатади?",
+        "en": "Which sign indicates the main (priority) road?",
+        "ru": "Какой знак обозначает главную дорогу?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90121, "index": 0, "text": { "uzl": "Sariq romb shaklidagi belgi", "uzc": "Сариқ ромб шаклидаги белги", "en": "Yellow diamond-shaped sign", "ru": "Жёлтый ромбовидный знак" } },
+        { "id": 90122, "index": 1, "text": { "uzl": "Qizil uchburchak belgi", "uzc": "Қизил учбурчак белги", "en": "Red triangle sign", "ru": "Красный треугольный знак" } },
+        { "id": 90123, "index": 2, "text": { "uzl": "Ko'k doira belgi", "uzc": "Кўк доира белги", "en": "Blue circle sign", "ru": "Синий круглый знак" } },
+        { "id": 90124, "index": 3, "text": { "uzl": "Oq to'rtburchak belgi", "uzc": "Оқ тўртбурчак белги", "en": "White rectangular sign", "ru": "Белый прямоугольный знак" } }
+      ],
+      "correctOptionIndex": 0,
+      "explanation": {
+        "uzl": "Asosiy yo'l belgisi sariq romb shaklida bo'ladi (2.1 belgisi).",
+        "uzc": "Асосий йўл белгиси сариқ ромб шаклида бўлади.",
+        "en": "The priority road sign is a yellow diamond shape (sign 2.1).",
+        "ru": "Знак главной дороги имеет форму жёлтого ромба (знак 2.1)."
+      }
+    },
+    {
+      "id": 9013,
+      "order": 13,
+      "text": {
+        "uzl": "Qachon yo'l berish belgisiga rioya qilish kerak?",
+        "uzc": "Қачон йўл бериш белгисига риоя қилиш керак?",
+        "en": "When must you obey the yield sign?",
+        "ru": "Когда нужно соблюдать знак «Уступите дорогу»?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90131, "index": 0, "text": { "uzl": "Har doim", "uzc": "Ҳар доим", "en": "Always", "ru": "Всегда" } },
+        { "id": 90132, "index": 1, "text": { "uzl": "Faqat svetofor bo'lmaganda", "uzc": "Фақат светофор бўлмаганда", "en": "Only when there is no traffic light", "ru": "Только при отсутствии светофора" } },
+        { "id": 90133, "index": 2, "text": { "uzl": "Faqat tunda", "uzc": "Фақат тунда", "en": "Only at night", "ru": "Только ночью" } },
+        { "id": 90134, "index": 3, "text": { "uzl": "Faqat shahar ichida", "uzc": "Фақат шаҳар ичида", "en": "Only in the city", "ru": "Только в городе" } }
+      ],
+      "correctOptionIndex": 0,
+      "explanation": {
+        "uzl": "Yo'l berish belgisiga har doim rioya qilish kerak.",
+        "uzc": "Йўл бериш белгисига ҳар доим риоя қилиш керак.",
+        "en": "The yield sign must always be obeyed.",
+        "ru": "Знак «Уступите дорогу» нужно соблюдать всегда."
+      }
+    },
+    {
+      "id": 9014,
+      "order": 14,
+      "text": {
+        "uzl": "14 yoshgacha bolalar avtomobilda qayerda o'tirishi kerak?",
+        "uzc": "14 ёшгача болалар автомобилда қаерда ўтириши керак?",
+        "en": "Where must children under 14 sit in a car?",
+        "ru": "Где должны сидеть дети до 14 лет в автомобиле?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90141, "index": 0, "text": { "uzl": "Old o'rindiqda", "uzc": "Олд ўриндиқда", "en": "In the front seat", "ru": "На переднем сиденье" } },
+        { "id": 90142, "index": 1, "text": { "uzl": "Orqa o'rindiqda maxsus moslamada", "uzc": "Орқа ўриндиқда махсус мосламада", "en": "In the rear seat with a special device", "ru": "На заднем сиденье в специальном устройстве" } },
+        { "id": 90143, "index": 2, "text": { "uzl": "Istalgan joyda", "uzc": "Исталган жойда", "en": "Anywhere", "ru": "Где угодно" } },
+        { "id": 90144, "index": 3, "text": { "uzl": "Haydovchi yonida", "uzc": "Ҳайдовчи ёнида", "en": "Next to the driver", "ru": "Рядом с водителем" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "14 yoshgacha bolalar orqa o'rindiqda maxsus bola o'rindig'ida o'tirishi kerak.",
+        "uzc": "14 ёшгача болалар орқа ўриндиқда махсус мосламада ўтириши керак.",
+        "en": "Children under 14 must sit in the rear seat in a special child restraint device.",
+        "ru": "Дети до 14 лет должны сидеть на заднем сиденье в специальном детском удерживающем устройстве."
+      }
+    },
+    {
+      "id": 9015,
+      "order": 15,
+      "text": {
+        "uzl": "Temir yo'l kesishmasiga yaqinlashayotganda nima qilish kerak?",
+        "uzc": "Темир йўл кесишмасига яқинлашаётганда нима қилиш керак?",
+        "en": "What should you do when approaching a railway crossing?",
+        "ru": "Что нужно делать при приближении к железнодорожному переезду?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90151, "index": 0, "text": { "uzl": "Tezlikni kamaytirish va diqqatli bo'lish", "uzc": "Тезликни камайтириш ва диққатли бўлиш", "en": "Slow down and be attentive", "ru": "Снизить скорость и быть внимательным" } },
+        { "id": 90152, "index": 1, "text": { "uzl": "Tezlikni oshirish", "uzc": "Тезликни оширишь", "en": "Speed up", "ru": "Увеличить скорость" } },
+        { "id": 90153, "index": 2, "text": { "uzl": "To'xtash shart emas", "uzc": "Тўхташ шарт эмас", "en": "No need to stop", "ru": "Останавливаться не обязательно" } },
+        { "id": 90154, "index": 3, "text": { "uzl": "Signal berish", "uzc": "Сигнал бериш", "en": "Honk the horn", "ru": "Подать звуковой сигнал" } }
+      ],
+      "correctOptionIndex": 0,
+      "explanation": {
+        "uzl": "Temir yo'l kesishmasiga yaqinlashayotganda tezlikni kamaytirish va xavfsizlikni ta'minlash kerak.",
+        "uzc": "Темир йўл кесишмасига яқинлашаётганда тезликни камайтириш керак.",
+        "en": "When approaching a railway crossing, slow down and ensure safety.",
+        "ru": "При приближении к железнодорожному переезду необходимо снизить скорость."
+      }
+    },
+    {
+      "id": 9016,
+      "order": 16,
+      "text": {
+        "uzl": "Qachon orqa ko'rish oynasidan foydalanish kerak?",
+        "uzc": "Қачон орқа кўриш ойнасидан фойдаланиш керак?",
+        "en": "When should you use the rearview mirror?",
+        "ru": "Когда нужно пользоваться зеркалом заднего вида?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90161, "index": 0, "text": { "uzl": "Faqat orqaga yurayotganda", "uzc": "Фақат орқага юраётганда", "en": "Only when reversing", "ru": "Только при движении задним ходом" } },
+        { "id": 90162, "index": 1, "text": { "uzl": "Faqat burilishda", "uzc": "Фақат бурилишда", "en": "Only when turning", "ru": "Только при повороте" } },
+        { "id": 90163, "index": 2, "text": { "uzl": "Muntazam ravishda", "uzc": "Мунтазам равишда", "en": "Regularly", "ru": "Регулярно" } },
+        { "id": 90164, "index": 3, "text": { "uzl": "Faqat magistral yo'lda", "uzc": "Фақат магистрал йўлда", "en": "Only on highways", "ru": "Только на магистралях" } }
+      ],
+      "correctOptionIndex": 2,
+      "explanation": {
+        "uzl": "Orqa ko'rish oynasidan muntazam foydalanish xavfsiz haydash uchun zarur.",
+        "uzc": "Орқа кўриш ойнасидан мунтазам фойдаланиш зарур.",
+        "en": "Regular use of the rearview mirror is essential for safe driving.",
+        "ru": "Регулярное использование зеркала заднего вида необходимо для безопасного вождения."
+      }
+    },
+    {
+      "id": 9017,
+      "order": 17,
+      "text": {
+        "uzl": "Sariq svetofor signali nimani bildiradi?",
+        "uzc": "Сариқ светофор сигнали нимани билдиради?",
+        "en": "What does a yellow traffic light signal mean?",
+        "ru": "Что означает жёлтый сигнал светофора?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90171, "index": 0, "text": { "uzl": "Harakatlanish mumkin", "uzc": "Ҳаракатланиш мумкин", "en": "You may proceed", "ru": "Можно двигаться" } },
+        { "id": 90172, "index": 1, "text": { "uzl": "Signal o'zgarishiga tayyor bo'lish", "uzc": "Сигнал ўзгаришига тайёр бўлиш", "en": "Prepare for signal change", "ru": "Приготовиться к смене сигнала" } },
+        { "id": 90173, "index": 2, "text": { "uzl": "Tezlikni oshirish", "uzc": "Тезликни оширишь", "en": "Speed up", "ru": "Увеличить скорость" } },
+        { "id": 90174, "index": 3, "text": { "uzl": "Orqaga yurish", "uzc": "Орқага юриш", "en": "Reverse", "ru": "Двигаться задним ходом" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "Sariq signal o'zgarishga tayyor bo'lishni bildiradi. Harakatni boshlash yoki davom ettirish taqiqlanadi.",
+        "uzc": "Сариқ сигнал ўзгаришга тайёр бўлишни билдиради.",
+        "en": "Yellow signal means prepare for a signal change.",
+        "ru": "Жёлтый сигнал означает подготовку к смене сигнала."
+      }
+    },
+    {
+      "id": 9018,
+      "order": 18,
+      "text": {
+        "uzl": "Haydovchilik guvohnomasi necha yoshdan beriladi?",
+        "uzc": "Ҳайдовчилик гувоҳномаси неча ёшдан берилади?",
+        "en": "At what age can you get a driver's license?",
+        "ru": "С какого возраста выдаётся водительское удостоверение?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90181, "index": 0, "text": { "uzl": "16 yoshdan", "uzc": "16 ёшдан", "en": "From 16 years", "ru": "С 16 лет" } },
+        { "id": 90182, "index": 1, "text": { "uzl": "18 yoshdan", "uzc": "18 ёшдан", "en": "From 18 years", "ru": "С 18 лет" } },
+        { "id": 90183, "index": 2, "text": { "uzl": "21 yoshdan", "uzc": "21 ёшдан", "en": "From 21 years", "ru": "С 21 года" } },
+        { "id": 90184, "index": 3, "text": { "uzl": "14 yoshdan", "uzc": "14 ёшдан", "en": "From 14 years", "ru": "С 14 лет" } }
+      ],
+      "correctOptionIndex": 1,
+      "explanation": {
+        "uzl": "O'zbekistonda B toifali haydovchilik guvohnomasi 18 yoshdan beriladi.",
+        "uzc": "Ўзбекистонда B тоифали гувоҳнома 18 ёшдан берилади.",
+        "en": "In Uzbekistan, a category B driver's license is issued from 18 years old.",
+        "ru": "В Узбекистане водительское удостоверение категории B выдаётся с 18 лет."
+      }
+    },
+    {
+      "id": 9019,
+      "order": 19,
+      "text": {
+        "uzl": "Qaysi joyda to'xtash taqiqlangan?",
+        "uzc": "Қайси жойда тўхташ тақиқланган?",
+        "en": "Where is stopping prohibited?",
+        "ru": "Где запрещена остановка?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90191, "index": 0, "text": { "uzl": "Piyodalar o'tish joyida", "uzc": "Пиёдалар ўтиш жойида", "en": "At a pedestrian crossing", "ru": "На пешеходном переходе" } },
+        { "id": 90192, "index": 1, "text": { "uzl": "Avtobus bekatidan 15 m masofada", "uzc": "Автобус бекатидан 15 м масофада", "en": "Within 15 m of a bus stop", "ru": "В 15 м от остановки автобуса" } },
+        { "id": 90193, "index": 2, "text": { "uzl": "Ikkalasi ham", "uzc": "Иккаласи ҳам", "en": "Both", "ru": "Оба варианта" } },
+        { "id": 90194, "index": 3, "text": { "uzl": "Hech qayerda taqiqlanmagan", "uzc": "Ҳеч қаерда тақиқланмаган", "en": "Nowhere is it prohibited", "ru": "Нигде не запрещена" } }
+      ],
+      "correctOptionIndex": 2,
+      "explanation": {
+        "uzl": "Piyodalar o'tish joyida va avtobus bekatidan 15 m masofada to'xtash taqiqlangan.",
+        "uzc": "Пиёдалар ўтиш жойида ва автобус бекатидан 15 м масофада тўхташ тақиқланган.",
+        "en": "Stopping is prohibited at pedestrian crossings and within 15 m of bus stops.",
+        "ru": "Остановка запрещена на пешеходном переходе и в 15 м от остановки автобуса."
+      }
+    },
+    {
+      "id": 9020,
+      "order": 20,
+      "text": {
+        "uzl": "Favqulodda to'xtash signali (avariya chirog'i) qachon yoqiladi?",
+        "uzc": "Фавқулодда тўхташ сигнали (авария чироғи) қачон ёқилади?",
+        "en": "When should hazard warning lights be turned on?",
+        "ru": "Когда нужно включать аварийную сигнализацию?"
+      },
+      "imageUrl": null,
+      "options": [
+        { "id": 90201, "index": 0, "text": { "uzl": "Majburiy to'xtaganda", "uzc": "Мажбурий тўхтаганда", "en": "During an emergency stop", "ru": "При вынужденной остановке" } },
+        { "id": 90202, "index": 1, "text": { "uzl": "Yo'l-transport hodisasida", "uzc": "Йўл-транспорт ҳодисасида", "en": "In case of a road accident", "ru": "При ДТП" } },
+        { "id": 90203, "index": 2, "text": { "uzl": "Tortib olib ketayotganda", "uzc": "Тортиб олиб кетаётганда", "en": "When being towed", "ru": "При буксировке" } },
+        { "id": 90204, "index": 3, "text": { "uzl": "Yuqoridagilarning barchasi", "uzc": "Юқоридагиларнинг барчаси", "en": "All of the above", "ru": "Все перечисленное" } }
+      ],
+      "correctOptionIndex": 3,
+      "explanation": {
+        "uzl": "Favqulodda to'xtash signali majburiy to'xtaganda, YTH da va tortib olib ketayotganda yoqilishi kerak.",
+        "uzc": "Фавқулодда тўхташ сигнали барча кўрсатилган ҳолларда ёқилиши керак.",
+        "en": "Hazard warning lights must be turned on during emergency stops, accidents, and when being towed.",
+        "ru": "Аварийную сигнализацию нужно включать при вынужденной остановке, ДТП и при буксировке."
+      }
+    }
+  ]
+}

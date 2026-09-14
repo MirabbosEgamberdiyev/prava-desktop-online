@@ -1,0 +1,64 @@
+/*
+ * Shrift `@import` bu yerdan OLIB TASHLANDI va `index.html` ga ko'chirildi.
+ * Sabab: CSS `@import` zanjirli render-blocking so'rov yaratadi — brauzer
+ * avval bundle CSS'ni yuklab, parse qilib, ANDIN Google Fonts so'rovini
+ * boshlaydi. Endi HTML'dan `preload` + non-blocking `stylesheet` bilan
+ * parallel yuklanadi.
+ */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/*
+ * `font-family` universal `*` selektoridan OLIB TASHLANDI.
+ * Avval u HAR BIR elementga Montserrat'ni majburlardi va Mantine
+ * theme'idagi `fontFamilyMonospace` ni ham bosib ketardi (kod/raqam
+ * bloklari proporsional shriftda chiqardi). Endi ildizdan meros olinadi.
+ */
+html {
+  scroll-behavior: smooth;
+  /* Mantine theme.fontFamily bilan bir xil — kaskad orqali meros bo'ladi */
+  font-family: "Montserrat", sans-serif;
+  /* Mobil brauzerlarda landscape'ga burilganda matn o'z-o'zidan kattalashmasin */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--mantine-color-body);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  text-decoration: none;
+}
+
+/*
+ * A11Y: klaviatura fokusini global ko'rinadigan qilish.
+ * Imtihon sahifasida navigatsiya klaviatura bilan ham bo'lishi mumkin.
+ */
+:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
+/* Harakatga sezgir foydalanuvchilar uchun animatsiyalarni kamaytirish */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

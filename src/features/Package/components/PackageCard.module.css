@@ -1,0 +1,51 @@
+.card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--mantine-color-blue-5), var(--mantine-color-cyan-5));
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+}
+
+:global([data-mantine-color-scheme="dark"]) .card:hover {
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.freeBadge {
+  background: linear-gradient(135deg, var(--mantine-color-green-5), var(--mantine-color-teal-5));
+  color: white;
+}
+
+.paidBadge {
+  background: linear-gradient(135deg, var(--mantine-color-blue-5), var(--mantine-color-indigo-5));
+  color: white;
+}
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.startButton {
+  background: linear-gradient(135deg, var(--mantine-color-blue-6), var(--mantine-color-indigo-5));
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.startButton:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}

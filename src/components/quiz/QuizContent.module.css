@@ -1,0 +1,74 @@
+.optionPaper {
+  transition: all 0.2s ease;
+}
+
+.optionPaper[data-clickable="true"]:hover {
+  border-color: var(--mantine-color-blue-4) !important;
+  transform: translateX(4px);
+}
+
+/* A11Y: variantlar endi klaviatura bilan fokuslanadi (tabIndex=0) —
+   fokus halqasi ko'rinishi SHART, aks holda klaviatura foydalanuvchisi
+   qayerda turganini bilmaydi. */
+.optionPaper:focus-visible {
+  outline: 3px solid var(--mantine-color-blue-6);
+  outline-offset: 2px;
+}
+
+/* Savol navigatsiya tugmasi */
+.questionBtn {
+  min-width: 40px;
+  /* Mobil uchun tegish nishoni: WCAG 2.5.8 minimal 24px, Google tavsiyasi 44px.
+     Avval 36px edi — telefonda 50 ta tugma zich joylashganda noto'g'ri
+     savolga bosish juda oson edi. */
+  height: 40px;
+  padding: 0 5px;
+  border-radius: var(--mantine-radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+/* Rangdan mustaqil holat belgisi (✓ / ✕ / •) */
+.questionBtnMark {
+  font-size: 0.625rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.questionBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+}
+
+.questionBtn:focus-visible {
+  outline: 3px solid var(--mantine-color-blue-6);
+  outline-offset: 2px;
+}
+
+.questionBtn[data-active="true"] {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(34, 139, 230, 0.35);
+}
+
+/* Harakatni kamaytirish sozlamasi yoqilgan foydalanuvchilar uchun */
+@media (prefers-reduced-motion: reduce) {
+  .optionPaper,
+  .questionBtn {
+    transition: none;
+  }
+  .optionPaper[data-clickable="true"]:hover,
+  .questionBtn:hover,
+  .questionBtn[data-active="true"] {
+    transform: none;
+  }
+}

@@ -1,0 +1,42 @@
+.card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border-left: 4px solid;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+:global([data-mantine-color-scheme="dark"]) .card:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.badge {
+  background: linear-gradient(135deg, var(--mantine-color-blue-5), var(--mantine-color-indigo-5));
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  min-width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.startButton {
+  background: linear-gradient(135deg, var(--mantine-color-blue-6), var(--mantine-color-indigo-5));
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.startButton:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}

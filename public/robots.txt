@@ -1,0 +1,122 @@
+# Prava Online - https://pravaonline.uz
+# Haydovchilik guvohnomasi imtihoniga tayyorlanish platformasi
+
+# Google
+User-agent: Googlebot
+Allow: /
+Allow: /try-exam
+Allow: /auth/login
+Allow: /auth/register
+Disallow: /auth/forgot-password
+Disallow: /auth/telegram-callback
+Disallow: /me
+Disallow: /me/
+Disallow: /packages
+Disallow: /packages/
+Disallow: /tickets
+Disallow: /tickets/
+Disallow: /history
+Disallow: /history/
+Disallow: /leaderboard
+Disallow: /leaderboard/
+Disallow: /statistics
+Disallow: /statistics/
+Disallow: /settings
+Disallow: /settings/
+Disallow: /exam
+Disallow: /exam/
+Disallow: /topics
+Disallow: /topics/
+Disallow: /marafon
+Disallow: /marafon/
+Disallow: /api/
+Disallow: /assets/
+
+# Yandex
+User-agent: Yandex
+Allow: /
+Allow: /try-exam
+Allow: /auth/login
+Allow: /auth/register
+Disallow: /auth/forgot-password
+Disallow: /auth/telegram-callback
+Disallow: /me
+Disallow: /packages
+Disallow: /tickets
+Disallow: /history
+Disallow: /leaderboard
+Disallow: /statistics
+Disallow: /settings
+Disallow: /exam
+Disallow: /topics
+Disallow: /marafon
+Disallow: /api/
+Disallow: /assets/
+Clean-param: utm_source&utm_medium&utm_campaign
+
+# Bing
+User-agent: Bingbot
+Allow: /
+Allow: /try-exam
+Allow: /auth/login
+Allow: /auth/register
+Disallow: /auth/forgot-password
+Disallow: /auth/telegram-callback
+Disallow: /me
+Disallow: /packages
+Disallow: /tickets
+Disallow: /history
+Disallow: /leaderboard
+Disallow: /statistics
+Disallow: /settings
+Disallow: /exam
+Disallow: /topics
+Disallow: /marafon
+Disallow: /api/
+
+# All other bots
+User-agent: *
+Allow: /
+Allow: /try-exam
+Allow: /auth/login
+Allow: /auth/register
+Disallow: /auth/forgot-password
+Disallow: /auth/telegram-callback
+Disallow: /me
+Disallow: /me/
+Disallow: /packages
+Disallow: /packages/
+Disallow: /tickets
+Disallow: /tickets/
+Disallow: /history
+Disallow: /history/
+Disallow: /leaderboard
+Disallow: /leaderboard/
+Disallow: /statistics
+Disallow: /statistics/
+Disallow: /settings
+Disallow: /settings/
+Disallow: /exam
+Disallow: /exam/
+Disallow: /topics
+Disallow: /topics/
+Disallow: /marafon
+Disallow: /marafon/
+Disallow: /api/
+Disallow: /assets/
+
+# Block AI training bots
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+# Sitemaps
+Sitemap: https://pravaonline.uz/sitemap.xml
+
+# Host
+Host: https://pravaonline.uz

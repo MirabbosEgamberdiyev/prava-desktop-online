@@ -1,0 +1,125 @@
+# Prava Online - SPA Routing & Performance Configuration
+# https://pravaonline.uz
+
+# ========================================
+# 1. SPA ROUTING - React Router support
+# ========================================
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # HTTPS redirect (agar SSL mavjud bo'lsa)
+  RewriteCond %{HTTPS} off
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # www dan non-www ga redirect
+  RewriteCond %{HTTP_HOST} ^www\.pravaonline\.uz [NC]
+  RewriteRule ^(.*)$ https://pravaonline.uz/$1 [L,R=301]
+
+  # Real fayllar va papkalar uchun rewrite qilmaymiz
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # API so'rovlarni o'tkazib yuboramiz (backend proxy uchun)
+  RewriteCond %{REQUEST_URI} !^/api/
+
+  # Qolgan barcha so'rovlarni index.html ga yo'naltiramiz (SPA routing)
+  RewriteRule ^(.*)$ /index.html [L,QSA]
+</IfModule>
+
+# ========================================
+# 2. CACHING - Tezlikni oshirish
+# ========================================
+<IfModule mod_expires.c>
+  ExpiresActive On
+
+  # Rasmlar - 1 yil
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/x-icon "access plus 1 year"
+
+  # Shriftlar - 1 yil
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType font/woff "access plus 1 year"
+  ExpiresByType application/font-woff2 "access plus 1 year"
+
+  # CSS/JS - 1 yil (Vite hash qo'shadi)
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType text/javascript "access plus 1 year"
+
+  # HTML - kesh qilmaymiz (har doim yangi versiyani olish uchun)
+  ExpiresByType text/html "access plus 0 seconds"
+
+  # JSON - 1 kun
+  ExpiresByType application/json "access plus 1 day"
+
+  # Manifest - 1 hafta
+  ExpiresByType application/manifest+json "access plus 1 week"
+
+  # XML (sitemap) - 1 hafta
+  ExpiresByType text/xml "access plus 1 week"
+  ExpiresByType application/xml "access plus 1 week"
+</IfModule>
+
+# ========================================
+# 3. GZIP COMPRESSION - Trafik tejash
+# ========================================
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html
+  AddOutputFilterByType DEFLATE text/css
+  AddOutputFilterByType DEFLATE application/javascript
+  AddOutputFilterByType DEFLATE text/javascript
+  AddOutputFilterByType DEFLATE application/json
+  AddOutputFilterByType DEFLATE application/manifest+json
+  AddOutputFilterByType DEFLATE image/svg+xml
+  AddOutputFilterByType DEFLATE text/xml
+  AddOutputFilterByType DEFLATE application/xml
+  AddOutputFilterByType DEFLATE font/woff2
+  AddOutputFilterByType DEFLATE application/font-woff2
+</IfModule>
+
+# ========================================
+# 4. SECURITY HEADERS
+# ========================================
+<IfModule mod_headers.c>
+  # XSS himoyasi
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set X-XSS-Protection "1; mode=block"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # Service Worker scope
+  Header set Service-Worker-Allowed "/"
+
+  # Cache-Control for HTML (har doim yangi versiya)
+  <FilesMatch "\.(html)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+
+  # Cache-Control for hashed assets (Vite)
+  <FilesMatch "\.(js|css|png|jpg|jpeg|gif|svg|woff2|woff)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+# ========================================
+# 5. MIME TYPES
+# ========================================
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+  AddType application/javascript .js .mjs
+  AddType text/css .css
+  AddType image/svg+xml .svg
+  AddType font/woff2 .woff2
+  AddType application/json .json
+</IfModule>
+
+# ========================================
+# 6. ERROR PAGES
+# ========================================
+ErrorDocument 404 /index.html

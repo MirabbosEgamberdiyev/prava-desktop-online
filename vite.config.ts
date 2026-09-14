@@ -1,8 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import path from "path";
 
-export default defineConfig(async () => ({
-  plugins: [react()],
+// https://vite.dev/config/
+export default defineConfig({
+  define: {
+    // Har build paytida yangi timestamp — i18n cache bypass uchun
+    __BUILD_TIME__: JSON.stringify(Date.now().toString()),
+  },
+  plugins: [
+    react({
+      babel: {
+        plugins: [["babel-plugin-react-compiler"]],
+      },
+    }),
+  ],
   clearScreen: false,
   server: {
     port: 1421,
@@ -10,33 +22,49 @@ export default defineConfig(async () => ({
     watch: { ignored: ["**/src-tauri/**"] },
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
   build: {
+    outDir: "dist",
     target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
-    // ⚡ Kichikroq bundle, tezroq parse, kamroq RAM
     cssMinify: true,
     reportCompressedSize: false,
     chunkSizeWarningLimit: 1024,
     rollupOptions: {
       output: {
         manualChunks: {
-          // React core alohida chunk — barcha sahifalar uchun bir marta yuklanadi
-          "react-vendor": ["react", "react-dom"],
-          // i18n alohida — kichik va kamdan-kam o'zgaradi
-          "i18n": ["i18next", "react-i18next"],
-          // Tabler icons alohida — bir marta yuklanadi
-          "icons":  ["@tabler/icons-react"],
-          // Tauri API alohida (plugin-opener/plugin-shell frontendda
-          // umuman import qilinmaydi — ro'yxatdan olib tashlandi)
-          "tauri":  ["@tauri-apps/api"],
+          mantine: [
+            "@mantine/core",
+            "@mantine/hooks",
+            "@mantine/notifications",
+            "@mantine/form",
+          ],
+          vendor: [
+            "react",
+            "react-dom",
+            "react-router-dom",
+          ],
+          icons: [
+            "@tabler/icons-react",
+          ],
+          i18n: [
+            "i18next",
+            "react-i18next",
+          ],
+          tauri: [
+            "@tauri-apps/api",
+          ],
         },
       },
     },
   },
   esbuild: {
-    // Production build'da console.log va debugger'lar olib tashlanadi
     drop: process.env.TAURI_ENV_DEBUG ? [] : ["console", "debugger"],
     legalComments: "none",
   },
-}));
+});
