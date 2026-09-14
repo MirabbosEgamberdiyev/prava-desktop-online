@@ -5,4 +5,5 @@
 export * from "./outboxQueue";
 export * from "./conflictResolver";
 export * from "./networkHeartbeat";
+export * from "./networkModeManager";
 export * from "./syncEngine";

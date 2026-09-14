@@ -1,14 +1,12 @@
 import { Suspense } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { UserRouteFallback } from "../components/common/RouteContentFallback";
-import { OfflineBanner } from "../components/common/OfflineBanner";
 
 const User_Layout = () => {
   const location = useLocation();
 
   return (
     <div className="app" style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", overflow: "hidden" }}>
-      <OfflineBanner />
       <div
         className="page-transition-wrapper"
         key={location.pathname}

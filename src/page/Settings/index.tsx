@@ -138,8 +138,8 @@ const Settings_Page = () => {
 
   const handleNetworkModeChange = (mode: NetworkMode) => {
     networkModeManager.setMode(mode);
-    setNetworkMode(mode);
-    if (mode !== "OFFLINE_ONLY") {
+    setNetworkMode(networkModeManager.getMode());
+    if (mode !== "OFFLINE" && mode !== "OFFLINE_ONLY") {
       syncEngine.triggerSync().catch(() => {});
     }
   };
@@ -404,18 +404,18 @@ const Settings_Page = () => {
                       </Group>
                       <Badge
                         color={
-                          networkMode === "ONLINE_SYNC"
+                          networkMode === "ONLINE" || networkMode === "ONLINE_SYNC"
                             ? "blue"
-                            : networkMode === "OFFLINE_ONLY"
+                            : networkMode === "OFFLINE" || networkMode === "OFFLINE_ONLY"
                             ? "orange"
                             : "teal"
                         }
                         variant="light"
                       >
-                        {networkMode === "ONLINE_SYNC"
-                          ? "Onlayn Sinxron"
-                          : networkMode === "OFFLINE_ONLY"
-                          ? "Faqat Oflayn"
+                        {networkMode === "ONLINE" || networkMode === "ONLINE_SYNC"
+                          ? "Qat'iy Onlayn"
+                          : networkMode === "OFFLINE" || networkMode === "OFFLINE_ONLY"
+                          ? "Qat'iy Oflayn"
                           : "Avtomatik (Dynamic)"}
                       </Badge>
                     </Group>
@@ -424,7 +424,7 @@ const Settings_Page = () => {
                     </Text>
 
                     <SegmentedControl
-                      value={networkMode}
+                      value={networkMode === "ONLINE_SYNC" ? "ONLINE" : networkMode === "OFFLINE_ONLY" ? "OFFLINE" : networkMode}
                       onChange={(val) => handleNetworkModeChange(val as NetworkMode)}
                       fullWidth
                       radius="md"
@@ -443,35 +443,35 @@ const Settings_Page = () => {
                           label: (
                             <Center style={{ gap: 6 }}>
                               <IconCloudUpload size={15} />
-                              <span>Onlayn (ONLINE_SYNC)</span>
+                              <span>Qat'iy Onlayn (ONLINE)</span>
                             </Center>
                           ),
-                          value: "ONLINE_SYNC",
+                          value: "ONLINE",
                         },
                         {
                           label: (
                             <Center style={{ gap: 6 }}>
                               <IconWifiOff size={15} />
-                              <span>Faqat Oflayn (OFFLINE_ONLY)</span>
+                              <span>Qat'iy Oflayn (OFFLINE)</span>
                             </Center>
                           ),
-                          value: "OFFLINE_ONLY",
+                          value: "OFFLINE",
                         },
                       ]}
                     />
 
                     <Alert
                       icon={<IconInfoCircle size={16} />}
-                      color={networkMode === "OFFLINE_ONLY" ? "orange" : "blue"}
+                      color={networkMode === "OFFLINE" || networkMode === "OFFLINE_ONLY" ? "orange" : "blue"}
                       variant="light"
                       radius="md"
                     >
                       {networkMode === "AUTO" &&
                         "Avtomatik rejim: Tarmoq aloqasi avtomatik tekshirib turiladi. Internet bo'lganda yangilanishlar fonda sinxronlanadi, aloqa uzilganda esa hech qanday to'xtovsiz lokal bazadan foydalaniladi."}
-                      {networkMode === "ONLINE_SYNC" &&
-                        "Onlayn Sinxron rejimi: Tarmoq bilan faol aloqa saqlanadi va bajarilgan har bir imtihon yoki o'zgarish zudlik bilan serverga yuklanadi."}
-                      {networkMode === "OFFLINE_ONLY" &&
-                        "Faqat Oflayn rejimi: Barcha tarmoq so'rovlari va fon pinglari to'xtatiladi, internet sarflanmaydi. Ilova 100% kompyuterdagi mahalliy bazada 0 ms tezlikda ishlaydi."}
+                      {(networkMode === "ONLINE" || networkMode === "ONLINE_SYNC") &&
+                        "Qat'iy Onlayn rejimi: Tarmoq bilan faol aloqa saqlanadi va bajarilgan har bir imtihon yoki o'zgarish serverga yuklanadi. Aloqa uzilsa, holat aniq ko'rsatiladi."}
+                      {(networkMode === "OFFLINE" || networkMode === "OFFLINE_ONLY") &&
+                        "Qat'iy Oflayn rejimi: Barcha tarmoq so'rovlari va fon pinglari to'xtatiladi, internet sarflanmaydi. Ilova 100% kompyuterdagi mahalliy SQLite bazasida ishlaydi. Internet tiklansa ham rejim oflayn qoladi."}
                     </Alert>
                   </Paper>
 

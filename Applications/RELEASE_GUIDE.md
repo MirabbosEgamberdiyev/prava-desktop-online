@@ -4,54 +4,41 @@
 
 | Fayl Nomi | Format | Hajmi | SHA-256 Checksum | Tavsif |
 | :--- | :--- | :--- | :--- | :--- |
-| **`Prava Online_1.0.0_x64-setup.exe`** | NSIS Installer | **3.56 MB** | `878A3D042A82DC107EA0E74E456A4EFC91D1681B5082F0CCB411ACF98D741F64` | Windows uchun qulay o'rnatuvchi (Desktop yorlig'i, Start Menu va uninstaller bilan) |
-| **`Prava Online_1.0.0_x64_en-US.msi`** | WiX MSI | **4.68 MB** | `5EB332993F34D3B836A7AA86FA719D516A7ED22F7A58AC834E688705D189EE70` | Korporativ tarqatish va avtomatlashtirilgan o'rnatishlar uchun Windows Installer |
-| **`prava-desktop-online.exe`** | Portable Executable | **10.68 MB** | `288BDE0F7B2F3E20E76344BC9EA40FF6D26E2E4A9F852013F12B51826F1E5C27` | O'rnatishsiz to'g'ridan-to'g'ri ishga tushuvchi portativ dastur |
+| **`Prava Online_1.0.0_x64-setup.exe`** | NSIS Installer | **3.56 MB** | `4EEC36216B71A9195C3A8E4BA48E95B19DFC67B0E20A81C98FC6B6FD9F37988B` | Windows uchun qulay o'rnatuvchi (Desktop yorlig'i, Start Menu va uninstaller bilan) |
+| **`Prava Online_1.0.0_x64_en-US.msi`** | WiX MSI | **4.68 MB** | `34A8BECE80A0C05597F937AFAB74693DF7F159D04D640CBAD4C5F09E4BD240EA` | Korporativ tarqatish va avtomatlashtirilgan o'rnatishlar uchun Windows Installer |
+| **`prava-desktop-online.exe`** | Portable Executable | **10.68 MB** | `989AE0E6FB5650476AFE988ABCF4FA7DEF295C36AB0F97709BE4E17988E7028F` | O'rnatishsiz to'g'ridan-to'g'ri ishga tushuvchi portativ dastur |
+| **`Prava-Online-Portable_1.0.0_x64.exe`** | Portable Executable | **10.68 MB** | `989AE0E6FB5650476AFE988ABCF4FA7DEF295C36AB0F97709BE4E17988E7028F` | Portativ dasturning muqobil nusxasi |
 
 ---
 
-## 2. Ishlab Chiqilgan Arxitektura va Imkoniyatlar
+## 2. Online / Offline Rejim Tizimining Yangi Arxitekturasi (Hardening)
 
-1. **Private Desktop Formati**:
-   - Hech qanday marketing landing, blog, haqimizda sahifalar mavjud emas.
-   - Root (`/`) to'g'ridan-to'g'ri foydalanuvchi kabinetiga (`/me`) yoki kirish sahifasiga (`/auth/login`) yo'naltiradi.
-   - Foydalanuvchi uchun faqat o'quv va imtihon tizimi to'liq mavjud: Biletlar, Mavzular, Marafon, Rasmiy Imtihon, Noto'g'ri javoblar, Saqlanganlar, Statistika, Reyting, Tarix va Sozlamalar.
+1. **Internet Aloqasi va Ilova Ish Rejimining Qat'iy Ajratilishi**:
+   - **Internet Connectivity** (`CONNECTED` | `DISCONNECTED` | `UNKNOWN`): Fizik tarmoq simi yoki Wi-Fi holati.
+   - **Application Work Mode** (`AUTO` | `ONLINE` | `OFFLINE`): Foydalanuvchining qat'iy irodasi va tanlovi.
+   - **Arxitektura Invarianti**: Agar foydalanuvchi **OFFLINE** rejimni tanlagan bo'lsa, hatto internet tarmog'i fizik tiklansa ham (OS `online` hodisasi yuz berganda), dastur **OFFLINE** rejimida qoladi! Tarmoq kelishi foydalanuvchi tanlovini aslo bekor qilmaydi.
+   - Tanlangan rejim `localStorage` (`prava_network_mode`) orqali doimiy saqlanadi va dastur qayta yoqilganda (restart/reload) ham saqlanib qoladi.
 
-2. **100% Pure Local-First Layer & Ikki Tomonlama Sinxronizatsiya (Local ↔ Server)**:
-   - **Kodda 0 ta hardcode qilingan savol (Rule #4 ga 100% muvofiq)**: Kod bazasida va bundle'da hech qanday mock yoki qotirilgan savollar massivi yo'q. Barcha savollar serverdan olinadi va mahalliy SQLite/IndexedDB bazasida saqlanadi.
-   - **Repository Pattern qatlami**: `src/database/repositories/` orqali to'g'ridan-to'g'ri mahalliy bazaga ulanish (`questionRepository`, `ticketRepository`, `topicRepository`, `outboxRepository`).
-   - **Boshlang'ich foniy sinxronizatsiya (Initial Sync)**: Dastur birinchi marta ochilganda yoki mahalliy baza bo'sh bo'lganda, `SyncEngine` serverdan savollarni fon rejimida batch (paketli) usulda yuklab oladi va tranzaksiyada saqlaydi.
-   - **Kuniga kamida 1 marta avtomatik sinxronizatsiya**: 24 soatlik threshold nazorati orqali muntazam sinxronizatsiya.
-   - **Header'dagi interaktiv "Sinxronlash" menyusi**: `User_Header` va Sozlamalar sahifasida real-vaqtda holatni (IDLE, SYNCING, OFFLINE, ERROR) ko'rsatib turuvchi va bir bosishda ikki tomonlama sinxronizatsiyani ishga tushiruvchi tugma (`SyncButton`).
-   - `src/sync/outboxQueue.ts`: Idempotent Outbox pattern (UUID v4) bilan oflayn mutatsiyalar navbati.
-   - `src/sync/conflictResolver.ts`: Deterministik to'qnashuvlarni hal qilish (imtihon ballari: monotonic best-score; progress: monotonic completion invariant; saqlangan savollar: tombstone set union).
-   - `src/sync/networkHeartbeat.ts`: Dual-tier tarmoq nazorati (OS hodisalari + real HTTP probe) va kompyuter uyqudan (sleep/hibernate) uyg'onishini aniqlash.
-   - `src/sync/syncEngine.ts`: Mutex lock bilan Push (`Local → Server`) va Pull (`Server → Local`) koordinatori. Avtomatik crash recovery.
+2. **Katta Apelsin Bannerni Butunlay Yo'qotish (Zero Screen Blocking)**:
+   - Dashboard va imtihon sahifalaridagi katta, xunuk va kontentni pastga suruvchi apelsin (orange) banner to'liq olib tashlandi.
+   - Ekranning barcha qismi o'quv jarayoni va test topshirish uchun 100% toza va qulay holatga keltirildi.
 
-3. **Tarmoq Ish Rejimlari Dvigateli (Network Mode Engine)**:
-   - **AUTO**: Tarmoqni avtomatik aniqlash va foniy sinxronlash.
-   - **ONLINE_SYNC**: Faol onlayn rejim, har bir harakat zudlik bilan serverga yuklanadi.
-   - **OFFLINE_ONLY**: Barcha tarmoq so'rovlari to'xtatiladi, internet sarflanmaydi. 100% lokal bazada 0 ms kechikish bilan ishlaydi.
-   - Rejimlar o'rtasida navigatsiya paneli yoki Sozlamalardan 1 bosish orqali almashish imkoniyati.
+3. **Yangi Ixcham va Zamonaviy Header Rejim Selektori (`NetworkModeSelector`)**:
+   - Dashboard (`/me`), sahifalar paneli (`User_Header`) va Imtihon paneli (`QuizNav`) yuqori o'ng burchagida ixcham pill tugma:
+     - `⚡ Avto` (Ulangan paytda och yashil / Uzilgan paytda kulrang)
+     - `☁ Onlayn` (Ulangan paytda och ko'k / Aloqa yo'q paytda qizil)
+     - `◉ Oflayn` (Qat'iy oflayn tanlanganda to'q sariq/amber)
+     - Agar zaxirada jo'natilmagan amallar bo'lsa: tugma ustida ixcham doiraviy hisoblagich `(• 3)`.
+   - Ochiluvchi zamonaviy menyuda:
+     - Tarmoq kechikishi (`latency: 24 ms` yoki `Aloqa yo'q`)
+     - Rejimni tanlash (Avtomatik, Qat'iy Onlayn, Qat'iy Oflayn)
+     - Qo'lda "Hozir sinxronlash" tugmasi va oxirgi muvaffaqiyatli sinxronlangan vaqt.
 
-4. **QR Kod Orqali Qurilmani Bog'lash Protokoli (Device Pairing) — To'liq Hardening**:
-   - Mobil ilovadan Desktop ilovaga kirish (`POST /api/v1/auth/qr/init`).
-   - Hech qanday soxta ("Demo") tugmalarsiz toza ishlab chiqarish arxitekturasi.
-   - Serverda ushbu endpoint hali sozlanmagan bo'lsa, qizil xatolik toasti chiqmasdan, toza va estetik xabarnoma hamda real ishlayotgan **Telegram Bot (@pravaonlineuzbot)** yoki **Parol** orqali kirish muqobillari ko'rsatiladi.
+4. **100% Local-First SQLite & Oflayn Ma'lumotlar Butunligi**:
+   - `OFFLINE` rejimida serverga barcha so'rovlar, foniy pinglar va heartbeat tekshiruvlari to'xtatiladi.
+   - Barcha imtihonlar, saqlangan savollar va noto'g'ri javoblar mahalliy bazada 0 ms kechikish bilan saqlanadi va outboxga yoziladi.
+   - Onlayn yoki Avto rejimga o'tilganda ma'lumotlar avtomatik ravishda serverga sinxronlanadi.
 
-5. **Faol Qurilmalar Boshqaruvi va Masofadan Sessiyani Tugatish**:
-   - Sozlamalar -> "Qurilmalar" bo'limida barcha ulangan qurilmalar ro'yxati (Desktop, Mobile, oxirgi faollik vaqti, joriy qurilma belgisi).
-   - Istalgan boshqa qurilmaning sessiyasini masofadan bekor qilish ("Sessiyani tugatish" tugmasi).
-
-6. **Multi-Account User Scoping**:
-   - Outbox va foydalanuvchi ma'lumotlari `user_id` bo'yicha qat'iy izolyatsiya qilingan. Bir kompyuterda bir nechta hisob ishlatilganda navbatlar aralashib ketmaydi.
-
-7. **Desktop Native UI/UX**:
-   - Klaviatura yordamida to'liq test topshirish: `1–5` yoki `F1–F5` (variant tanlash), `ArrowLeft`/`ArrowRight` (savollarni almashtirish), `Space` (keyingi savolga o'tish), `Enter` (imtihonni yakunlash), `Escape` (rasm yoki modalni yopish).
-   - Dual-tier `OfflineBanner`: internet uzilganda foydalanuvchini ogohlantirish va javoblar mahalliy xotirada saqlanayotganini kafolatlash, aloqa tiklanganda esa yashil tasdiq berish.
-   - Monotonic Wall-Clock anti-drift taymer (`Date.now() - startTime` delta).
-   - Rasm yuklanmaganda chiroyli SVG avtomobil/rul platseholderi.
-
-8. **To'liq Test Qamrovi (37/37 Test Muvaffaqiyatli)**:
-   - 18 ta favqulodda nosozlik stsenariylari testi (`tests/failureScenarios.test.ts`).
-   - Idempotency, Outbox crash recovery, Tombstone merge va Monotonic Best-Score to'liq avtomatlashtirilgan testlarda tasdiqlangan.
+5. **Avtomatlashtirilgan Testlar (46/46 Test Muvaffaqiyatli)**:
+   - `tests/networkModeArchitecture.test.ts` orqali 7 ta yangi arxitektura invarianti to'liq tekshirildi.
+   - `tests/failureScenarios.test.ts` (18 ta xaos testi), `tests/syncEngine.test.ts`, `tests/conflictResolver.test.ts`, `tests/multiAccountStorage.test.ts` testlari 100% PASS qildi.

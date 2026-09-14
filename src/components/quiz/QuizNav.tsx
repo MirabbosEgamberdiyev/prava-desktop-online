@@ -34,6 +34,7 @@ import {
 } from "@tabler/icons-react";
 import LanguagePicker from "../language/LanguagePicker";
 import ColorMode from "../other/ColorMode";
+import NetworkModeSelector from "../common/NetworkModeSelector";
 import api from "../../api/api";
 import { backupAnswers, clearBackup } from "../../hooks/useAutoSave";
 import type { AnswersMap } from "../../types";
@@ -317,6 +318,7 @@ export const QuizNav = forwardRef<QuizNavHandle, QuizNavProps>(function QuizNav(
         </Group>
 
         <Group gap="xs" wrap="nowrap">
+          <NetworkModeSelector size="xs" />
           <ColorMode />
           <LanguagePicker />
         </Group>

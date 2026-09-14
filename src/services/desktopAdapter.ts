@@ -21,7 +21,7 @@ import {
   ticketRepository,
   topicRepository,
 } from "../database";
-import { OutboxQueue, syncEngine } from "../sync";
+import { OutboxQueue, syncEngine, networkModeManager } from "../sync";
 
 export function getLang(): AppLanguage {
   const l = i18n.resolvedLanguage || i18n.language;
@@ -421,8 +421,8 @@ export async function getTickets(): Promise<OfflineTicket[]> {
     // ignore
   }
 
-  // 2. Fetch from backend if online
-  if (navigator.onLine) {
+  // 2. Fetch from backend if online AND online allowed
+  if (typeof navigator !== "undefined" && navigator.onLine && networkModeManager.isOnlineAllowed()) {
     try {
       const res = await api.get<{
         data: { content?: any[]; tickets?: any[] };
@@ -533,8 +533,8 @@ export async function getTopics(): Promise<OfflineTopic[]> {
     // ignore
   }
 
-  // 2. Fetch from backend if online
-  if (navigator.onLine) {
+  // 2. Fetch from backend if online AND online allowed
+  if (typeof navigator !== "undefined" && navigator.onLine && networkModeManager.isOnlineAllowed()) {
     try {
       let list: any[] = [];
       try {
@@ -601,16 +601,20 @@ export async function getFullStats(_userId?: number): Promise<FullStats> {
   const ticketStats: TicketReadinessStat[] = [];
   const totalTickets = 60;
 
-  // Try fetching live statistics from backend
+  // Try fetching live statistics from backend if online mode allowed
   let serverStats: any = null;
-  try {
-    const res = await api.get("/api/v2/my-statistics");
-    if (res.data?.data) {
-      serverStats = res.data.data;
-      setCachedData(OFFLINE_CACHE_KEYS.STATS, serverStats);
+  if (networkModeManager.isOnlineAllowed()) {
+    try {
+      const res = await api.get("/api/v2/my-statistics");
+      if (res.data?.data) {
+        serverStats = res.data.data;
+        setCachedData(OFFLINE_CACHE_KEYS.STATS, serverStats);
+      }
+    } catch {
+      // Offline or unauthenticated fallback: load last cached statistics
+      serverStats = getCachedData<any>(OFFLINE_CACHE_KEYS.STATS);
     }
-  } catch {
-    // Offline or unauthenticated fallback: load last cached statistics
+  } else {
     serverStats = getCachedData<any>(OFFLINE_CACHE_KEYS.STATS);
   }
 
@@ -769,23 +773,25 @@ export async function getQuestionStats(_userId?: number): Promise<QuestionStatDe
 }
 
 export async function getExamHistory(userId?: number, _limit?: number): Promise<ExamResult[]> {
-  try {
-    const res = await api.get<{ data: any }>("/api/v2/exams/history?page=0&size=50");
-    const serverExams = res.data?.data?.content || res.data?.data?.recentExams;
-    if (Array.isArray(serverExams) && serverExams.length > 0) {
-      return serverExams.map((item: any) => ({
-        id: item.sessionId || item.id,
-        user_id: userId ?? 1,
-        score: item.score ?? Math.round(item.percentage ?? 0),
-        total_questions: item.totalQuestions ?? 20,
-        correct_answers: item.correctCount ?? item.correctAnswers ?? 0,
-        duration_seconds: item.durationSeconds ?? 0,
-        exam_type: item.examType || "EXAM",
-        created_at: item.finishedAt || item.startedAt || item.createdAt || new Date().toISOString(),
-      }));
+  if (networkModeManager.isOnlineAllowed()) {
+    try {
+      const res = await api.get<{ data: any }>("/api/v2/exams/history?page=0&size=50");
+      const serverExams = res.data?.data?.content || res.data?.data?.recentExams;
+      if (Array.isArray(serverExams) && serverExams.length > 0) {
+        return serverExams.map((item: any) => ({
+          id: item.sessionId || item.id,
+          user_id: userId ?? 1,
+          score: item.score ?? Math.round(item.percentage ?? 0),
+          total_questions: item.totalQuestions ?? 20,
+          correct_answers: item.correctCount ?? item.correctAnswers ?? 0,
+          duration_seconds: item.durationSeconds ?? 0,
+          exam_type: item.examType || "EXAM",
+          created_at: item.finishedAt || item.startedAt || item.createdAt || new Date().toISOString(),
+        }));
+      }
+    } catch {
+      // offline fallback
     }
-  } catch {
-    // offline fallback
   }
 
   const list = storageService.getExamHistory();

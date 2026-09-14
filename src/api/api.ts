@@ -200,7 +200,7 @@ api.interceptors.response.use(
           );
         }
       }
-    } else if (!axios.isCancel(error) && error.code !== "ERR_CANCELED") {
+    } else if (!axios.isCancel(error) && error.code !== "ERR_CANCELED" && error.code !== "ERR_OFFLINE_MODE" && !(error as any).isOffline) {
       // Tarmoq uzilishi, timeout yoki server javob bermagan holat (status: 0)
       const SELF_HANDLED = [
         "/auth/logout",

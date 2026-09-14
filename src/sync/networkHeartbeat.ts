@@ -41,7 +41,7 @@ class NetworkHeartbeat {
 
   private setupModeListener(): void {
     networkModeManager.subscribe((mode) => {
-      if (mode === "OFFLINE_ONLY") {
+      if (mode === "OFFLINE" || networkModeManager.isOfflineOnly()) {
         this.updateStatus(false, null);
       } else {
         this.checkNow();
@@ -56,6 +56,11 @@ class NetworkHeartbeat {
     if (typeof window === "undefined") return;
 
     window.addEventListener("online", () => {
+      // Invariant: If OFFLINE mode is active, do NOT probe or auto-switch to online
+      if (networkModeManager.isOfflineOnly()) {
+        console.info("[NetworkHeartbeat] OS online event ignored: OFFLINE mode is explicitly chosen by user.");
+        return;
+      }
       // OS says online — verify with real probe immediately
       this.checkNow();
     });
@@ -179,11 +184,17 @@ class NetworkHeartbeat {
   /**
    * Public API
    */
-  public getStatus(): { isOnline: boolean; latencyMs: number | null; lastCheckedAt: number | null } {
+  public getStatus(): {
+    isOnline: boolean;
+    latencyMs: number | null;
+    lastCheckedAt: number | null;
+    connectivityState: "CONNECTED" | "DISCONNECTED" | "UNKNOWN";
+  } {
     return {
       isOnline: this.isOnline,
       latencyMs: this.latencyMs,
       lastCheckedAt: this.lastCheckedAt,
+      connectivityState: this.isOnline ? "CONNECTED" : "DISCONNECTED",
     };
   }
 

@@ -21,7 +21,6 @@ import { QuizNav, type QuizNavHandle } from "../../../components/quiz/QuizNav";
 import { QuizContent } from "../../../components/quiz/QuizContent";
 import SEO from "../../../components/common/SEO";
 import { useAutoSave, restoreAnswers } from "../../../hooks/useAutoSave";
-import { OfflineBanner } from "../../../components/common/OfflineBanner";
 import type { PackageExamData, AnswersMap } from "../../../types";
 
 interface ActiveExamInfo {
@@ -277,7 +276,6 @@ const PackageExamPage = () => {
         isSecureMode={isSecureMode}
         onSubmitSuccess={handleSubmitSuccess}
       />
-      <OfflineBanner />
       <QuizContent
         questions={examData.data.questions}
         onAnswerSelect={handleAnswerSelect}

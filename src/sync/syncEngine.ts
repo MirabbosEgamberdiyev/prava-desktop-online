@@ -137,13 +137,15 @@ export class SyncEngine {
         });
         // Windows Wake from sleep / resume listener
         window.addEventListener("online", () => {
-          this.triggerSync().catch(() => {});
+          if (!networkModeManager.isOfflineOnly()) {
+            this.triggerSync().catch(() => {});
+          }
         });
       }
 
-      // 7. React to network mode changes (AUTO, ONLINE_SYNC, OFFLINE_ONLY)
+      // 7. React to network mode changes (AUTO, ONLINE, OFFLINE)
       networkModeManager.subscribe((mode) => {
-        if (mode === "OFFLINE_ONLY") {
+        if (mode === "OFFLINE" || networkModeManager.isOfflineOnly()) {
           this.state = "OFFLINE";
           this.broadcastStatus();
         } else if (networkHeartbeat.getStatus().isOnline) {

@@ -15,7 +15,6 @@ import api from "../../../api/api";
 import { QuizNav, type QuizNavHandle } from "../../../components/quiz/QuizNav";
 import { QuizContent } from "../../../components/quiz/QuizContent";
 import { useAutoSave, restoreAnswers } from "../../../hooks/useAutoSave";
-import { OfflineBanner } from "../../../components/common/OfflineBanner";
 import type { MarathonExamData, AnswersMap } from "../../../types";
 import type { ExamMode } from "../../../components/quiz/ExamModeModal";
 
@@ -191,7 +190,6 @@ const Marathon_ExamPage = ({
         isSecureMode={isSecureMode}
         onSubmitSuccess={handleSubmitSuccess}
       />
-      <OfflineBanner />
       <QuizContent
         questions={examData.data.questions}
         onAnswerSelect={handleAnswerSelect}
