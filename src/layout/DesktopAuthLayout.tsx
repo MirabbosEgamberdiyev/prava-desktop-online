@@ -3,7 +3,6 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { AppShell, Container, Group, Text } from "@mantine/core";
 import LanguagePicker from "../components/language/LanguagePicker";
 import ColorMode from "../components/other/ColorMode";
-import { LicenseBar } from "../components/desktop/LicenseBar";
 import { RouteContentFallback } from "../components/common/RouteContentFallback";
 
 export const DesktopAuthLayout = () => {
@@ -50,9 +49,8 @@ export const DesktopAuthLayout = () => {
               </Text>
             </Group>
 
-            {/* Right: License Status + Dark/Light + Language Switcher */}
+            {/* Right: Dark/Light + Language Switcher */}
             <Group gap={10} wrap="nowrap">
-              <LicenseBar />
               <ColorMode />
               <LanguagePicker />
             </Group>

@@ -12,7 +12,6 @@ import { useAuth } from "../../auth/AuthContext";
 import UserMenuButton from "./UserMenuButton";
 import { useTranslation } from "react-i18next";
 import ColorMode from "../other/ColorMode";
-import { LicenseBar } from "../desktop/LicenseBar";
 
 const User_Header = ({
   opened,
@@ -45,7 +44,6 @@ const User_Header = ({
 
           {/* Right: Theme + Language + Profile */}
           <Group gap={8} wrap="nowrap" style={{ flexShrink: 1, minWidth: 0 }}>
-            <LicenseBar />
             <ColorMode />
             <LanguagePicker />
             {isAuthenticated ? (

@@ -9,7 +9,6 @@ import GoogleOneTap from "./components/auth/GoogleOneTap";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import { ScrollManager } from "./components/common/ScrollManager";
-import { DesktopLicenseGuard } from "./components/desktop/DesktopLicenseGuard";
 
 /**
  * Global API error listener with deduplication cooldown.
@@ -73,18 +72,16 @@ function AppInner() {
 
   return (
     <DesktopThemeProvider>
-      <DesktopLicenseGuard>
-        <AuthProvider>
-          <LanguageProvider>
-            <ApiErrorListener />
-            <GoogleOneTap />
-            <ScrollManager />
-            <ErrorBoundary resetKey={location.pathname}>
-              <AppRoutes />
-            </ErrorBoundary>
-          </LanguageProvider>
-        </AuthProvider>
-      </DesktopLicenseGuard>
+      <AuthProvider>
+        <LanguageProvider>
+          <ApiErrorListener />
+          <GoogleOneTap />
+          <ScrollManager />
+          <ErrorBoundary resetKey={location.pathname}>
+            <AppRoutes />
+          </ErrorBoundary>
+        </LanguageProvider>
+      </AuthProvider>
     </DesktopThemeProvider>
   );
 }

@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import ColorMode from "../../components/other/ColorMode";
 import LanguagePicker from "../../components/language/LanguagePicker";
 import UserMenuButton from "../../components/nav/UserMenuButton";
-import { LicenseBar } from "../../components/desktop/LicenseBar";
 import SEO from "../../components/common/SEO";
 import { getFullStats } from "../../services/desktopAdapter";
 import type { FullStats, AppScreen } from "../../types/desktop";
@@ -213,9 +212,8 @@ export default function User_Page() {
               </span>
             </div>
 
-            {/* Right Zone Controls: License, Theme, Language, User Profile */}
+            {/* Right Zone Controls: Theme, Language, User Profile */}
             <div className="home-header-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <LicenseBar />
               <ColorMode />
               <LanguagePicker />
               <div className="navbar-divider" aria-hidden="true" />
