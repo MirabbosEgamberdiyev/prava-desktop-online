@@ -24,16 +24,30 @@ html {
   scroll-behavior: smooth;
   /* Mantine theme.fontFamily bilan bir xil — kaskad orqali meros bo'ladi */
   font-family: "Montserrat", sans-serif;
-  /* Mobil brauzerlarda landscape'ga burilganda matn o'z-o'zidan kattalashmasin */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   background-color: var(--mantine-color-body);
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 a {

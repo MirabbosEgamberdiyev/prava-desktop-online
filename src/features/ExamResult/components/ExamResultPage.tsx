@@ -121,7 +121,7 @@ export function ExamResultPage() {
   };
 
   return (
-    <Box bg="var(--bg)" mih="100vh" style={{ color: "var(--text)" }}>
+    <Box bg="var(--bg)" style={{ color: "var(--text)", minHeight: "100%", height: "100%", flex: 1, overflowY: "auto" }}>
       {/*
         Mobil ko'rinishda pastdagi "Orqaga" tugmasi `position: fixed` —
         avval kontent tagida qo'shimcha joy yo'q edi va tugma oxirgi

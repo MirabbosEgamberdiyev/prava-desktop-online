@@ -7,7 +7,7 @@ const User_Layout = () => {
   const location = useLocation();
 
   return (
-    <div className="app" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+    <div className="app" style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", overflow: "hidden" }}>
       <OfflineBanner />
       <div
         className="page-transition-wrapper"

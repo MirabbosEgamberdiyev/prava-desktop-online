@@ -129,7 +129,7 @@ const Marathon_ExamPage = ({
 
   if (loading) {
     return (
-      <Center h="100vh">
+      <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
         <Box ta="center">
           <Loader size="lg" mb="md" />
           <Text c="dimmed">{t("marathon.loading")}</Text>
@@ -140,7 +140,7 @@ const Marathon_ExamPage = ({
 
   if (error) {
     return (
-      <Center h="100vh">
+      <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
         <Box ta="center">
           <Title order={3} c="red" mb="md">
             {t("common.errorOccurred")}
@@ -163,7 +163,7 @@ const Marathon_ExamPage = ({
 
   if (!examData) {
     return (
-      <Center h="100vh">
+      <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
         <Box ta="center">
           <Title order={3} mb="md">
             {t("marathon.notFound")}

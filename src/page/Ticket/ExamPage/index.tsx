@@ -481,7 +481,7 @@ export default function TicketExamPage() {
           description="Bilet imtihon natijalari"
           canonical={`/tickets/${ticket.id}`}
         />
-        <div className="min-h-[85vh] flex items-center justify-center p-4">
+        <div style={{ height: "100%", flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <GamificationResult
             score={score}
             correct={correct}

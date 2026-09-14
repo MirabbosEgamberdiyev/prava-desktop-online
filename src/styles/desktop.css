@@ -646,10 +646,13 @@
 }
 
 body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
-  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   transition:
     background 0.2s,
@@ -657,14 +660,16 @@ body {
 }
 
 body:has(.app) {
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
 .app {
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -672,7 +677,10 @@ body:has(.app) {
 
 /* ============ LOADING ============ */
 .loading-screen {
-  height: 100vh;
+  height: 100%;
+  min-height: 240px;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -699,7 +707,9 @@ body:has(.app) {
 
 /* ============ LICENSE SCREEN ============ */
 .license-screen {
-  height: 100vh;
+  height: 100%;
+  min-height: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -847,7 +857,9 @@ body:has(.app) {
 
 /* ============ USER SELECT SCREEN ============ */
 .usp-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1369,7 +1381,9 @@ body:has(.app) {
 
 /* ============ MAIN SCREEN ============ */
 .main-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -2565,11 +2579,14 @@ body:has(.app) {
 
 /* ============ MARATHON SETUP SCREEN ============ */
 .marathon-setup-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg);
+  overflow-y: auto;
 }
 .marathon-setup-card {
   background: var(--card-bg);
@@ -2714,7 +2731,9 @@ body:has(.app) {
 
 /* ============ QUIZ SCREEN ============ */
 .quiz-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -3074,12 +3093,15 @@ body:has(.app) {
 
 /* Result screen — shared */
 .quiz-result-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg);
   padding: 16px;
+  overflow-y: auto;
 }
 .quiz-result-card {
   background: var(--card-bg);
@@ -3227,10 +3249,13 @@ body:has(.app) {
 
 /* ============ REVIEW SCREENS (Wrong Answers + Saved) ============ */
 .review-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  overflow: hidden;
 }
 .review-header {
   height: 50px;
@@ -4053,12 +4078,15 @@ body:has(.app) {
 
 /* ── Result screen ── */
 .exam-result-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg);
   padding: 16px;
+  overflow-y: auto;
 }
 .exam-result-card {
   background: var(--card-bg);
@@ -4210,11 +4238,13 @@ body:has(.app) {
 
 /* ============ TOPICS SCREEN ============ */
 .topics-screen {
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  overflow: hidden;
 }
 .topics-header {
   height: 50px;
@@ -4662,7 +4692,9 @@ body:has(.app) {
 
 /* ============ STATS SCREEN ============ */
 .stats-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -5877,8 +5909,9 @@ body:has(.app) {
 /* ============ RESPONSIVE MEDIA QUERIES ============ */
 @media (max-width: 900px) {
   .exam-screen {
-    height: auto;
-    min-height: 100vh;
+    height: 100%;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
   }
   .exam-topbar {

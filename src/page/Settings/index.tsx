@@ -129,23 +129,36 @@ const Settings_Page = () => {
             <span>{t("settings.title", "Sozlamalar va Profil")}</span>
           </div>
         </header>
-        <main style={{ flex: 1, overflowY: "auto", padding: "14px 16px 32px" }}>
-          <Container size="md">
+        <main style={{ flex: 1, overflowY: "auto", padding: "0 16px 32px" }}>
+          <Container size="md" pt="xs">
             <Tabs defaultValue="profile">
-              <Tabs.List mb="md">
-                <Tabs.Tab value="profile" leftSection={<IconUser size={16} />}>
-                  {t("settings.profile", "Profil")}
-                </Tabs.Tab>
-                <Tabs.Tab value="security" leftSection={<IconLock size={16} />}>
-                  {t("settings.security", "Xavfsizlik")}
-                </Tabs.Tab>
-                <Tabs.Tab value="devices" leftSection={<IconDevices size={16} />}>
-                  {t("settings.devices", "Qurilmalar")}
-                </Tabs.Tab>
-                <Tabs.Tab value="desktop" leftSection={<IconDeviceDesktop size={16} />}>
-                  Desktop & Boshqaruv
-                </Tabs.Tab>
-              </Tabs.List>
+              <div
+                style={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 20,
+                  background: "var(--bg)",
+                  paddingTop: "10px",
+                  paddingBottom: "12px",
+                  borderBottom: "1px solid var(--border)",
+                  marginBottom: "20px",
+                }}
+              >
+                <Tabs.List>
+                  <Tabs.Tab value="profile" leftSection={<IconUser size={16} />}>
+                    {t("settings.profile", "Profil")}
+                  </Tabs.Tab>
+                  <Tabs.Tab value="security" leftSection={<IconLock size={16} />}>
+                    {t("settings.security", "Xavfsizlik")}
+                  </Tabs.Tab>
+                  <Tabs.Tab value="devices" leftSection={<IconDevices size={16} />}>
+                    {t("settings.devices", "Qurilmalar")}
+                  </Tabs.Tab>
+                  <Tabs.Tab value="desktop" leftSection={<IconDeviceDesktop size={16} />}>
+                    Desktop & Boshqaruv
+                  </Tabs.Tab>
+                </Tabs.List>
+              </div>
 
               <Tabs.Panel value="profile">
                 <Stack gap="lg">

@@ -85,7 +85,7 @@ export const GamificationResult: React.FC<GamificationResultProps> = ({
       };
 
   return (
-    <div className="quiz-result-screen" style={{ width: "100%", padding: "24px 16px" }}>
+    <div className="quiz-result-screen" style={{ width: "100%", height: "100%", flex: 1, minHeight: 0, padding: "24px 16px", overflowY: "auto" }}>
       <div
         className="quiz-result-card"
         style={{

@@ -12,7 +12,7 @@ export const DesktopAuthLayout = () => {
     <AppShell
       header={{ height: 58 }}
       padding={0}
-      style={{ minHeight: "100vh", background: "var(--bg)" }}
+      style={{ height: "100%", minHeight: "100%", background: "var(--bg)" }}
     >
       <AppShell.Header
         style={{
@@ -62,9 +62,11 @@ export const DesktopAuthLayout = () => {
         style={{
           display: "flex",
           flexDirection: "column",
-          minHeight: "calc(100vh - 58px)",
+          flex: 1,
+          minHeight: 0,
           background: "var(--bg)",
           overflowX: "hidden",
+          overflowY: "auto",
         }}
       >
         <div

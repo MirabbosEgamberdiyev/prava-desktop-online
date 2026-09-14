@@ -153,7 +153,7 @@ const PackageExamPage = () => {
   // Yuklash
   if (loading) {
     return (
-      <Center h="100vh">
+      <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
         <Box ta="center">
           <Loader size="lg" mb="md" />
           <Text c="dimmed">{t("exam.loading")}</Text>
@@ -165,7 +165,7 @@ const PackageExamPage = () => {
   // Tugallanmagan imtihon bor — conflict UI
   if (activeConflict) {
     return (
-      <Center h="100vh">
+      <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
         <Container size="xs">
           <Paper p="xl" radius="md" withBorder shadow="md" ta="center">
             <ThemeIcon size={64} radius="xl" color="orange" variant="light" mb="md" mx="auto">
@@ -220,7 +220,7 @@ const PackageExamPage = () => {
   // Xato
   if (error) {
     return (
-      <Center h="100vh">
+      <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
         <Box ta="center">
           <Title order={3} c="red" mb="md">
             {t("common.errorOccurred")}
@@ -241,7 +241,7 @@ const PackageExamPage = () => {
 
   if (!examData) {
     return (
-      <Center h="100vh">
+      <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
         <Box ta="center">
           <Title order={3} mb="md">
             {t("exam.notFound")}

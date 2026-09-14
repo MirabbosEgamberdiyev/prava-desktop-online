@@ -94,7 +94,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
       if (errorType === "chunk") {
         return (
-          <Center h="100vh">
+          <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
             <Stack align="center" gap="md">
               <Title order={3}>
                 {t("errors.chunkTitle")}
@@ -112,7 +112,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
       if (errorType === "network") {
         return (
-          <Center h="100vh">
+          <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
             <Stack align="center" gap="md">
               <Title order={3}>
                 {t("errors.noInternetTitle")}
@@ -133,7 +133,7 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <Center h="100vh">
+        <Center style={{ height: "100%", flex: 1, minHeight: 0 }}>
           <Stack align="center" gap="md">
             <Title order={3} c="red">
               {t("errors.renderTitle")}
