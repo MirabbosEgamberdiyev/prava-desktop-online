@@ -14,6 +14,8 @@ import type {
 import storageService, { type StoredQuestion } from "./storageService";
 import api from "../api/api";
 import { normalizeLanguage, type AppLanguage } from "../context/LanguageContext";
+import { dbClient } from "../database";
+import { OutboxQueue } from "../sync";
 
 export function getLang(): AppLanguage {
   const l = i18n.resolvedLanguage || i18n.language;
@@ -171,19 +173,25 @@ export async function submitExamSession(
   answers: { questionId: number; selectedOptionIndex?: number | null; timeSpentSeconds?: number }[]
 ): Promise<boolean> {
   if (!sessionId || !answers || answers.length === 0) return false;
+  const payload = {
+    sessionId,
+    answers: answers.map((a) => ({
+      questionId: a.questionId,
+      selectedOptionIndex: a.selectedOptionIndex != null ? a.selectedOptionIndex : null,
+      timeSpentSeconds: a.timeSpentSeconds || 0,
+    })),
+  };
   try {
-    await api.post("/api/v2/exams/submit", {
-      sessionId,
-      answers: answers.map((a) => ({
-        questionId: a.questionId,
-        selectedOptionIndex: a.selectedOptionIndex != null ? a.selectedOptionIndex : null,
-        timeSpentSeconds: a.timeSpentSeconds || 0,
-      })),
-    });
+    await api.post("/api/v2/exams/submit", payload);
     window.dispatchEvent(new Event("prava-storage-changed"));
     return true;
   } catch (err) {
-    console.warn("Failed to submit exam session to backend:", err);
+    console.warn("Failed to submit exam session to backend, enqueueing to OutboxQueue:", err);
+    try {
+      await OutboxQueue.enqueue("SUBMIT_EXAM", "/api/v2/exams/submit", "POST", payload);
+    } catch (e) {
+      console.error("Outbox queue error:", e);
+    }
     return false;
   }
 }
@@ -293,6 +301,16 @@ export async function getTickets(): Promise<OfflineTicket[]> {
         is_blocked: tk.isBlocked ?? false,
       }));
       setCachedData(OFFLINE_CACHE_KEYS.TICKETS, tickets);
+      dbClient
+        .saveTickets(
+          tickets.map((t) => ({
+            id: t.id,
+            ticket_number: t.ticket_number,
+            question_count: t.question_count,
+            updated_at: Date.now(),
+          }))
+        )
+        .catch(() => {});
       return tickets;
     }
   } catch {
@@ -386,6 +404,20 @@ export async function getTopics(): Promise<OfflineTopic[]> {
         question_count: tp.questionCount ?? tp.questionsCount ?? 20,
       }));
       setCachedData(OFFLINE_CACHE_KEYS.TOPICS, topics);
+      dbClient
+        .saveTopics(
+          topics.map((tp) => ({
+            id: tp.id,
+            code: tp.code || `topic_${tp.id}`,
+            name_uzl: tp.name_uzl,
+            name_uzc: tp.name_uzc,
+            name_ru: tp.name_ru,
+            order_num: tp.id,
+            question_count: tp.question_count,
+            updated_at: Date.now(),
+          }))
+        )
+        .catch(() => {});
       return topics;
     }
   } catch {
@@ -637,6 +669,7 @@ export async function addWrongAnswer(_userId: number, question: OfflineQuestion 
   if (typeof question !== "number") {
     storageService.addWrongAnswer(toStoredQuestion(question));
   }
+  dbClient.recordWrongAnswer(qId).catch(() => {});
   try {
     await api.post(`/api/v1/app/wrong-answers/${qId}`);
   } catch {
@@ -694,10 +727,28 @@ export async function toggleSavedQuestion(_userId: number, question: OfflineQues
   } else {
     saved = storageService.toggleSavedQuestion(toStoredQuestion(question));
   }
+
+  // Persist bookmark state to SQLite / IndexedDB
+  dbClient.setQuestionSaved(qId, saved).catch(() => {});
+
   try {
-    await api.post(`/api/v1/app/saved-questions/${qId}`);
+    if (saved) {
+      await api.post(`/api/v1/app/saved-questions/${qId}`);
+    } else {
+      await api.delete(`/api/v1/app/saved-questions/${qId}`);
+    }
   } catch {
-    // offline
+    // Offline mutation -> enqueue into OutboxQueue for automatic background sync
+    try {
+      await OutboxQueue.enqueue(
+        saved ? "SAVE_QUESTION" : "UNSAVE_QUESTION",
+        `/api/v1/app/saved-questions/${qId}`,
+        saved ? "POST" : "DELETE",
+        { questionId: qId }
+      );
+    } catch (e) {
+      console.error("Outbox enqueue error for saved question:", e);
+    }
   }
   return saved;
 }
