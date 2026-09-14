@@ -18,6 +18,8 @@ export interface DbQuestion {
   options_json: string; // JSON: Array<{ uzl: string; uzc?: string; ru?: string; is_correct?: boolean }>
   correct_option: number;
   updated_at: number;
+  version?: number;
+  is_deleted?: number;
 }
 
 export interface DbTopic {

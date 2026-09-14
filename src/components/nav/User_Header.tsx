@@ -12,6 +12,7 @@ import { useAuth } from "../../auth/AuthContext";
 import UserMenuButton from "./UserMenuButton";
 import { useTranslation } from "react-i18next";
 import ColorMode from "../other/ColorMode";
+import SyncButton from "../common/SyncButton";
 
 const User_Header = ({
   opened,
@@ -42,8 +43,9 @@ const User_Header = ({
             </Link>
           </Group>
 
-          {/* Right: Theme + Language + Profile */}
+          {/* Right: Sync + Theme + Language + Profile */}
           <Group gap={8} wrap="nowrap" style={{ flexShrink: 1, minWidth: 0 }}>
+            <SyncButton />
             <ColorMode />
             <LanguagePicker />
             {isAuthenticated ? (

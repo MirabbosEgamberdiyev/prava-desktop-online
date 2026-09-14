@@ -4,9 +4,9 @@
 
 | Fayl Nomi | Format | Hajmi | SHA-256 Checksum | Tavsif |
 | :--- | :--- | :--- | :--- | :--- |
-| **`Prava Online_1.0.0_x64-setup.exe`** | NSIS Installer | **3.72 MB** | `60ED611628EA487668B0FD04F2C06C040AE7DBC49306A402D449F6DD9E2D5967` | Windows uchun qulay o'rnatuvchi (Desktop yorlig'i, Start Menu va uninstaller bilan) |
-| **`Prava Online_1.0.0_x64_en-US.msi`** | WiX MSI | **4.90 MB** | `3932D56A52902D79E4C2E7AED5D496AD6DEBC2E5C02776FC04A013F9EF929219` | Korporativ tarqatish va avtomatlashtirilgan o'rnatishlar uchun Windows Installer |
-| **`prava-desktop-online.exe`** | Portable Executable | **11.18 MB** | `089A457E664578F6CC88CB06960284FC34898CA233FEFDD585696D427188307A` | O'rnatishsiz to'g'ridan-to'g'ri ishga tushuvchi portativ dastur |
+| **`Prava Online_1.0.0_x64-setup.exe`** | NSIS Installer | **3.55 MB** | `CEE2986C06193E50D11294124E986E49F4135D94BBB1654F58F99DDA6CCDA05D` | Windows uchun qulay o'rnatuvchi (Desktop yorlig'i, Start Menu va uninstaller bilan) |
+| **`Prava Online_1.0.0_x64_en-US.msi`** | WiX MSI | **4.67 MB** | `D7A6363715B0DD214BCBD89AD59A4EB08ABED04FBBBE60A3AED066D220BC3E01` | Korporativ tarqatish va avtomatlashtirilgan o'rnatishlar uchun Windows Installer |
+| **`prava-desktop-online.exe`** | Portable Executable | **10.67 MB** | `6715DFCE50CBDED8697D523A362A9E913C128F0E0BCE6369950BF634DED6730E` | O'rnatishsiz to'g'ridan-to'g'ri ishga tushuvchi portativ dastur |
 
 ---
 
@@ -17,13 +17,15 @@
    - Root (`/`) to'g'ridan-to'g'ri foydalanuvchi kabinetiga (`/me`) yoki kirish sahifasiga (`/auth/login`) yo'naltiradi.
    - Foydalanuvchi uchun faqat o'quv va imtihon tizimi to'liq mavjud: Biletlar, Mavzular, Marafon, Rasmiy Imtihon, Noto'g'ri javoblar, Saqlanganlar, Statistika, Reyting, Tarix va Sozlamalar.
 
-2. **100% Offline-First Layer & Ikki Tomonlama Sinxronizatsiya (Local ↔ Server)**:
-   - **Lokal baza birlamchi haqiqat manbai**: Internet umuman yo'q bo'lsa ham dastur to'liq ishlaydi. 60 ta bilet (1200 ta savol) va 24 ta mavzu avtomatik preloaded offline seed dataset bilan ta'minlangan.
-   - `src/database/schema.ts` va `src/database/dbClient.ts`: Native SQLite / IndexedDB v2 bilan `questions`, `topics`, `tickets`, `exam_sessions`, `user_progress`, `saved_questions`, `wrong_answers`, `sync_queue`, `sync_meta`.
+2. **100% Pure Local-First Layer & Ikki Tomonlama Sinxronizatsiya (Local ↔ Server)**:
+   - **Kodda 0 ta hardcode qilingan savol (Rule #4 ga 100% muvofiq)**: Kod bazasida va bundle'da hech qanday mock yoki qotirilgan savollar massivi yo'q. Barcha savollar serverdan olinadi va mahalliy SQLite/IndexedDB bazasida saqlanadi.
+   - **Repository Pattern qatlami**: `src/database/repositories/` orqali to'g'ridan-to'g'ri mahalliy bazaga ulanish (`questionRepository`, `ticketRepository`, `topicRepository`, `outboxRepository`).
+   - **Boshlang'ich foniy sinxronizatsiya (Initial Sync)**: Dastur birinchi marta ochilganda yoki mahalliy baza bo'sh bo'lganda, `SyncEngine` serverdan savollarni fon rejimida batch (paketli) usulda yuklab oladi va tranzaksiyada saqlaydi.
+   - **Header'dagi maxsus "Yangilash" tugmasi**: `User_Header` va Sozlamalar sahifasida real-vaqtda holatni (IDLE, SYNCING, OFFLINE, ERROR) ko'rsatib turuvchi va bir bosishda ikki tomonlama sinxronizatsiyani ishga tushiruvchi tugma (`SyncButton`).
    - `src/sync/outboxQueue.ts`: Idempotent Outbox pattern (UUID v4) bilan oflayn mutatsiyalar navbati.
    - `src/sync/conflictResolver.ts`: Deterministik to'qnashuvlarni hal qilish (imtihon ballari: monotonic best-score; progress: timestamp LWW; saqlangan savollar: tombstone set union).
    - `src/sync/networkHeartbeat.ts`: Dual-tier tarmoq nazorati (OS hodisalari + real HTTP probe) va kompyuter uyqudan (sleep/hibernate) uyg'onishini aniqlash.
-   - `src/sync/syncEngine.ts`: Mutex lock bilan Push (`Local → Server`) va Pull (`Server → Local`) koordinatori. Avtomatik crash recovery (chala qolgan `IN_FLIGHT` so'rovlarni `PENDING`ga qaytarish).
+   - `src/sync/syncEngine.ts`: Mutex lock bilan Push (`Local → Server`) va Pull (`Server → Local`) koordinatori. Avtomatik crash recovery.
    - Sozlamalar sahifasida real-vaqt sinxronizatsiya ko'rsatkichlari (lokal savollar soni, kutayotgan outbox mutatsiyalari, oxirgi muvaffaqiyatli sinxronizatsiya vaqti va qo'lda "Hozir sinxronlash" tugmasi).
 
 3. **Autentifikatsiya va Xavfsizlik**:

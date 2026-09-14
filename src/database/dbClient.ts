@@ -416,25 +416,20 @@ export const dbClient = {
     await idbTx("sync_meta", "readwrite", (store) => store.put(item));
   },
 
-  // ── SEEDING & PRELOADING HELPER ──
-  async seedInitialDataIfEmpty(
-    questions: DbQuestion[],
-    tickets: DbTicket[],
-    topics: DbTopic[]
-  ): Promise<{ seeded: boolean; questionCount: number }> {
-    const existingCount = await this.getQuestionCount();
-    if (existingCount > 0) {
-      return { seeded: false, questionCount: existingCount };
-    }
-
-    console.info(`[dbClient] Seeding local database with ${questions.length} questions, ${tickets.length} tickets, ${topics.length} topics...`);
-    if (topics.length > 0) await this.saveTopics(topics);
-    if (tickets.length > 0) await this.saveTickets(tickets);
-    if (questions.length > 0) await this.saveQuestions(questions);
-
-    await this.setSyncMeta("initial_seed_applied", "true");
-    await this.setSyncMeta("last_sync_at", Date.now().toString());
-
-    return { seeded: true, questionCount: questions.length };
+  // ── ATOMIC BULK TRANSACTIONS ──
+  async bulkInsertQuestions(questions: DbQuestion[]): Promise<number> {
+    if (!questions || questions.length === 0) return 0;
+    const db = await openIndexedDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("questions", "readwrite");
+      const store = tx.objectStore("questions");
+      let count = 0;
+      for (const q of questions) {
+        store.put(q);
+        count++;
+      }
+      tx.oncomplete = () => resolve(count);
+      tx.onerror = () => reject(tx.error);
+    });
   },
 };

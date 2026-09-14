@@ -4,3 +4,4 @@
 
 export * from "./schema";
 export * from "./dbClient";
+export * from "./repositories";

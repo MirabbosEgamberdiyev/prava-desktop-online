@@ -1,7 +1,7 @@
 /**
  * PRAVA DESKTOP ONLINE — BACKGROUND BIDIRECTIONAL SYNCHRONIZATION ENGINE
  * Orchestrates Local -> Server (Push Outbox) and Server -> Local (Pull Updates)
- * with Mutex Lock, Conflict Resolution, and Crash Recovery.
+ * with Mutex Lock, Incremental Sync, Crash Recovery, and Zero Hardcoded Data.
  */
 
 import api from "../api/api";
@@ -10,11 +10,11 @@ import { networkHeartbeat } from "./networkHeartbeat";
 import { dbClient } from "../database/dbClient";
 import { ConflictResolver } from "./conflictResolver";
 import {
-  SEED_QUESTIONS,
-  SEED_TICKETS,
-  SEED_TOPICS,
-} from "../services/offlineSeedData";
-import type { DbOutboxItem, DbTicket, DbTopic } from "../database/schema";
+  questionRepository,
+  ticketRepository,
+  topicRepository,
+} from "../database/repositories";
+import type { DbOutboxItem, DbQuestion, DbTicket, DbTopic } from "../database/schema";
 
 export type SyncState = "IDLE" | "SYNCING" | "OFFLINE" | "ERROR";
 
@@ -34,6 +34,54 @@ export interface SyncResult {
   error?: string;
 }
 
+/**
+ * Normalizes backend question payload into clean SQLite / IndexedDB schema.
+ */
+export function normalizeServerQuestion(q: any, defaultTicketId?: number | null): DbQuestion {
+  const textUzl = typeof q.text === "object" ? q.text?.uzl || "" : q.text_uzl || q.text || "";
+  const textUzc = typeof q.text === "object" ? q.text?.uzc || null : q.text_uzc || null;
+  const textRu = typeof q.text === "object" ? q.text?.ru || null : q.text_ru || null;
+
+  let optionsJson = q.options_json;
+  if (!optionsJson && Array.isArray(q.options)) {
+    optionsJson = JSON.stringify(
+      q.options.map((opt: any, idx: number) => ({
+        index: opt.index ?? idx,
+        uzl: typeof opt.text === "object" ? opt.text?.uzl || "" : opt.uzl || opt.text || "",
+        uzc: typeof opt.text === "object" ? opt.text?.uzc || "" : opt.uzc || "",
+        ru: typeof opt.text === "object" ? opt.text?.ru || "" : opt.ru || "",
+        is_correct: idx === (q.correct_option ?? q.correctOptionIndex ?? 0),
+      }))
+    );
+  }
+
+  const expUzl =
+    typeof q.explanation === "object" ? q.explanation?.uzl || null : q.explanation_uzl || null;
+  const expUzc =
+    typeof q.explanation === "object" ? q.explanation?.uzc || null : q.explanation_uzc || null;
+  const expRu =
+    typeof q.explanation === "object" ? q.explanation?.ru || null : q.explanation_ru || null;
+
+  return {
+    id: q.id,
+    ticket_id: q.ticket_id ?? q.ticketId ?? defaultTicketId ?? null,
+    topic_id: q.topic_id ?? q.topicId ?? null,
+    order_num: q.order_num ?? q.order ?? 0,
+    text_uzl: textUzl,
+    text_uzc: textUzc,
+    text_ru: textRu,
+    explanation_uzl: expUzl,
+    explanation_uzc: expUzc,
+    explanation_ru: expRu,
+    image_url: q.image_path || q.imageUrl || q.image_url || null,
+    options_json: optionsJson || "[]",
+    correct_option: q.correct_option ?? q.correctOptionIndex ?? 0,
+    updated_at: Date.now(),
+    version: q.version ?? 1,
+    is_deleted: 0,
+  };
+}
+
 export class SyncEngine {
   private isRunning: boolean = false;
   private state: SyncState = "IDLE";
@@ -41,7 +89,7 @@ export class SyncEngine {
   private syncIntervalTimer: any = null;
   private lastSyncAt: number | null = null;
   private lastError: string | null = null;
-  private readonly SYNC_INTERVAL_MS = 30000; // 30s background sweep
+  private readonly SYNC_INTERVAL_MS = 30000; // 30s background sweep when online
 
   constructor() {
     this.init();
@@ -55,20 +103,23 @@ export class SyncEngine {
       // 2. Crash recovery: reset any stuck IN_FLIGHT items from previous session
       await this.recoverStuckInFlightItems();
 
-      // 3. Seed initial offline dataset if database is brand new/empty
-      await this.ensureSeedDataLoaded();
-
-      // 4. Load last sync metadata
+      // 3. Load last sync metadata
       const storedLastSync = await dbClient.getSyncMeta("last_sync_at");
       if (storedLastSync) {
         this.lastSyncAt = parseInt(storedLastSync, 10) || null;
       }
 
-      // 5. React to network status changes
+      // 4. Initial sync check: if local database has 0 questions, queue background initial download
+      this.checkAndTriggerInitialSync();
+
+      // 5. React to network status changes (auto-sync on reconnection with debounce)
+      let reconnectDebounce: any = null;
       networkHeartbeat.subscribe((isOnline) => {
         if (isOnline) {
-          // Immediate bidirectional sync upon reconnection
-          this.triggerSync().catch(() => {});
+          clearTimeout(reconnectDebounce);
+          reconnectDebounce = setTimeout(() => {
+            this.triggerSync().catch(() => {});
+          }, 2000);
         } else {
           this.state = "OFFLINE";
           this.broadcastStatus();
@@ -83,6 +134,10 @@ export class SyncEngine {
         window.addEventListener("auth-refresh-end", () => {
           this.triggerSync().catch(() => {});
         });
+        // Windows Wake from sleep / resume listener
+        window.addEventListener("online", () => {
+          this.triggerSync().catch(() => {});
+        });
       }
 
       // 7. Periodic background sweep
@@ -93,7 +148,7 @@ export class SyncEngine {
         }
       }, this.SYNC_INTERVAL_MS);
 
-      // 8. Initial sync if already online
+      // 8. Initial sync run if already online
       if (networkHeartbeat.getStatus().isOnline) {
         this.triggerSync().catch(() => {});
       }
@@ -103,20 +158,17 @@ export class SyncEngine {
   }
 
   /**
-   * Ensure local database has questions, tickets, and topics on first install
+   * If local database is empty on first install, initiate non-blocking background sync
    */
-  private async ensureSeedDataLoaded(): Promise<void> {
+  private async checkAndTriggerInitialSync(): Promise<void> {
     try {
-      const { seeded, questionCount } = await dbClient.seedInitialDataIfEmpty(
-        SEED_QUESTIONS,
-        SEED_TICKETS,
-        SEED_TOPICS
-      );
-      if (seeded) {
-        console.info(`[SyncEngine] Preloaded ${questionCount} offline questions for zero-internet readiness.`);
+      const count = await questionRepository.getQuestionCount();
+      if (count === 0 && networkHeartbeat.getStatus().isOnline) {
+        console.info("[SyncEngine] Local database empty. Triggering background initial sync...");
+        this.triggerSync().catch(() => {});
       }
     } catch (err) {
-      console.warn("[SyncEngine] Failed to seed offline data:", err);
+      console.warn("[SyncEngine] Initial sync check error:", err);
     }
   }
 
@@ -141,7 +193,7 @@ export class SyncEngine {
    * Mutex lock: guarantees only ONE sync cycle executes at any time.
    */
   public async triggerSync(): Promise<SyncResult> {
-    // If a sync is already running, join the existing promise
+    // If a sync is already running, join the existing promise (single-flight)
     if (this.activeSyncPromise) {
       return this.activeSyncPromise;
     }
@@ -204,12 +256,13 @@ export class SyncEngine {
         pulledCount = await this.pullServerChanges();
       }
 
+      // Update sync metadata and dispatch notification
       this.lastSyncAt = Date.now();
       await dbClient.setSyncMeta("last_sync_at", this.lastSyncAt.toString());
+
       this.state = "IDLE";
       this.broadcastStatus();
 
-      // Trigger UI cache invalidation so all components read fresh local DB data
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("prava-storage-changed"));
       }
@@ -234,7 +287,7 @@ export class SyncEngine {
     await OutboxQueue.markInFlight(item.id);
 
     try {
-      let payload: any = null;
+      let payload: any = {};
       try {
         payload = JSON.parse(item.payload_json);
       } catch {
@@ -288,9 +341,9 @@ export class SyncEngine {
     switch (item.action_type) {
       case "SUBMIT_EXAM": {
         const payload = JSON.parse(item.payload_json || "{}");
-        if (payload.local_id) {
+        if (payload.sessionId) {
           const serverId = responseData?.data?.id || responseData?.id || null;
-          await dbClient.completeExamSession(payload.local_id, {
+          await dbClient.completeExamSession(String(payload.sessionId), {
             server_id: serverId,
             synced: 1,
           });
@@ -320,12 +373,46 @@ export class SyncEngine {
   }
 
   /**
-   * PULL: Fetch server updates and reconcile into local database
+   * PULL: Fetch authoritative server updates and reconcile into local database
    */
   private async pullServerChanges(): Promise<number> {
     let count = 0;
 
-    // 1. Pull Tickets
+    // 1. Pull Topics
+    try {
+      let topicList: any[] = [];
+      try {
+        const topicsRes = await api.get<{ data: any[] }>("/api/v1/admin/topics/active");
+        topicList = topicsRes.data?.data || [];
+      } catch {
+        try {
+          const res2 = await api.get<{ data: any[] }>("/api/v1/admin/topics/with-questions");
+          topicList = res2.data?.data || [];
+        } catch {
+          const res3 = await api.get<{ data: any[] }>("/api/v1/admin/topics/simple");
+          topicList = res3.data?.data || [];
+        }
+      }
+
+      if (topicList.length > 0) {
+        const dbTopics: DbTopic[] = topicList.map((tp: any) => ({
+          id: tp.id,
+          code: tp.code || `topic_${tp.id}`,
+          name_uzl: typeof tp.name === "object" ? tp.name?.uzl : (tp.name || tp.nameUzl || ""),
+          name_uzc: typeof tp.name === "object" ? tp.name?.uzc : (tp.nameUzc || ""),
+          name_ru: typeof tp.name === "object" ? tp.name?.ru : (tp.nameRu || ""),
+          order_num: tp.id,
+          question_count: tp.questionCount ?? tp.questionsCount ?? 20,
+          updated_at: Date.now(),
+        }));
+        await topicRepository.saveTopics(dbTopics);
+        count += dbTopics.length;
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    // 2. Pull Tickets
     try {
       const ticketsRes = await api.get<{ data: { content?: any[]; tickets?: any[] } }>(
         "/api/v2/tickets?page=0&size=100&sortBy=ticketNumber&direction=ASC"
@@ -338,36 +425,55 @@ export class SyncEngine {
           question_count: tk.questionCount ?? 20,
           updated_at: Date.now(),
         }));
-        await dbClient.saveTickets(dbTickets);
+        await ticketRepository.saveTickets(dbTickets);
         count += dbTickets.length;
-      }
-    } catch {
-      // Non-blocking: keep local tickets
-    }
-
-    // 2. Pull Topics
-    try {
-      const topicsRes = await api.get<{ data: any[] }>("/api/v1/admin/topics/active");
-      const topicList = topicsRes.data?.data || [];
-      if (topicList.length > 0) {
-        const dbTopics: DbTopic[] = topicList.map((tp: any) => ({
-          id: tp.id,
-          code: tp.code || `topic_${tp.id}`,
-          name_uzl: typeof tp.name === "object" ? tp.name?.uzl : (tp.name || tp.nameUzl || ""),
-          name_uzc: typeof tp.name === "object" ? tp.name?.uzc : (tp.nameUzc || ""),
-          name_ru: typeof tp.name === "object" ? tp.name?.ru : (tp.nameRu || ""),
-          order_num: tp.id,
-          question_count: tp.questionCount ?? tp.questionsCount ?? 20,
-          updated_at: Date.now(),
-        }));
-        await dbClient.saveTopics(dbTopics);
-        count += dbTopics.length;
       }
     } catch {
       // Non-blocking
     }
 
-    // 3. Pull Saved Questions (Bookmarks) & Resolve Tombstones
+    // 3. Pull Questions in background streaming batches
+    try {
+      // Check if questions are already present or if we need to sync them
+      const localQCount = await questionRepository.getQuestionCount();
+      if (localQCount < 100) {
+        // Attempt downloading marathon question set (which encompasses all topics and tickets)
+        try {
+          const res = await api.post<{ data: { questions: any[] } }>("/api/v2/exams/marathon/start-visible", {
+            questionCount: 1200,
+            durationMinutes: 1200,
+          });
+          const questions = res.data?.data?.questions;
+          if (Array.isArray(questions) && questions.length > 0) {
+            const dbQuestions = questions.map((q: any) => normalizeServerQuestion(q));
+            await dbClient.bulkInsertQuestions(dbQuestions);
+            count += dbQuestions.length;
+          }
+        } catch {
+          // If bulk marathon call fails, try fetching first 5-10 tickets in small chunks
+          const tickets = await ticketRepository.getAllTickets();
+          for (const tk of tickets.slice(0, 10)) {
+            try {
+              const tkRes = await api.post<{ data: { questions: any[] } }>("/api/v2/tickets/start-visible", {
+                ticketId: tk.id,
+              });
+              const qList = tkRes.data?.data?.questions;
+              if (Array.isArray(qList) && qList.length > 0) {
+                const dbQ = qList.map((q: any) => normalizeServerQuestion(q, tk.id));
+                await dbClient.bulkInsertQuestions(dbQ);
+                count += dbQ.length;
+              }
+            } catch {
+              // Non-blocking
+            }
+          }
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    // 4. Pull Saved Questions (Bookmarks) & Resolve Tombstones
     try {
       const savedRes = await api.get<{ data: any[] }>("/api/v1/app/saved-questions");
       const serverBookmarks = (savedRes.data?.data || []).map((b: any) => ({
@@ -375,7 +481,6 @@ export class SyncEngine {
         savedAt: b.savedAt ? new Date(b.savedAt).getTime() : Date.now(),
       }));
 
-      // In-memory or local reconciliation
       const localActiveIds = await dbClient.getActiveSavedQuestions();
       const localSavedList = localActiveIds.map((id) => ({
         question_id: id,
@@ -418,7 +523,7 @@ export class SyncEngine {
    */
   public async getSyncMetrics(): Promise<SyncMetrics> {
     const pending = await OutboxQueue.getPending();
-    const questionsCount = await dbClient.getQuestionCount();
+    const questionsCount = await questionRepository.getQuestionCount();
 
     return {
       state: this.state,

@@ -14,13 +14,14 @@ import type {
 import storageService, { type StoredQuestion } from "./storageService";
 import api from "../api/api";
 import { normalizeLanguage, type AppLanguage } from "../context/LanguageContext";
-import { dbClient, type DbQuestion } from "../database";
-import { OutboxQueue, syncEngine } from "../sync";
 import {
-  SEED_QUESTIONS,
-  SEED_TICKETS,
-  SEED_TOPICS,
-} from "./offlineSeedData";
+  dbClient,
+  type DbQuestion,
+  questionRepository,
+  ticketRepository,
+  topicRepository,
+} from "../database";
+import { OutboxQueue, syncEngine } from "../sync";
 
 export function getLang(): AppLanguage {
   const l = i18n.resolvedLanguage || i18n.language;
@@ -260,6 +261,18 @@ export async function submitExamSession(
 // ── DATA FETCHING APIS (OFFLINE-FIRST) ────────────────────────────────────────
 
 export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
+  // 1. LOCAL DATABASE FIRST (Primary Runtime Source of Truth)
+  try {
+    const localDbQuestions = await questionRepository.getRandomQuestions(count);
+    if (localDbQuestions && localDbQuestions.length > 0) {
+      activeExamSessionId = Date.now();
+      return localDbQuestions.map(dbQuestionToOfflineQuestion);
+    }
+  } catch (err) {
+    console.warn("Lokal DB dan imtihon savollarini olishda xatolik:", err);
+  }
+
+  // 2. If Local DB is empty, attempt on-demand fetch from backend
   if (navigator.onLine) {
     try {
       const res = await api.post<{
@@ -273,7 +286,7 @@ export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
       }
       if (res.data?.data?.questions && res.data.data.questions.length > 0) {
         const questions = res.data.data.questions.map(normalizeQuestion);
-        dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q))).catch(() => {});
+        questionRepository.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q))).catch(() => {});
         return questions;
       }
     } catch {
@@ -289,34 +302,33 @@ export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
         }
         if (res2.data?.data?.questions && res2.data.data.questions.length > 0) {
           const questions = res2.data.data.questions.map(normalizeQuestion);
-          dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q))).catch(() => {});
+          questionRepository.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q))).catch(() => {});
           return questions;
         }
       } catch {
-        // Tarmoq xatosi, lokal bazaga o'tish
+        // Backend unavailable
       }
     }
   }
 
-  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH (Offline-First)
-  try {
-    const localDbQuestions = await dbClient.getRandomQuestions(count);
-    if (localDbQuestions && localDbQuestions.length > 0) {
-      activeExamSessionId = Date.now();
-      return localDbQuestions.map(dbQuestionToOfflineQuestion);
-    }
-  } catch (err) {
-    console.warn("Lokal DB dan imtihon savollarini olishda xatolik:", err);
-  }
-
-  // Fallback: Preloaded seed dataset
-  activeExamSessionId = Date.now();
-  const shuffled = [...SEED_QUESTIONS].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, count).map(dbQuestionToOfflineQuestion);
+  return [];
 }
 
 export async function getMarathonQuestions(topicId?: number, count = 100): Promise<OfflineQuestion[]> {
   const actualCount = count && count > 0 ? count : 1200;
+
+  // 1. LOCAL DATABASE FIRST (Primary Runtime Source of Truth)
+  try {
+    const localDbQuestions = await questionRepository.getRandomQuestions(actualCount, topicId);
+    if (localDbQuestions && localDbQuestions.length > 0) {
+      activeMarathonSessionId = Date.now();
+      return localDbQuestions.map(dbQuestionToOfflineQuestion);
+    }
+  } catch (err) {
+    console.warn("Lokal DB dan marafon savollarini olishda xatolik:", err);
+  }
+
+  // 2. If Local DB is empty, attempt on-demand fetch from backend
   if (navigator.onLine) {
     try {
       const res = await api.post<{
@@ -331,7 +343,7 @@ export async function getMarathonQuestions(topicId?: number, count = 100): Promi
       }
       if (res.data?.data?.questions && res.data.data.questions.length > 0) {
         const questions = res.data.data.questions.map(normalizeQuestion);
-        dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, null))).catch(() => {});
+        questionRepository.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, null))).catch(() => {});
         return questions;
       }
     } catch (err: any) {
@@ -339,24 +351,7 @@ export async function getMarathonQuestions(topicId?: number, count = 100): Promi
     }
   }
 
-  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH
-  try {
-    const localDbQuestions = await dbClient.getRandomQuestions(actualCount, topicId);
-    if (localDbQuestions && localDbQuestions.length > 0) {
-      activeMarathonSessionId = Date.now();
-      return localDbQuestions.map(dbQuestionToOfflineQuestion);
-    }
-  } catch (err) {
-    console.warn("Lokal DB dan marafon savollarini olishda xatolik:", err);
-  }
-
-  // Fallback: Preloaded seed dataset
-  activeMarathonSessionId = Date.now();
-  const filtered = topicId
-    ? SEED_QUESTIONS.filter((q) => q.topic_id === topicId)
-    : SEED_QUESTIONS;
-  const questionsToUse = filtered.length > 0 ? filtered : SEED_QUESTIONS;
-  return questionsToUse.slice(0, actualCount).map(dbQuestionToOfflineQuestion);
+  return [];
 }
 
 // ── OFFLINE CACHE HELPERS ───────────────────────────────────────────────────
@@ -383,23 +378,50 @@ function setCachedData<T>(key: string, data: T): void {
   }
 }
 
-function generateFallbackTickets(): OfflineTicket[] {
-  return SEED_TICKETS.map((t) => ({
-    id: t.id,
-    topic_id: null,
-    ticket_number: t.ticket_number,
-    name_uzl: `${t.ticket_number}-bilet`,
-    name_uzc: `${t.ticket_number}-билет`,
-    name_en: `Ticket #${t.ticket_number}`,
-    name_ru: `Билет #${t.ticket_number}`,
-    duration_minutes: 20,
-    passing_score: 90,
-    question_count: t.question_count || 20,
-    is_blocked: false,
-  }));
+function generateDefaultTickets(): OfflineTicket[] {
+  const tickets: OfflineTicket[] = [];
+  for (let i = 1; i <= 60; i++) {
+    tickets.push({
+      id: i,
+      topic_id: null,
+      ticket_number: i,
+      name_uzl: `${i}-bilet`,
+      name_uzc: `${i}-билет`,
+      name_en: `Ticket #${i}`,
+      name_ru: `Билет #${i}`,
+      duration_minutes: 20,
+      passing_score: 90,
+      question_count: 20,
+      is_blocked: false,
+    });
+  }
+  return tickets;
 }
 
 export async function getTickets(): Promise<OfflineTicket[]> {
+  // 1. LOCAL DATABASE FIRST
+  try {
+    const dbTickets = await ticketRepository.getAllTickets();
+    if (dbTickets && dbTickets.length > 0) {
+      return dbTickets.map((t) => ({
+        id: t.id,
+        topic_id: null,
+        ticket_number: t.ticket_number,
+        name_uzl: `${t.ticket_number}-bilet`,
+        name_uzc: `${t.ticket_number}-билет`,
+        name_en: `Ticket #${t.ticket_number}`,
+        name_ru: `Билет #${t.ticket_number}`,
+        duration_minutes: 20,
+        passing_score: 90,
+        question_count: t.question_count || 20,
+        is_blocked: false,
+      }));
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2. Fetch from backend if online
   if (navigator.onLine) {
     try {
       const res = await api.get<{
@@ -421,7 +443,7 @@ export async function getTickets(): Promise<OfflineTicket[]> {
           is_blocked: tk.isBlocked ?? false,
         }));
         setCachedData(OFFLINE_CACHE_KEYS.TICKETS, tickets);
-        dbClient.saveTickets(
+        ticketRepository.saveTickets(
           tickets.map((t) => ({
             id: t.id,
             ticket_number: t.ticket_number,
@@ -432,30 +454,8 @@ export async function getTickets(): Promise<OfflineTicket[]> {
         return tickets;
       }
     } catch {
-      // Tarmoq xatosi bo'lsa lokal DB ga o'tish
+      // Backend unavailable
     }
-  }
-
-  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH
-  try {
-    const dbTickets = await dbClient.getTickets();
-    if (dbTickets && dbTickets.length > 0) {
-      return dbTickets.map((t) => ({
-        id: t.id,
-        topic_id: null,
-        ticket_number: t.ticket_number,
-        name_uzl: `${t.ticket_number}-bilet`,
-        name_uzc: `${t.ticket_number}-билет`,
-        name_en: `Ticket #${t.ticket_number}`,
-        name_ru: `Билет #${t.ticket_number}`,
-        duration_minutes: 20,
-        passing_score: 90,
-        question_count: t.question_count || 20,
-        is_blocked: false,
-      }));
-    }
-  } catch {
-    // ignore
   }
 
   const cached = getCachedData<OfflineTicket[]>(OFFLINE_CACHE_KEYS.TICKETS);
@@ -463,10 +463,22 @@ export async function getTickets(): Promise<OfflineTicket[]> {
     return cached;
   }
 
-  return generateFallbackTickets();
+  return generateDefaultTickets();
 }
 
 export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQuestion[]> {
+  // 1. LOCAL DATABASE FIRST (Primary Runtime Source of Truth)
+  try {
+    const localDbQuestions = await questionRepository.getQuestionsByTicket(ticketId);
+    if (localDbQuestions && localDbQuestions.length > 0) {
+      activeTicketSessionId = Date.now();
+      return localDbQuestions.map(dbQuestionToOfflineQuestion);
+    }
+  } catch (err) {
+    console.warn(`Lokal DB dan ${ticketId}-bilet savollarini olishda xatolik:`, err);
+  }
+
+  // 2. If Local DB is empty, attempt on-demand fetch from backend
   if (navigator.onLine) {
     try {
       const res = await api.post<{
@@ -477,7 +489,7 @@ export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQue
       }
       if (res.data?.data?.questions && res.data.data.questions.length > 0) {
         const questions = res.data.data.questions.map(normalizeQuestion);
-        dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, ticketId))).catch(() => {});
+        questionRepository.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, ticketId))).catch(() => {});
         return questions;
       }
     } catch {
@@ -490,37 +502,38 @@ export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQue
         }
         if (res2.data?.data?.questions && res2.data.data.questions.length > 0) {
           const questions = res2.data.data.questions.map(normalizeQuestion);
-          dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, ticketId))).catch(() => {});
+          questionRepository.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, ticketId))).catch(() => {});
           return questions;
         }
       } catch {
-        // Tarmoq xatosi bo'lsa lokal DB ga o'tish
+        // Backend unavailable
       }
     }
   }
 
-  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH
-  try {
-    const localDbQuestions = await dbClient.getQuestionsByTicket(ticketId);
-    if (localDbQuestions && localDbQuestions.length > 0) {
-      activeTicketSessionId = Date.now();
-      return localDbQuestions.map(dbQuestionToOfflineQuestion);
-    }
-  } catch (err) {
-    console.warn(`Lokal DB dan ${ticketId}-bilet savollarini olishda xatolik:`, err);
-  }
-
-  // Fallback: Preloaded seed questions for this ticket
-  activeTicketSessionId = Date.now();
-  const seedTicketQuestions = SEED_QUESTIONS.filter((q) => q.ticket_id === ticketId);
-  if (seedTicketQuestions.length > 0) {
-    return seedTicketQuestions.map(dbQuestionToOfflineQuestion);
-  }
-
-  return SEED_QUESTIONS.slice(0, 20).map(dbQuestionToOfflineQuestion);
+  return [];
 }
 
 export async function getTopics(): Promise<OfflineTopic[]> {
+  // 1. LOCAL DATABASE FIRST
+  try {
+    const dbTopics = await topicRepository.getAllTopics();
+    if (dbTopics && dbTopics.length > 0) {
+      return dbTopics.map((tp) => ({
+        id: tp.id,
+        code: tp.code,
+        name_uzl: tp.name_uzl,
+        name_uzc: tp.name_uzc,
+        name_en: tp.name_uzl,
+        name_ru: tp.name_ru,
+        question_count: tp.question_count,
+      }));
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2. Fetch from backend if online
   if (navigator.onLine) {
     try {
       let list: any[] = [];
@@ -554,7 +567,7 @@ export async function getTopics(): Promise<OfflineTopic[]> {
           question_count: tp.questionCount ?? tp.questionsCount ?? 20,
         }));
         setCachedData(OFFLINE_CACHE_KEYS.TOPICS, topics);
-        dbClient.saveTopics(
+        topicRepository.saveTopics(
           topics.map((tp) => ({
             id: tp.id,
             code: tp.code || `topic_${tp.id}`,
@@ -569,26 +582,8 @@ export async function getTopics(): Promise<OfflineTopic[]> {
         return topics;
       }
     } catch {
-      // Tarmoq xatosi bo'lsa lokal DB ga o'tish
+      // Backend unavailable
     }
-  }
-
-  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH
-  try {
-    const dbTopics = await dbClient.getTopics();
-    if (dbTopics && dbTopics.length > 0) {
-      return dbTopics.map((tp) => ({
-        id: tp.id,
-        code: tp.code,
-        name_uzl: tp.name_uzl,
-        name_uzc: tp.name_uzc,
-        name_en: tp.name_uzl,
-        name_ru: tp.name_ru,
-        question_count: tp.question_count,
-      }));
-    }
-  } catch {
-    // ignore
   }
 
   const cached = getCachedData<OfflineTopic[]>(OFFLINE_CACHE_KEYS.TOPICS);
@@ -596,15 +591,7 @@ export async function getTopics(): Promise<OfflineTopic[]> {
     return cached;
   }
 
-  return SEED_TOPICS.map((tp) => ({
-    id: tp.id,
-    code: tp.code,
-    name_uzl: tp.name_uzl,
-    name_uzc: tp.name_uzc,
-    name_en: tp.name_uzl,
-    name_ru: tp.name_ru,
-    question_count: tp.question_count,
-  }));
+  return [];
 }
 
 // ── STATS & STORAGE WRAPPERS ──────────────────────────────────────────────────
