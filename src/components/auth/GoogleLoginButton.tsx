@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { Button } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useTranslation } from "react-i18next";
 import api from "../../api/api";
 import { getErrorMessage } from "../../types/errors";
+import { showToast } from "../../utils/notificationUtils";
 
 interface GoogleLoginButtonProps {
   mode?: "login" | "register";
@@ -32,6 +32,7 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
 
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
+      if (loading) return;
       setLoading(true);
       try {
         const response = await api.post("/api/v1/auth/google", {
@@ -47,7 +48,9 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
           authLogin(response.data.data);
           navigate(from, { replace: true });
 
-          notifications.show({
+          showToast({
+            id: "auth-google-success",
+            dedupeKey: "auth-google-success",
             title: t("auth.google.successTitle"),
             message: t("auth.google.successMessage"),
             color: "green",
@@ -55,7 +58,9 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
           });
         }
       } catch (err: unknown) {
-        notifications.show({
+        showToast({
+          id: "auth-google-error",
+          dedupeKey: "auth-google-error",
           color: "red",
           title: t("common.error"),
           message: getErrorMessage(err, t("auth.google.errorMessage")),
@@ -65,7 +70,9 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
       }
     },
     onError: () => {
-      notifications.show({
+      showToast({
+        id: "auth-google-failed",
+        dedupeKey: "auth-google-failed",
         color: "red",
         title: t("common.error"),
         message: t("auth.google.errorMessage"),
@@ -76,13 +83,16 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
   const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 
   const handleClick = async () => {
+    if (loading) return;
     if (isTauri) {
       setLoading(true);
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("open_oauth_window", { provider: "google" });
       } catch (err: unknown) {
-        notifications.show({
+        showToast({
+          id: "auth-google-window-error",
+          dedupeKey: "auth-google-window-error",
           color: "red",
           title: t("common.error"),
           message: getErrorMessage(err, t("auth.google.errorMessage")),

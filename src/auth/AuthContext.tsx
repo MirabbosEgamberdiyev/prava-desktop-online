@@ -10,21 +10,33 @@ import React, {
 } from "react";
 import Cookies from "js-cookie";
 import { useNavigate } from "react-router-dom";
-import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import type { User, AuthData } from "../types";
 import api from "../api/api";
+import { showToast } from "../utils/notificationUtils";
 
 const ACCESS_TOKEN_KEY = "accessToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
 const USER_DATA_KEY = "userData";
 
-interface AuthContextType {
+export type AuthState =
+  | "UNAUTHENTICATED"
+  | "AUTHENTICATING"
+  | "AUTHENTICATED"
+  | "REFRESHING"
+  | "RESTORING"
+  | "LOGGING_OUT"
+  | "TOKEN_EXPIRED"
+  | "ERROR";
+
+export interface AuthContextType {
+  authState: AuthState;
   isAuthenticated: boolean;
   user: User | null;
   login: (authData: AuthData) => void;
   register: (authData: AuthData) => void;
   logout: () => Promise<void>;
+  transitionTo: (nextState: AuthState) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -71,7 +83,7 @@ const checkAuthStatus = (): boolean => {
   return false;
 };
 
-const getInitialUser = () => {
+const getInitialUser = (): User | null => {
   const user = Cookies.get(USER_DATA_KEY);
   try {
     return user ? JSON.parse(user) : null;
@@ -83,39 +95,70 @@ const getInitialUser = () => {
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [isAuthenticated, setIsAuthenticated] =
-    useState<boolean>(checkAuthStatus());
+  const initialAuth = checkAuthStatus();
+  const [authState, setAuthState] = useState<AuthState>(
+    initialAuth ? "AUTHENTICATED" : "UNAUTHENTICATED"
+  );
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialAuth);
   const [user, setUser] = useState<User | null>(getInitialUser());
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
 
-  // Keep a ref in sync so syncAuthState never closes over stale state
+  const authStateRef = useRef(authState);
+  useEffect(() => {
+    authStateRef.current = authState;
+  }, [authState]);
+
   const isAuthenticatedRef = useRef(isAuthenticated);
   useEffect(() => {
     isAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
-  // Stable callback — no state in deps, reads current value via ref
-  const syncAuthState = useCallback(() => {
-    const isValid = checkAuthStatus();
-    if (isAuthenticatedRef.current && !isValid) {
-      setIsAuthenticated(false);
-      setUser(null);
-    } else if (!isAuthenticatedRef.current && isValid) {
+  const transitionTo = useCallback((nextState: AuthState) => {
+    authStateRef.current = nextState;
+    setAuthState(nextState);
+
+    if (nextState === "AUTHENTICATED") {
       setIsAuthenticated(true);
-      setUser(getInitialUser());
+    } else if (
+      nextState === "UNAUTHENTICATED" ||
+      nextState === "TOKEN_EXPIRED" ||
+      nextState === "LOGGING_OUT"
+    ) {
+      setIsAuthenticated(false);
     }
   }, []);
+
+  // Stable callback — no stale state closures
+  const syncAuthState = useCallback(() => {
+    // If currently performing active transition, don't interrupt
+    if (
+      authStateRef.current === "AUTHENTICATING" ||
+      authStateRef.current === "LOGGING_OUT" ||
+      authStateRef.current === "REFRESHING"
+    ) {
+      return;
+    }
+
+    const isValid = checkAuthStatus();
+    if (isAuthenticatedRef.current && !isValid) {
+      transitionTo("UNAUTHENTICATED");
+      setUser(null);
+    } else if (!isAuthenticatedRef.current && isValid) {
+      transitionTo("AUTHENTICATED");
+      setUser(getInitialUser());
+    }
+  }, [transitionTo]);
 
   useEffect(() => {
     // Check every 30 seconds
     const interval = setInterval(syncAuthState, 30_000);
 
-    // Also check on window focus (user returning to tab)
+    // Also check on window focus (user returning to tab/app)
     const onFocus = () => syncAuthState();
     window.addEventListener("focus", onFocus);
 
-    // Instant multi-tab synchronization
+    // Instant multi-window synchronization
     const onStorage = (e: StorageEvent) => {
       if (e.key === "auth_sync_event") {
         syncAuthState();
@@ -123,9 +166,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     };
     window.addEventListener("storage", onStorage);
 
-    // Listen for forced logout from API interceptor (e.g. refresh token expired)
+    // Refresh start / end event listeners from API interceptor
+    const onRefreshStart = () => {
+      if (authStateRef.current === "AUTHENTICATED") {
+        setAuthState("REFRESHING");
+      }
+    };
+    const onRefreshEnd = () => {
+      if (authStateRef.current === "REFRESHING") {
+        setAuthState("AUTHENTICATED");
+      }
+    };
+    window.addEventListener("auth-refresh-start", onRefreshStart);
+    window.addEventListener("auth-refresh-end", onRefreshEnd);
+
+    // Token expired event
+    const onTokenExpired = () => {
+      transitionTo("TOKEN_EXPIRED");
+      showToast({
+        id: "auth-session-expired",
+        dedupeKey: "auth-session-expired",
+        title: t("errors.sessionExpiredTitle", { defaultValue: "Sessiya muddati tugadi" }),
+        message: t("errors.sessionExpiredMessage", {
+          defaultValue: "Xavfsizlik maqsadida iltimos qaytadan tizimga kiring.",
+        }),
+        color: "red",
+        withBorder: true,
+      });
+    };
+    window.addEventListener("auth-token-expired", onTokenExpired);
+
+    // Listen for forced logout from API interceptor
     const onForceLogout = () => {
-      setIsAuthenticated(false);
+      transitionTo("UNAUTHENTICATED");
       setUser(null);
       try {
         localStorage.setItem("auth_sync_event", `logout_${Date.now()}`);
@@ -140,9 +213,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("storage", onStorage);
+      window.removeEventListener("auth-refresh-start", onRefreshStart);
+      window.removeEventListener("auth-refresh-end", onRefreshEnd);
+      window.removeEventListener("auth-token-expired", onTokenExpired);
       window.removeEventListener("auth-logout", onForceLogout);
     };
-  }, [syncAuthState, navigate]);
+  }, [syncAuthState, navigate, t, transitionTo]);
 
   const saveAuthData = (authData: AuthData) => {
     const { accessToken, refreshToken, user: userData, expiresIn } = authData;
@@ -150,7 +226,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     // expiresIn millisekundda kelsa kun hisobiga o'tkazamiz, kelmasa 1 kun
     const expiryDays = expiresIn ? expiresIn / (1000 * 60 * 60 * 24) : 1;
 
-    // HTTP da secure: true cookie saqlanmaydi, shuning uchun protocol'ga qarab o'rnatamiz
     const isSecure = window.location.protocol === "https:";
 
     Cookies.set(ACCESS_TOKEN_KEY, accessToken, {
@@ -183,8 +258,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     setUser(userData);
   };
 
+  const lastProcessedTokenRef = useRef<string>("");
+  const isAuthListenerAttachedRef = useRef(false);
+
   useEffect(() => {
-    let unlistenAuth: (() => void) | undefined;
     const isTauri =
       typeof window !== "undefined" &&
       Boolean(
@@ -192,74 +269,105 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           .__TAURI_INTERNALS__
       );
 
-    if (isTauri) {
-      import("@tauri-apps/api/event")
-        .then(({ listen }) => {
-          return listen<{
-            accessToken: string;
-            refreshToken?: string;
-            user?: User;
-          }>("desktop-auth-success", async (event) => {
-            const { accessToken, refreshToken, user: userData } = event.payload;
-            if (accessToken) {
-              let finalUser = userData;
-              if (!finalUser || !finalUser.id) {
-                try {
-                  const res = await api.get("/api/v1/auth/me", {
-                    headers: { Authorization: `Bearer ${accessToken}` },
-                  });
-                  if (res.data?.success && res.data?.data) {
-                    finalUser = res.data.data;
-                  }
-                } catch {
-                  // ignore
-                }
-              }
+    if (!isTauri || isAuthListenerAttachedRef.current) return;
+    isAuthListenerAttachedRef.current = true;
 
-              const userLang = finalUser?.preferredLanguage;
-              if (userLang) {
-                i18n.changeLanguage(userLang);
-              }
+    let unlistenFn: (() => void) | undefined;
+    let isMounted = true;
 
-              saveAuthData({
-                accessToken,
-                refreshToken: refreshToken || "",
-                user: finalUser || ({} as User),
+    import("@tauri-apps/api/event")
+      .then(({ listen }) => {
+        if (!isMounted) return;
+        return listen<{
+          accessToken: string;
+          refreshToken?: string;
+          user?: User;
+        }>("desktop-auth-success", async (event) => {
+          const { accessToken, refreshToken, user: userData } = event.payload;
+          if (!accessToken) return;
+
+          // Strict token deduplication
+          if (lastProcessedTokenRef.current === accessToken) {
+            return;
+          }
+          lastProcessedTokenRef.current = accessToken;
+
+          transitionTo("AUTHENTICATING");
+          let finalUser = userData;
+          if (!finalUser || !finalUser.id) {
+            try {
+              const res = await api.get("/api/v1/auth/me", {
+                headers: { Authorization: `Bearer ${accessToken}` },
               });
-
-              notifications.show({
-                title: t("auth.loginSuccess", { defaultValue: "Xush kelibsiz!" }),
-                message: t("auth.loginSuccessDesc", {
-                  defaultValue: "Prava Online tizimiga muvaffaqiyatli kirdingiz",
-                }),
-                color: "green",
-                withBorder: true,
-              });
-
-              navigate("/me", { replace: true });
+              if (res.data?.success && res.data?.data) {
+                finalUser = res.data.data;
+              }
+            } catch {
+              // ignore
             }
+          }
+
+          const userLang = finalUser?.preferredLanguage;
+          if (userLang) {
+            i18n.changeLanguage(userLang);
+          }
+
+          saveAuthData({
+            accessToken,
+            refreshToken: refreshToken || "",
+            user: finalUser || ({} as User),
           });
-        })
-        .then((unsub) => {
-          unlistenAuth = unsub;
-        })
-        .catch(() => {});
-    }
+
+          transitionTo("AUTHENTICATED");
+
+          showToast({
+            id: "auth-desktop-login-success",
+            dedupeKey: "auth-desktop-login-success",
+            cooldownMs: 15_000,
+            title: t("auth.loginSuccess", { defaultValue: "Xush kelibsiz!" }),
+            message: t("auth.loginSuccessDesc", {
+              defaultValue: "Prava Online tizimiga muvaffaqiyatli kirdingiz",
+            }),
+            color: "green",
+            withBorder: true,
+          });
+
+          navigate("/me", { replace: true });
+        });
+      })
+      .then((unsub) => {
+        if (!isMounted && unsub) {
+          unsub();
+        } else {
+          unlistenFn = unsub;
+        }
+      })
+      .catch(() => {});
 
     return () => {
-      if (unlistenAuth) unlistenAuth();
+      isMounted = false;
+      isAuthListenerAttachedRef.current = false;
+      if (unlistenFn) unlistenFn();
     };
-  }, [navigate, t, i18n]);
+  }, [navigate, t, i18n, transitionTo]);
 
   const login = (authData: AuthData) => {
+    if (authStateRef.current === "LOGGING_OUT") return;
+    transitionTo("AUTHENTICATING");
     saveAuthData(authData);
+    transitionTo("AUTHENTICATED");
   };
 
   const register = (authData: AuthData) => {
+    if (authStateRef.current === "LOGGING_OUT") return;
+    transitionTo("AUTHENTICATING");
     saveAuthData(authData);
+    transitionTo("AUTHENTICATED");
   };
 
   const logout = async () => {
+    if (authStateRef.current === "LOGGING_OUT") return;
+    transitionTo("LOGGING_OUT");
     try {
       const refreshToken = Cookies.get(REFRESH_TOKEN_KEY);
       if (refreshToken) {
@@ -276,15 +384,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       } catch {
         // ignore
       }
-      setIsAuthenticated(false);
       setUser(null);
+      transitionTo("UNAUTHENTICATED");
       navigate("/", { replace: true });
     }
   };
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, user, login, register, logout }}
+      value={{
+        authState,
+        isAuthenticated,
+        user,
+        login,
+        register,
+        logout,
+        transitionTo,
+      }}
     >
       {children}
     </AuthContext.Provider>

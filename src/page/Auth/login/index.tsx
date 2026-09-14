@@ -21,7 +21,7 @@ import { useForm } from "@mantine/form";
 import { useState } from "react";
 import { useAuth } from "../../../auth/AuthContext";
 import api from "../../../api/api";
-import { notifications } from "@mantine/notifications";
+import { showToast } from "../../../utils/notificationUtils";
 import { useTranslation } from "react-i18next";
 import {
   IconAlertCircle,
@@ -74,6 +74,7 @@ const Login_Page = () => {
   }
 
   const handleSubmit = async (values: typeof form.values) => {
+    if (loading) return;
     setLoading(true);
     setErrorMessage(null);
 
@@ -99,7 +100,9 @@ const Login_Page = () => {
         login(response.data.data);
         navigate(from, { replace: true });
 
-        notifications.show({
+        showToast({
+          id: "auth-login-success",
+          dedupeKey: "auth-login-success",
           title: t("auth.not_title"),
           message: t("auth.not_massage"),
           color: "teal",
@@ -109,7 +112,9 @@ const Login_Page = () => {
     } catch (err: unknown) {
       const msg = getErrorMessage(err, t("auth.loginError"));
       setErrorMessage(msg);
-      notifications.show({
+      showToast({
+        id: "auth-login-error",
+        dedupeKey: "auth-login-error",
         color: "red",
         title: t("auth.errorTitle"),
         message: msg,

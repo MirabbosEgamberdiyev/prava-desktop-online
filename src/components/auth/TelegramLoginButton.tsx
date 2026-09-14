@@ -10,7 +10,7 @@ import {
   ThemeIcon,
   Divider,
 } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
+import { showToast } from "../../utils/notificationUtils";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useTranslation } from "react-i18next";
@@ -83,6 +83,7 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
   };
 
   const handleTokenSubmit = async (tokenValue?: string) => {
+    if (submittingToken) return;
     const raw = (tokenValue || tokenInput).trim();
     if (!raw) return;
 
@@ -113,7 +114,9 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
         setModalOpened(false);
         navigate(from, { replace: true });
 
-        notifications.show({
+        showToast({
+          id: "auth-telegram-token-success",
+          dedupeKey: "auth-telegram-token-success",
           title: t("auth.telegram.successTitle", { defaultValue: "Muvaffaqiyatli kirildi!" }),
           message: t("auth.telegram.successMessage", {
             defaultValue: "Telegram orqali tizimga kirdingiz",
@@ -123,7 +126,9 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
         });
       }
     } catch (err: unknown) {
-      notifications.show({
+      showToast({
+        id: "auth-telegram-token-error",
+        dedupeKey: "auth-telegram-token-error",
         color: "red",
         title: t("common.error", { defaultValue: "Xatolik" }),
         message: getErrorMessage(
@@ -141,13 +146,16 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
   const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 
   const handleTelegramLogin = useCallback(async () => {
+    if (loading) return;
     if (isTauri) {
       setLoading(true);
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("open_oauth_window", { provider: "telegram" });
       } catch (err: unknown) {
-        notifications.show({
+        showToast({
+          id: "auth-telegram-window-error",
+          dedupeKey: "auth-telegram-window-error",
           color: "red",
           title: t("common.error"),
           message: getErrorMessage(err, t("auth.telegram.errorMessage")),
@@ -192,7 +200,9 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
                 authLogin(response.data.data);
                 navigate(from, { replace: true });
 
-                notifications.show({
+                showToast({
+                  id: "auth-telegram-auth-success",
+                  dedupeKey: "auth-telegram-auth-success",
                   title: t("auth.telegram.successTitle"),
                   message: t("auth.telegram.successMessage"),
                   color: "green",
@@ -200,7 +210,9 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
                 });
               }
             } catch (err: unknown) {
-              notifications.show({
+              showToast({
+                id: "auth-telegram-auth-error",
+                dedupeKey: "auth-telegram-auth-error",
                 color: "red",
                 title: t("common.error"),
                 message: getErrorMessage(err, t("auth.telegram.errorMessage")),

@@ -8,8 +8,8 @@ import {
   IconKey,
 } from "@tabler/icons-react";
 import { Group, Avatar, Text, Menu, UnstyledButton, Box } from "@mantine/core";
+import { showToast } from "../../utils/notificationUtils";
 import { useAuth } from "../../auth/AuthContext";
-import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
@@ -20,10 +20,13 @@ function UserMenuButton() {
 
   const handleLogout = () => {
     logout();
-    notifications.show({
+    showToast({
+      id: "auth-logout-toast",
+      dedupeKey: "auth-logout-toast",
       title: t("userMenu.logoutTitle", "Chiqish"),
       message: t("userMenu.logoutMessage", "Tizimdan muvaffaqiyatli chiqdingiz"),
       color: "yellow",
+      withBorder: true,
     });
   };
 

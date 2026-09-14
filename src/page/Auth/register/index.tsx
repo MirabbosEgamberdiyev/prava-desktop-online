@@ -24,7 +24,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, Navigate } from "react-router-dom";
 import api from "../../../api/api";
 import { useAuth } from "../../../auth/AuthContext";
-import { notifications } from "@mantine/notifications";
+import { showToast } from "../../../utils/notificationUtils";
 import {
   IconAlertCircle,
   IconArrowLeft,
@@ -128,6 +128,7 @@ const Register_Page = () => {
 
   // Step 1: Init registration — send form data + get OTP
   const handleInit = async (values: typeof form.values) => {
+    if (loading) return;
     setLoading(true);
     setErrorMessage(null);
     try {
@@ -149,7 +150,9 @@ const Register_Page = () => {
     } catch (error: unknown) {
       const msg = getErrorMessage(error, t("register.errorMessage"));
       setErrorMessage(msg);
-      notifications.show({
+      showToast({
+        id: "auth-register-init-error",
+        dedupeKey: "auth-register-init-error",
         title: t("register.errorTitle"),
         message: msg,
         color: "red",
@@ -162,7 +165,7 @@ const Register_Page = () => {
 
   // Resend OTP
   const handleResendCode = async () => {
-    if (countdown > 0) return;
+    if (resending || countdown > 0) return;
     setResending(true);
     setErrorMessage(null);
     try {
@@ -179,7 +182,9 @@ const Register_Page = () => {
 
       await api.post("/api/v1/auth/register/init", payload);
       setCountdown(60);
-      notifications.show({
+      showToast({
+        id: "auth-register-resend-success",
+        dedupeKey: "auth-register-resend-success",
         title: t("common.success"),
         message: t("register.otpSentTo"),
         color: "teal",
@@ -188,6 +193,14 @@ const Register_Page = () => {
     } catch (error: unknown) {
       const msg = getErrorMessage(error, t("register.errorMessage"));
       setErrorMessage(msg);
+      showToast({
+        id: "auth-register-resend-error",
+        dedupeKey: "auth-register-resend-error",
+        title: t("register.errorTitle"),
+        message: msg,
+        color: "red",
+        withBorder: true,
+      });
     } finally {
       setResending(false);
     }
@@ -195,7 +208,7 @@ const Register_Page = () => {
 
   // Step 2: Verify OTP and complete registration
   const handleComplete = async () => {
-    if (code.length < 6) return;
+    if (loading || code.length < 6) return;
 
     setLoading(true);
     setErrorMessage(null);
@@ -218,7 +231,9 @@ const Register_Page = () => {
 
       if (res.data) {
         authRegister(res.data.data);
-        notifications.show({
+        showToast({
+          id: "auth-register-success",
+          dedupeKey: "auth-register-success",
           title: t("register.successTitle"),
           message: t("register.successMessage"),
           color: "teal",
@@ -229,7 +244,9 @@ const Register_Page = () => {
     } catch (error: unknown) {
       const msg = getErrorMessage(error, t("register.codeError"));
       setErrorMessage(msg);
-      notifications.show({
+      showToast({
+        id: "auth-register-complete-error",
+        dedupeKey: "auth-register-complete-error",
         title: t("register.errorTitle"),
         message: msg,
         color: "red",

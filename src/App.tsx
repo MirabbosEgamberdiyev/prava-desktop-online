@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { HashRouter, useLocation } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { DesktopThemeProvider } from "./context/DesktopThemeContext";
@@ -6,7 +6,7 @@ import { LanguageProvider } from "./context/LanguageContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import AppRoutes from "./routes";
 import GoogleOneTap from "./components/auth/GoogleOneTap";
-import { notifications } from "@mantine/notifications";
+import { showToast } from "./utils/notificationUtils";
 import { useTranslation } from "react-i18next";
 import { ScrollManager } from "./components/common/ScrollManager";
 
@@ -16,9 +16,6 @@ import { ScrollManager } from "./components/common/ScrollManager";
  */
 function ApiErrorListener() {
   const { t } = useTranslation();
-  const lastToastRef = useRef<Record<string, number>>({});
-  const lastNetworkToastRef = useRef<number>(0);
-  const COOLDOWN_MS = 30_000;
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -29,19 +26,15 @@ function ApiErrorListener() {
         isOffline?: boolean;
       };
 
-      const now = Date.now();
-
       // Network / Connectivity errors deduplication (GLOBAL across all endpoints)
       if (detail.status === 0) {
-        if (now - lastNetworkToastRef.current < 20_000) {
-          return; // Skip duplicate network toast
-        }
-        lastNetworkToastRef.current = now;
-
         const isActuallyOffline =
           detail.isOffline ?? (typeof navigator !== "undefined" && !navigator.onLine);
 
-        notifications.show({
+        showToast({
+          id: "global-network-toast",
+          dedupeKey: "global-network-toast",
+          cooldownMs: 20_000,
           title: isActuallyOffline
             ? t("errors.noInternetTitle", "Internet aloqasi yo‘q")
             : t("common.error", "Xatolik"),
@@ -54,20 +47,22 @@ function ApiErrorListener() {
         return;
       }
 
-      // Deduplication: skip if same endpoint showed toast recently
       const endpoint = detail.url || `status-${detail.status}`;
-      if (now - (lastToastRef.current[endpoint] || 0) < COOLDOWN_MS) return;
-      lastToastRef.current[endpoint] = now;
-
       if (detail.status === 403) {
-        notifications.show({
+        showToast({
+          id: `status-403-${endpoint}`,
+          dedupeKey: `status-403-${endpoint}`,
+          cooldownMs: 30_000,
           title: t("common.error"),
           message: detail.message || t("errors.accessDenied"),
           color: "orange",
           autoClose: 5000,
         });
       } else if (detail.status >= 500) {
-        notifications.show({
+        showToast({
+          id: `status-500-${endpoint}`,
+          dedupeKey: `status-500-${endpoint}`,
+          cooldownMs: 30_000,
           title: t("common.error"),
           message: detail.message || t("errors.serverError"),
           color: "red",

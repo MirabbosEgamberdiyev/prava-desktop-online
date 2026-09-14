@@ -72,6 +72,7 @@ api.interceptors.request.use(
       if (refreshToken) {
         isProactiveRefreshing = true;
         isRefreshing = true; // Block reactive refresh while proactive is in progress
+        window.dispatchEvent(new CustomEvent("auth-refresh-start"));
         try {
           const response = await refreshClient.post("/api/v1/auth/refresh", {
             refreshToken,
@@ -114,6 +115,7 @@ api.interceptors.request.use(
         } finally {
           isProactiveRefreshing = false;
           isRefreshing = false;
+          window.dispatchEvent(new CustomEvent("auth-refresh-end"));
         }
       }
     }
@@ -236,6 +238,7 @@ api.interceptors.response.use(
         Cookies.remove(ACCESS_TOKEN_KEY);
         Cookies.remove(REFRESH_TOKEN_KEY);
         Cookies.remove(USER_DATA_KEY);
+        window.dispatchEvent(new CustomEvent("auth-token-expired"));
         window.dispatchEvent(new CustomEvent("auth-logout"));
         return Promise.reject(error);
       }
@@ -256,6 +259,7 @@ api.interceptors.response.use(
 
       originalRequest._retry = true;
       isRefreshing = true;
+      window.dispatchEvent(new CustomEvent("auth-refresh-start"));
 
       try {
         const response = await refreshClient.post("/api/v1/auth/refresh", {
@@ -306,15 +310,56 @@ api.interceptors.response.use(
         Cookies.remove(ACCESS_TOKEN_KEY);
         Cookies.remove(REFRESH_TOKEN_KEY);
         Cookies.remove(USER_DATA_KEY);
+        window.dispatchEvent(new CustomEvent("auth-token-expired"));
         window.dispatchEvent(new CustomEvent("auth-logout"));
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
+        window.dispatchEvent(new CustomEvent("auth-refresh-end"));
       }
     }
 
     return Promise.reject(error);
   },
 );
+
+// ── In-Flight GET Request Deduplication ──
+const inFlightGetRequests = new Map<string, Promise<unknown>>();
+const originalApiRequest = api.request.bind(api);
+
+api.request = function <T = unknown, R = import("axios").AxiosResponse<T>>(
+  configOrUrl: unknown,
+  config?: unknown
+): Promise<R> {
+  const mergedConfig =
+    typeof configOrUrl === "string"
+      ? { ...(config as object || {}), url: configOrUrl }
+      : { ...((configOrUrl as object) || {}) };
+
+  const method = ((mergedConfig as { method?: string }).method || "get").toLowerCase();
+  const skipDedup = Boolean((mergedConfig as { skipDeduplication?: boolean }).skipDeduplication);
+
+  if (method === "get" && !skipDedup) {
+    const key = `${(mergedConfig as { baseURL?: string }).baseURL || ""}|${(mergedConfig as { url?: string }).url || ""}|${JSON.stringify(
+      (mergedConfig as { params?: unknown }).params || {}
+    )}`;
+
+    const existing = inFlightGetRequests.get(key);
+    if (existing) {
+      return existing as Promise<R>;
+    }
+
+    const promise = originalApiRequest(mergedConfig as any).finally(() => {
+      setTimeout(() => {
+        inFlightGetRequests.delete(key);
+      }, 50);
+    });
+
+    inFlightGetRequests.set(key, promise);
+    return promise as Promise<R>;
+  }
+
+  return originalApiRequest(mergedConfig as any) as Promise<R>;
+};
 
 export default api;

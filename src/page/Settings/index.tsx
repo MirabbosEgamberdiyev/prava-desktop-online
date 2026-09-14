@@ -27,7 +27,8 @@ import { ChangePasswordForm } from "../../features/me/components/ChangePasswordF
 import SEO from "../../components/common/SEO";
 
 interface DeviceInfo {
-  currentDevices: number;
+  activeDevices?: number;
+  currentDevices?: number;
   maxDevices: number;
   devices?: Array<{
     deviceId: string;
@@ -111,7 +112,7 @@ const Settings_Page = () => {
                   <Group justify="space-between" mb="md">
                     <Text fw={600}>{t("settings.activeDevices")}</Text>
                     <Badge size="lg" variant="light">
-                      {deviceInfo.currentDevices}/{deviceInfo.maxDevices}
+                      {(deviceInfo.activeDevices ?? deviceInfo.currentDevices ?? 1)}/{deviceInfo.maxDevices || 3}
                     </Badge>
                   </Group>
                   <Text size="sm" c="dimmed">

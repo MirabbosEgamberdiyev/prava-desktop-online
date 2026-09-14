@@ -117,6 +117,9 @@ async fn open_oauth_window(app: tauri::AppHandle, provider: Option<String>) -> R
     "#;
 
     let app_clone = app.clone();
+    let already_emitted = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let emitted_clone = already_emitted.clone();
+
     let win = tauri::WebviewWindowBuilder::new(&app, "auth-window", tauri::WebviewUrl::External(url))
         .title("Prava Online — Kirish")
         .inner_size(520.0, 720.0)
@@ -130,6 +133,10 @@ async fn open_oauth_window(app: tauri::AppHandle, provider: Option<String>) -> R
         })
         .on_navigation(move |nav_url| {
             if nav_url.as_str().contains("__desktop_oauth_done") {
+                if emitted_clone.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    return false;
+                }
+
                 let mut token = String::new();
                 let mut refresh = String::new();
                 let mut user_json = String::new();
