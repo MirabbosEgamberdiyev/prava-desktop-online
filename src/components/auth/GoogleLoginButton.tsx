@@ -28,7 +28,13 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/me";
+  const locationState = location.state as { from?: string | { pathname: string; search?: string } } | undefined;
+  let from = "/me";
+  if (typeof locationState?.from === "string") {
+    from = locationState.from;
+  } else if (locationState?.from?.pathname) {
+    from = locationState.from.pathname + (locationState.from.search || "");
+  }
 
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {

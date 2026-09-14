@@ -65,7 +65,13 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
   const [tokenInput, setTokenInput] = useState("");
   const [submittingToken, setSubmittingToken] = useState(false);
   const timeoutRef = useRef<number | null>(null);
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/me";
+  const locationState = location.state as { from?: string | { pathname: string; search?: string } } | undefined;
+  let from = "/me";
+  if (typeof locationState?.from === "string") {
+    from = locationState.from;
+  } else if (locationState?.from?.pathname) {
+    from = locationState.from.pathname + (locationState.from.search || "");
+  }
 
   const clearSafetyTimeout = () => {
     if (timeoutRef.current) {

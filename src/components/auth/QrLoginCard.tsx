@@ -48,7 +48,7 @@ interface QrLoginCardProps {
 }
 
 export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLoginCardProps = {}) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -131,8 +131,10 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
               showToast({
                 id: "qr-login-success",
                 dedupeKey: "qr-login-success",
-                title: "Muvaffaqiyatli bog'landi!",
-                message: "Qurilmangiz orqali tizimga muvaffaqiyatli kirdingiz.",
+                title: t("qr.successTitle", { defaultValue: "Muvaffaqiyatli bog'landi!" }),
+                message: t("qr.successMessage", {
+                  defaultValue: "Qurilmangiz orqali tizimga muvaffaqiyatli kirdingiz.",
+                }),
                 color: "teal",
                 withBorder: true,
               });
@@ -188,7 +190,7 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
           <Stack align="center" gap="xs">
             <Loader size="md" />
             <Text size="sm" c="dimmed">
-              QR kod tayyorlanmoqda...
+              {t("qr.preparing", { defaultValue: "QR kod tayyorlanmoqda..." })}
             </Text>
           </Stack>
         </Center>
@@ -206,12 +208,14 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
             </ThemeIcon>
 
             <Text fw={700} fz="md">
-              QR orqali kirish tez kunda ishga tushiriladi
+              {t("qr.serviceUnavailable", { defaultValue: "QR orqali kirish tez kunda ishga tushiriladi" })}
             </Text>
 
             <Text size="xs" c="dimmed" maw={360}>
-              Server tomonida mobil QR autentifikatsiya xizmati yangilanmoqda.
-              Hozirda desktop ilovaga kirish uchun quyidagi qulay usullardan foydalanishingiz mumkin:
+              {t("qr.serviceUnavailableDesc", {
+                defaultValue:
+                  "Server tomonida mobil QR autentifikatsiya xizmati yangilanmoqda. Hozirda desktop ilovaga kirish uchun quyidagi qulay usullardan foydalanishingiz mumkin:",
+              })}
             </Text>
 
             <Divider my="xs" style={{ width: "100%" }} />
@@ -227,7 +231,7 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
                   leftSection={<IconLock size={16} />}
                   onClick={onSwitchToPassword}
                 >
-                  Parol orqali kirish
+                  {t("qr.byPassword", { defaultValue: "Parol orqali kirish" })}
                 </Button>
               )}
 
@@ -238,7 +242,7 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
                 leftSection={<IconRefresh size={14} />}
                 onClick={startNewSession}
               >
-                Qayta tekshirish
+                {t("qr.checkAgain", { defaultValue: "Qayta tekshirish" })}
               </Button>
             </Stack>
           </Stack>
@@ -317,10 +321,10 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
                 }
               >
                 {status === "SCANNED"
-                  ? "Skanerlandi! Telefonda tasdiqlashni bosing..."
+                  ? t("qr.scanned", { defaultValue: "Skanerlandi! Telefonda tasdiqlashni bosing..." })
                   : status === "APPROVED"
-                  ? "Tasdiqlandi! Tizimga kirilmoqda..."
-                  : `Muddati: ${timeLeft}s`}
+                  ? t("qr.approved", { defaultValue: "Tasdiqlandi! Tizimga kirilmoqda..." })
+                  : t("qr.expiresIn", { seconds: timeLeft, defaultValue: `Muddati: ${timeLeft}s` })}
               </Badge>
             </div>
           </Group>
@@ -336,17 +340,25 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
               <Group gap="xs">
                 <IconDeviceMobile size={18} color="var(--mantine-color-blue-6)" />
                 <Text fw={600} fz="xs">
-                  Tezkor ulanish yo'riqnomasi:
+                  {t("qr.instructionsTitle", { defaultValue: "Tezkor ulanish yo'riqnomasi:" })}
                 </Text>
               </Group>
               <Text fz="xs" c="dimmed">
-                1. Telefoningiz <strong>kamerasini</strong> QR kodga qarating va havolani oching (yoki mobil ilovadan skanerlang).
+                {t("qr.step1", {
+                  defaultValue:
+                    "1. Telefoningiz kamerasini QR kodga qarating va havolani oching.",
+                })}
               </Text>
               <Text fz="xs" c="dimmed">
-                2. Profilingizga kiring va <strong>«Tasdiqlash»</strong> tugmasini bosing.
+                {t("qr.step2", {
+                  defaultValue: "2. Profilingizga kiring va «Tasdiqlash» tugmasini bosing.",
+                })}
               </Text>
               <Text fz="xs" c="dimmed">
-                3. Desktop ilovaga avtomatik kiriladi va ma'lumotlar sinxronlashadi.
+                {t("qr.step3", {
+                  defaultValue:
+                    "3. Desktop ilovaga avtomatik kiriladi va ma'lumotlar sinxronlashadi.",
+                })}
               </Text>
             </Stack>
           </Paper>
@@ -356,7 +368,7 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
         <Center py={40}>
           <Stack align="center" gap="sm">
             <Text c="dimmed" fz="sm">
-              QR kod muddati tugadi
+              {t("qr.expired", { defaultValue: "QR kod muddati tugadi" })}
             </Text>
             <Button
               variant="filled"
@@ -364,7 +376,7 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
               onClick={startNewSession}
               radius="md"
             >
-              Kodni yangilash
+              {t("qr.refresh", { defaultValue: "Kodni yangilash" })}
             </Button>
           </Stack>
         </Center>

@@ -34,7 +34,8 @@ export const theme = createTheme({
   autoContrast: true,
   luminanceThreshold: 0.3,
 
-  fontFamily: '"Montserrat", sans-serif',
+  fontFamily:
+    '"Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 
   /**
    * Imtihon davomida foydalanuvchi ketma-ket 20-50 ta savol o'qiydi.
@@ -57,7 +58,8 @@ export const theme = createTheme({
   },
 
   headings: {
-    fontFamily: '"Montserrat", sans-serif',
+    fontFamily:
+      '"Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     sizes: {
       h1: { fontSize: "2.125rem", lineHeight: "1.3", fontWeight: "700" },
       h2: { fontSize: "1.625rem", lineHeight: "1.35", fontWeight: "700" },
