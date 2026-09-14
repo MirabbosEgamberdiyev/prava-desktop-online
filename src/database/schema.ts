@@ -100,6 +100,12 @@ export interface DbOutboxItem {
   updated_at: number;
 }
 
+export interface DbSyncMeta {
+  key: string;
+  value: string;
+  updated_at: number;
+}
+
 /**
  * SQLite DDL (Data Definition Language) table creation statements
  */
@@ -207,5 +213,12 @@ export const SQLITE_INIT_SCRIPTS: string[] = [
     updated_at INTEGER NOT NULL
   );`,
 
-  `CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, created_at);`
+  `CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, created_at);`,
+
+  // 9. Sync Metadata Table (Bidirectional sync cursors & versions)
+  `CREATE TABLE IF NOT EXISTS sync_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );`
 ];

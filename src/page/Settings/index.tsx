@@ -64,27 +64,58 @@ const Settings_Page = () => {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [syncState, setSyncState] = useState<SyncState>("IDLE");
   const [syncing, setSyncing] = useState<boolean>(false);
+  const [syncMetrics, setSyncMetrics] = useState<{
+    pendingCount: number;
+    localQuestionsCount: number;
+    lastSyncAt: number | null;
+  }>({
+    pendingCount: 0,
+    localQuestionsCount: 0,
+    lastSyncAt: null,
+  });
+
+  const loadSyncMetrics = async () => {
+    try {
+      const metrics = await syncEngine.getSyncMetrics();
+      setSyncMetrics({
+        pendingCount: metrics.pendingCount,
+        localQuestionsCount: metrics.localQuestionsCount,
+        lastSyncAt: metrics.lastSyncAt,
+      });
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     setSavedAccounts(AccountManager.getSavedAccounts());
     setIsOnline(networkHeartbeat.getStatus().isOnline);
     setSyncState(syncEngine.getState());
+    loadSyncMetrics();
 
     const unsubHeartbeat = networkHeartbeat.subscribe((online) => {
       setIsOnline(online);
+      loadSyncMetrics();
     });
 
     const handleSyncStatus = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.state) setSyncState(detail.state);
       if (detail?.isRunning !== undefined) setSyncing(detail.isRunning);
+      loadSyncMetrics();
+    };
+
+    const handleStorageChanged = () => {
+      loadSyncMetrics();
     };
 
     window.addEventListener("sync-status-changed", handleSyncStatus);
+    window.addEventListener("prava-storage-changed", handleStorageChanged);
 
     return () => {
       unsubHeartbeat();
       window.removeEventListener("sync-status-changed", handleSyncStatus);
+      window.removeEventListener("prava-storage-changed", handleStorageChanged);
     };
   }, []);
 
@@ -312,13 +343,68 @@ const Settings_Page = () => {
                     <Text size="sm" c="dimmed" mb="md">
                       Barcha topshirilgan imtihonlar, saqlangan savollar va natijalar kompyuteringizdagi xavfsiz SQLite/IndexedDB bazasida saqlanadi va aloqa tiklanganda server bilan avtomatik sinxronlanadi.
                     </Text>
+
+                    <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm" mb="md">
+                      <Paper p="sm" withBorder radius="sm">
+                        <Text size="xs" c="dimmed">
+                          Lokal bazadagi savollar:
+                        </Text>
+                        <Text size="sm" fw={700}>
+                          {syncMetrics.localQuestionsCount.toLocaleString()} ta savol
+                        </Text>
+                      </Paper>
+
+                      <Paper p="sm" withBorder radius="sm">
+                        <Text size="xs" c="dimmed">
+                          Kutayotgan o‘zgarishlar (Outbox):
+                        </Text>
+                        <Text
+                          size="sm"
+                          fw={700}
+                          c={syncMetrics.pendingCount > 0 ? "orange" : "green"}
+                        >
+                          {syncMetrics.pendingCount > 0
+                            ? `${syncMetrics.pendingCount} ta so‘rov navbatda`
+                            : "Barchasi sinxronlangan"}
+                        </Text>
+                      </Paper>
+
+                      <Paper p="sm" withBorder radius="sm">
+                        <Text size="xs" c="dimmed">
+                          Oxirgi sinxronizatsiya:
+                        </Text>
+                        <Text size="sm" fw={700}>
+                          {syncMetrics.lastSyncAt
+                            ? new Date(syncMetrics.lastSyncAt).toLocaleTimeString()
+                            : "Hali bajarilmagan"}
+                        </Text>
+                      </Paper>
+                    </SimpleGrid>
+
                     <Group justify="space-between">
                       <Group gap="xs">
                         <Text size="sm" fw={500}>
                           Sinxron holati:
                         </Text>
-                        <Badge variant="light" color={syncState === "SYNCING" ? "blue" : "gray"}>
-                          {syncState}
+                        <Badge
+                          variant="light"
+                          color={
+                            syncState === "SYNCING"
+                              ? "blue"
+                              : syncState === "OFFLINE"
+                              ? "orange"
+                              : syncState === "ERROR"
+                              ? "red"
+                              : "green"
+                          }
+                        >
+                          {syncState === "SYNCING"
+                            ? "Sinxronlanmoqda..."
+                            : syncState === "OFFLINE"
+                            ? "Oflayn"
+                            : syncState === "ERROR"
+                            ? "Xatolik"
+                            : "Tayyor (IDLE)"}
                         </Badge>
                       </Group>
                       <Button
@@ -326,6 +412,7 @@ const Settings_Page = () => {
                         variant="light"
                         leftSection={<IconRefresh size={14} />}
                         loading={syncing}
+                        disabled={!isOnline}
                         onClick={handleManualSync}
                       >
                         Hozir sinxronlash

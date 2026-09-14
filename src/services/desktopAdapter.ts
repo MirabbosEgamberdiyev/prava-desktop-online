@@ -14,8 +14,13 @@ import type {
 import storageService, { type StoredQuestion } from "./storageService";
 import api from "../api/api";
 import { normalizeLanguage, type AppLanguage } from "../context/LanguageContext";
-import { dbClient } from "../database";
-import { OutboxQueue } from "../sync";
+import { dbClient, type DbQuestion } from "../database";
+import { OutboxQueue, syncEngine } from "../sync";
+import {
+  SEED_QUESTIONS,
+  SEED_TICKETS,
+  SEED_TOPICS,
+} from "./offlineSeedData";
 
 export function getLang(): AppLanguage {
   const l = i18n.resolvedLanguage || i18n.language;
@@ -151,6 +156,44 @@ export function fromStoredQuestion(sq: StoredQuestion): OfflineQuestion {
   };
 }
 
+export function dbQuestionToOfflineQuestion(dbq: DbQuestion): OfflineQuestion {
+  return {
+    id: dbq.id,
+    topic_id: dbq.topic_id,
+    order_num: dbq.order_num,
+    text_uzl: dbq.text_uzl,
+    text_uzc: dbq.text_uzc,
+    text_en: null,
+    text_ru: dbq.text_ru,
+    image_path: dbq.image_url,
+    options_json: dbq.options_json,
+    correct_option: dbq.correct_option,
+    explanation_uzl: dbq.explanation_uzl,
+    explanation_uzc: dbq.explanation_uzc,
+    explanation_en: null,
+    explanation_ru: dbq.explanation_ru,
+  };
+}
+
+export function offlineQuestionToDbQuestion(q: OfflineQuestion, ticketId?: number | null): DbQuestion {
+  return {
+    id: q.id,
+    ticket_id: ticketId ?? null,
+    topic_id: q.topic_id,
+    order_num: q.order_num,
+    text_uzl: q.text_uzl,
+    text_uzc: q.text_uzc,
+    text_ru: q.text_ru,
+    explanation_uzl: q.explanation_uzl,
+    explanation_uzc: q.explanation_uzc,
+    explanation_ru: q.explanation_ru,
+    image_url: q.image_path,
+    options_json: q.options_json,
+    correct_option: q.correct_option,
+    updated_at: Date.now(),
+  };
+}
+
 // ── ACTIVE SESSION TRACKING ───────────────────────────────────────────────────
 let activeExamSessionId: number | null = null;
 let activeTicketSessionId: number | null = null;
@@ -181,79 +224,139 @@ export async function submitExamSession(
       timeSpentSeconds: a.timeSpentSeconds || 0,
     })),
   };
+
+  let isOnlineSuccess = false;
   try {
     await api.post("/api/v2/exams/submit", payload);
+    isOnlineSuccess = true;
     window.dispatchEvent(new Event("prava-storage-changed"));
-    return true;
   } catch (err) {
-    console.warn("Failed to submit exam session to backend, enqueueing to OutboxQueue:", err);
+    console.warn("Serverga imtihon natijasini yuborib bo'lmadi, OutboxQueue navbatiga joylanmoqda:", err);
     try {
       await OutboxQueue.enqueue("SUBMIT_EXAM", "/api/v2/exams/submit", "POST", payload);
     } catch (e) {
-      console.error("Outbox queue error:", e);
+      console.error("OutboxQueue xatosi:", e);
     }
-    return false;
   }
+
+  // Crash recovery va lokal saqlash
+  try {
+    dbClient.completeExamSession(String(sessionId), {
+      status: "COMPLETED",
+      completed_at: Date.now(),
+    }).catch(() => {});
+  } catch {
+    // ignore
+  }
+
+  // Agar tarmoq mavjud bo'lsa, background sync ishga tushirish
+  if (navigator.onLine) {
+    syncEngine.triggerSync().catch(() => {});
+  }
+
+  return isOnlineSuccess;
 }
 
-// ── DATA FETCHING APIS ────────────────────────────────────────────────────────
+// ── DATA FETCHING APIS (OFFLINE-FIRST) ────────────────────────────────────────
 
 export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
-  try {
-    const res = await api.post<{
-      data: { sessionId?: number; questions: any[] };
-    }>("/api/v2/exams/marathon/start-visible", {
-      questionCount: count,
-      durationMinutes: count,
-    });
-    if (res.data?.data?.sessionId) {
-      activeExamSessionId = res.data.data.sessionId;
-    }
-    if (res.data?.data?.questions && res.data.data.questions.length > 0) {
-      return res.data.data.questions.map(normalizeQuestion);
-    }
-  } catch {
-    // fallback to start-visible
+  if (navigator.onLine) {
     try {
-      const res2 = await api.post<{
+      const res = await api.post<{
         data: { sessionId?: number; questions: any[] };
-      }>("/api/v2/exams/start-visible", {
+      }>("/api/v2/exams/marathon/start-visible", {
         questionCount: count,
         durationMinutes: count,
       });
-      if (res2.data?.data?.sessionId) {
-        activeExamSessionId = res2.data.data.sessionId;
+      if (res.data?.data?.sessionId) {
+        activeExamSessionId = res.data.data.sessionId;
       }
-      if (res2.data?.data?.questions && res2.data.data.questions.length > 0) {
-        return res2.data.data.questions.map(normalizeQuestion);
+      if (res.data?.data?.questions && res.data.data.questions.length > 0) {
+        const questions = res.data.data.questions.map(normalizeQuestion);
+        dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q))).catch(() => {});
+        return questions;
       }
     } catch {
-      // ignore
+      try {
+        const res2 = await api.post<{
+          data: { sessionId?: number; questions: any[] };
+        }>("/api/v2/exams/start-visible", {
+          questionCount: count,
+          durationMinutes: count,
+        });
+        if (res2.data?.data?.sessionId) {
+          activeExamSessionId = res2.data.data.sessionId;
+        }
+        if (res2.data?.data?.questions && res2.data.data.questions.length > 0) {
+          const questions = res2.data.data.questions.map(normalizeQuestion);
+          dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q))).catch(() => {});
+          return questions;
+        }
+      } catch {
+        // Tarmoq xatosi, lokal bazaga o'tish
+      }
     }
   }
-  return [];
+
+  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH (Offline-First)
+  try {
+    const localDbQuestions = await dbClient.getRandomQuestions(count);
+    if (localDbQuestions && localDbQuestions.length > 0) {
+      activeExamSessionId = Date.now();
+      return localDbQuestions.map(dbQuestionToOfflineQuestion);
+    }
+  } catch (err) {
+    console.warn("Lokal DB dan imtihon savollarini olishda xatolik:", err);
+  }
+
+  // Fallback: Preloaded seed dataset
+  activeExamSessionId = Date.now();
+  const shuffled = [...SEED_QUESTIONS].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, count).map(dbQuestionToOfflineQuestion);
 }
 
 export async function getMarathonQuestions(topicId?: number, count = 100): Promise<OfflineQuestion[]> {
-  const actualCount = count && count > 0 ? count : 1190;
-  try {
-    const res = await api.post<{
-      data: { sessionId?: number; questions: any[] };
-    }>("/api/v2/exams/marathon/start-visible", {
-      questionCount: actualCount,
-      durationMinutes: actualCount,
-      topicId,
-    });
-    if (res.data?.data?.sessionId) {
-      activeMarathonSessionId = res.data.data.sessionId;
+  const actualCount = count && count > 0 ? count : 1200;
+  if (navigator.onLine) {
+    try {
+      const res = await api.post<{
+        data: { sessionId?: number; questions: any[] };
+      }>("/api/v2/exams/marathon/start-visible", {
+        questionCount: actualCount,
+        durationMinutes: actualCount,
+        topicId,
+      });
+      if (res.data?.data?.sessionId) {
+        activeMarathonSessionId = res.data.data.sessionId;
+      }
+      if (res.data?.data?.questions && res.data.data.questions.length > 0) {
+        const questions = res.data.data.questions.map(normalizeQuestion);
+        dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, null))).catch(() => {});
+        return questions;
+      }
+    } catch (err: any) {
+      console.warn("Marafon savollarini serverdan olishda xatolik:", err?.message || err);
     }
-    if (res.data?.data?.questions) {
-      return res.data.data.questions.map(normalizeQuestion);
-    }
-  } catch (err: any) {
-    console.warn("getMarathonQuestions error:", err?.response?.data || err?.message || err);
   }
-  return [];
+
+  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH
+  try {
+    const localDbQuestions = await dbClient.getRandomQuestions(actualCount, topicId);
+    if (localDbQuestions && localDbQuestions.length > 0) {
+      activeMarathonSessionId = Date.now();
+      return localDbQuestions.map(dbQuestionToOfflineQuestion);
+    }
+  } catch (err) {
+    console.warn("Lokal DB dan marafon savollarini olishda xatolik:", err);
+  }
+
+  // Fallback: Preloaded seed dataset
+  activeMarathonSessionId = Date.now();
+  const filtered = topicId
+    ? SEED_QUESTIONS.filter((q) => q.topic_id === topicId)
+    : SEED_QUESTIONS;
+  const questionsToUse = filtered.length > 0 ? filtered : SEED_QUESTIONS;
+  return questionsToUse.slice(0, actualCount).map(dbQuestionToOfflineQuestion);
 }
 
 // ── OFFLINE CACHE HELPERS ───────────────────────────────────────────────────
@@ -280,132 +383,178 @@ function setCachedData<T>(key: string, data: T): void {
   }
 }
 
+function generateFallbackTickets(): OfflineTicket[] {
+  return SEED_TICKETS.map((t) => ({
+    id: t.id,
+    topic_id: null,
+    ticket_number: t.ticket_number,
+    name_uzl: `${t.ticket_number}-bilet`,
+    name_uzc: `${t.ticket_number}-билет`,
+    name_en: `Ticket #${t.ticket_number}`,
+    name_ru: `Билет #${t.ticket_number}`,
+    duration_minutes: 20,
+    passing_score: 90,
+    question_count: t.question_count || 20,
+    is_blocked: false,
+  }));
+}
+
 export async function getTickets(): Promise<OfflineTicket[]> {
-  try {
-    const res = await api.get<{
-      data: { content?: any[]; tickets?: any[] };
-    }>("/api/v2/tickets?page=0&size=100&sortBy=ticketNumber&direction=ASC");
-    const list = res.data?.data?.content || res.data?.data?.tickets || [];
-    if (list.length > 0) {
-      const tickets: OfflineTicket[] = list.map((tk: any) => ({
-        id: tk.id,
-        topic_id: tk.topicId ?? null,
-        ticket_number: tk.ticketNumber ?? tk.number ?? tk.id,
-        name_uzl: typeof tk.name === "object" ? tk.name?.uzl : (tk.name || `${tk.ticketNumber}-bilet`),
-        name_uzc: typeof tk.name === "object" ? tk.name?.uzc : (tk.nameUzc || `${tk.ticketNumber}-билет`),
-        name_en: typeof tk.name === "object" ? tk.name?.en : (tk.nameEn || `Ticket #${tk.ticketNumber}`),
-        name_ru: typeof tk.name === "object" ? tk.name?.ru : (tk.nameRu || `Билет #${tk.ticketNumber}`),
-        duration_minutes: tk.durationMinutes ?? 20,
-        passing_score: tk.passingScore ?? 90,
-        question_count: tk.questionCount ?? 20,
-        is_blocked: tk.isBlocked ?? false,
-      }));
-      setCachedData(OFFLINE_CACHE_KEYS.TICKETS, tickets);
-      dbClient
-        .saveTickets(
+  if (navigator.onLine) {
+    try {
+      const res = await api.get<{
+        data: { content?: any[]; tickets?: any[] };
+      }>("/api/v2/tickets?page=0&size=100&sortBy=ticketNumber&direction=ASC");
+      const list = res.data?.data?.content || res.data?.data?.tickets || [];
+      if (list.length > 0) {
+        const tickets: OfflineTicket[] = list.map((tk: any) => ({
+          id: tk.id,
+          topic_id: tk.topicId ?? null,
+          ticket_number: tk.ticketNumber ?? tk.number ?? tk.id,
+          name_uzl: typeof tk.name === "object" ? tk.name?.uzl : (tk.name || `${tk.ticketNumber}-bilet`),
+          name_uzc: typeof tk.name === "object" ? tk.name?.uzc : (tk.nameUzc || `${tk.ticketNumber}-билет`),
+          name_en: typeof tk.name === "object" ? tk.name?.en : (tk.nameEn || `Ticket #${tk.ticketNumber}`),
+          name_ru: typeof tk.name === "object" ? tk.name?.ru : (tk.nameRu || `Билет #${tk.ticketNumber}`),
+          duration_minutes: tk.durationMinutes ?? 20,
+          passing_score: tk.passingScore ?? 90,
+          question_count: tk.questionCount ?? 20,
+          is_blocked: tk.isBlocked ?? false,
+        }));
+        setCachedData(OFFLINE_CACHE_KEYS.TICKETS, tickets);
+        dbClient.saveTickets(
           tickets.map((t) => ({
             id: t.id,
             ticket_number: t.ticket_number,
             question_count: t.question_count,
             updated_at: Date.now(),
           }))
-        )
-        .catch(() => {});
-      return tickets;
-    }
-  } catch {
-    // API failed, try offline cached tickets
-    const cached = getCachedData<OfflineTicket[]>(OFFLINE_CACHE_KEYS.TICKETS);
-    if (cached && cached.length > 0) {
-      return cached;
+        ).catch(() => {});
+        return tickets;
+      }
+    } catch {
+      // Tarmoq xatosi bo'lsa lokal DB ga o'tish
     }
   }
 
-  // Standalone fallback: 60 bilet
-  const fallbackTickets: OfflineTicket[] = [];
-  for (let i = 1; i <= 60; i++) {
-    fallbackTickets.push({
-      id: i,
-      topic_id: null,
-      ticket_number: i,
-      name_uzl: `${i}-bilet`,
-      name_uzc: `${i}-билет`,
-      name_en: `Ticket #${i}`,
-      name_ru: `Билет #${i}`,
-      duration_minutes: 20,
-      passing_score: 90,
-      question_count: 20,
-      is_blocked: false,
-    });
+  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH
+  try {
+    const dbTickets = await dbClient.getTickets();
+    if (dbTickets && dbTickets.length > 0) {
+      return dbTickets.map((t) => ({
+        id: t.id,
+        topic_id: null,
+        ticket_number: t.ticket_number,
+        name_uzl: `${t.ticket_number}-bilet`,
+        name_uzc: `${t.ticket_number}-билет`,
+        name_en: `Ticket #${t.ticket_number}`,
+        name_ru: `Билет #${t.ticket_number}`,
+        duration_minutes: 20,
+        passing_score: 90,
+        question_count: t.question_count || 20,
+        is_blocked: false,
+      }));
+    }
+  } catch {
+    // ignore
   }
-  return fallbackTickets;
+
+  const cached = getCachedData<OfflineTicket[]>(OFFLINE_CACHE_KEYS.TICKETS);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
+
+  return generateFallbackTickets();
 }
 
 export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQuestion[]> {
-  try {
-    const res = await api.post<{
-      data: { sessionId?: number; questions: any[] };
-    }>("/api/v2/tickets/start-visible", { ticketId });
-    if (res.data?.data?.sessionId) {
-      activeTicketSessionId = res.data.data.sessionId;
-    }
-    if (res.data?.data?.questions && res.data.data.questions.length > 0) {
-      return res.data.data.questions.map(normalizeQuestion);
-    }
-  } catch {
+  if (navigator.onLine) {
     try {
-      const res2 = await api.post<{
+      const res = await api.post<{
         data: { sessionId?: number; questions: any[] };
-      }>("/api/v2/tickets/start-secure", { ticketId });
-      if (res2.data?.data?.sessionId) {
-        activeTicketSessionId = res2.data.data.sessionId;
+      }>("/api/v2/tickets/start-visible", { ticketId });
+      if (res.data?.data?.sessionId) {
+        activeTicketSessionId = res.data.data.sessionId;
       }
-      if (res2.data?.data?.questions && res2.data.data.questions.length > 0) {
-        return res2.data.data.questions.map(normalizeQuestion);
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return [];
-}
-
-export async function getTopics(): Promise<OfflineTopic[]> {
-  try {
-    let list: any[] = [];
-    try {
-      const res = await api.get<{ data: any[] }>("/api/v1/admin/topics/active");
-      if (Array.isArray(res.data?.data)) {
-        list = res.data.data;
+      if (res.data?.data?.questions && res.data.data.questions.length > 0) {
+        const questions = res.data.data.questions.map(normalizeQuestion);
+        dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, ticketId))).catch(() => {});
+        return questions;
       }
     } catch {
       try {
-        const res2 = await api.get<{ data: any[] }>("/api/v1/admin/topics/with-questions");
-        if (Array.isArray(res2.data?.data)) {
-          list = res2.data.data;
+        const res2 = await api.post<{
+          data: { sessionId?: number; questions: any[] };
+        }>("/api/v2/tickets/start-secure", { ticketId });
+        if (res2.data?.data?.sessionId) {
+          activeTicketSessionId = res2.data.data.sessionId;
+        }
+        if (res2.data?.data?.questions && res2.data.data.questions.length > 0) {
+          const questions = res2.data.data.questions.map(normalizeQuestion);
+          dbClient.saveQuestions(questions.map((q) => offlineQuestionToDbQuestion(q, ticketId))).catch(() => {});
+          return questions;
         }
       } catch {
-        // try simple
-        const res3 = await api.get<{ data: any[] }>("/api/v1/admin/topics/simple");
-        if (Array.isArray(res3.data?.data)) {
-          list = res3.data.data;
-        }
+        // Tarmoq xatosi bo'lsa lokal DB ga o'tish
       }
     }
+  }
 
-    if (list.length > 0) {
-      const topics: OfflineTopic[] = list.map((tp: any) => ({
-        id: tp.id,
-        code: tp.code || null,
-        name_uzl: typeof tp.name === "object" ? tp.name?.uzl : (tp.name || tp.nameUzl || ""),
-        name_uzc: typeof tp.name === "object" ? tp.name?.uzc : (tp.nameUzc || ""),
-        name_en: typeof tp.name === "object" ? tp.name?.en : (tp.nameEn || ""),
-        name_ru: typeof tp.name === "object" ? tp.name?.ru : (tp.nameRu || ""),
-        question_count: tp.questionCount ?? tp.questionsCount ?? 20,
-      }));
-      setCachedData(OFFLINE_CACHE_KEYS.TOPICS, topics);
-      dbClient
-        .saveTopics(
+  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH
+  try {
+    const localDbQuestions = await dbClient.getQuestionsByTicket(ticketId);
+    if (localDbQuestions && localDbQuestions.length > 0) {
+      activeTicketSessionId = Date.now();
+      return localDbQuestions.map(dbQuestionToOfflineQuestion);
+    }
+  } catch (err) {
+    console.warn(`Lokal DB dan ${ticketId}-bilet savollarini olishda xatolik:`, err);
+  }
+
+  // Fallback: Preloaded seed questions for this ticket
+  activeTicketSessionId = Date.now();
+  const seedTicketQuestions = SEED_QUESTIONS.filter((q) => q.ticket_id === ticketId);
+  if (seedTicketQuestions.length > 0) {
+    return seedTicketQuestions.map(dbQuestionToOfflineQuestion);
+  }
+
+  return SEED_QUESTIONS.slice(0, 20).map(dbQuestionToOfflineQuestion);
+}
+
+export async function getTopics(): Promise<OfflineTopic[]> {
+  if (navigator.onLine) {
+    try {
+      let list: any[] = [];
+      try {
+        const res = await api.get<{ data: any[] }>("/api/v1/admin/topics/active");
+        if (Array.isArray(res.data?.data)) {
+          list = res.data.data;
+        }
+      } catch {
+        try {
+          const res2 = await api.get<{ data: any[] }>("/api/v1/admin/topics/with-questions");
+          if (Array.isArray(res2.data?.data)) {
+            list = res2.data.data;
+          }
+        } catch {
+          const res3 = await api.get<{ data: any[] }>("/api/v1/admin/topics/simple");
+          if (Array.isArray(res3.data?.data)) {
+            list = res3.data.data;
+          }
+        }
+      }
+
+      if (list.length > 0) {
+        const topics: OfflineTopic[] = list.map((tp: any) => ({
+          id: tp.id,
+          code: tp.code || null,
+          name_uzl: typeof tp.name === "object" ? tp.name?.uzl : (tp.name || tp.nameUzl || ""),
+          name_uzc: typeof tp.name === "object" ? tp.name?.uzc : (tp.nameUzc || ""),
+          name_en: typeof tp.name === "object" ? tp.name?.en : (tp.nameEn || ""),
+          name_ru: typeof tp.name === "object" ? tp.name?.ru : (tp.nameRu || ""),
+          question_count: tp.questionCount ?? tp.questionsCount ?? 20,
+        }));
+        setCachedData(OFFLINE_CACHE_KEYS.TOPICS, topics);
+        dbClient.saveTopics(
           topics.map((tp) => ({
             id: tp.id,
             code: tp.code || `topic_${tp.id}`,
@@ -416,18 +565,46 @@ export async function getTopics(): Promise<OfflineTopic[]> {
             question_count: tp.question_count,
             updated_at: Date.now(),
           }))
-        )
-        .catch(() => {});
-      return topics;
-    }
-  } catch {
-    // API failed, try offline cached topics
-    const cached = getCachedData<OfflineTopic[]>(OFFLINE_CACHE_KEYS.TOPICS);
-    if (cached && cached.length > 0) {
-      return cached;
+        ).catch(() => {});
+        return topics;
+      }
+    } catch {
+      // Tarmoq xatosi bo'lsa lokal DB ga o'tish
     }
   }
-  return [];
+
+  // LOCAL DATABASE IS PRIMARY SOURCE OF TRUTH
+  try {
+    const dbTopics = await dbClient.getTopics();
+    if (dbTopics && dbTopics.length > 0) {
+      return dbTopics.map((tp) => ({
+        id: tp.id,
+        code: tp.code,
+        name_uzl: tp.name_uzl,
+        name_uzc: tp.name_uzc,
+        name_en: tp.name_uzl,
+        name_ru: tp.name_ru,
+        question_count: tp.question_count,
+      }));
+    }
+  } catch {
+    // ignore
+  }
+
+  const cached = getCachedData<OfflineTopic[]>(OFFLINE_CACHE_KEYS.TOPICS);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
+
+  return SEED_TOPICS.map((tp) => ({
+    id: tp.id,
+    code: tp.code,
+    name_uzl: tp.name_uzl,
+    name_uzc: tp.name_uzc,
+    name_en: tp.name_uzl,
+    name_ru: tp.name_ru,
+    question_count: tp.question_count,
+  }));
 }
 
 // ── STATS & STORAGE WRAPPERS ──────────────────────────────────────────────────
@@ -652,6 +829,26 @@ export async function saveExamResult(params: {
     durationSeconds: params.durationSeconds,
     examType: params.examType,
   });
+
+  // Local SQLite / IndexedDB session persistance
+  dbClient
+    .saveExamSession({
+      local_id: String(res.id),
+      server_id: null,
+      exam_type: (params.examType as any) || "EXAM",
+      status: "COMPLETED",
+      total_questions: params.totalQuestions,
+      correct_answers: params.correctAnswers,
+      score: params.score,
+      duration_seconds: params.durationSeconds,
+      time_remaining_seconds: 0,
+      started_at: Date.now() - params.durationSeconds * 1000,
+      completed_at: Date.now(),
+      answers_json: "{}",
+      synced: 0,
+    })
+    .catch(() => {});
+
   return {
     id: res.id,
     user_id: params.userId,
@@ -673,7 +870,8 @@ export async function addWrongAnswer(_userId: number, question: OfflineQuestion 
   try {
     await api.post(`/api/v1/app/wrong-answers/${qId}`);
   } catch {
-    // offline
+    // Offline: enqueue into OutboxQueue for server sync
+    OutboxQueue.enqueue("UPDATE_PROGRESS", `/api/v1/app/wrong-answers/${qId}`, "POST", { questionId: qId }).catch(() => {});
   }
   return true;
 }
@@ -713,7 +911,8 @@ export async function removeWrongAnswer(_userId: number, questionId: number): Pr
   try {
     await api.delete(`/api/v1/app/wrong-answers/${questionId}`);
   } catch {
-    // offline
+    // Offline: enqueue into OutboxQueue for server sync
+    OutboxQueue.enqueue("UPDATE_PROGRESS", `/api/v1/app/wrong-answers/${questionId}`, "DELETE", { questionId }).catch(() => {});
   }
   return true;
 }
@@ -767,10 +966,36 @@ export async function getSavedQuestions(_userId?: number): Promise<SavedQuestion
     // fallback
   }
 
-  return localList.map((s) => ({
-    saved_at: s.date,
-    question: fromStoredQuestion(s.question),
-  }));
+  if (localList.length > 0) {
+    return localList.map((s) => ({
+      saved_at: s.date,
+      question: fromStoredQuestion(s.question),
+    }));
+  }
+
+  // Check dbClient active saved questions
+  try {
+    const savedIds = await dbClient.getActiveSavedQuestions();
+    if (savedIds.length > 0) {
+      const allQ = await dbClient.getAllQuestions();
+      const qMap = new Map(allQ.map((q) => [q.id, q]));
+      const entries: SavedQuestionEntry[] = [];
+      for (const id of savedIds) {
+        const q = qMap.get(id);
+        if (q) {
+          entries.push({
+            saved_at: new Date().toISOString(),
+            question: dbQuestionToOfflineQuestion(q),
+          });
+        }
+      }
+      return entries;
+    }
+  } catch {
+    // ignore
+  }
+
+  return [];
 }
 
 export async function saveTicketStat(
@@ -782,6 +1007,21 @@ export async function saveTicketStat(
   passed: boolean
 ): Promise<boolean> {
   storageService.saveTicketStat(ticketId, durationSeconds, correctCount, score, passed);
+
+  // Local SQLite / IndexedDB user progress persistence
+  dbClient
+    .saveUserProgress({
+      progress_key: `ticket_${ticketId}`,
+      progress_type: "TICKET",
+      total_items: 20,
+      completed_items: 20,
+      correct_count: correctCount,
+      best_score: score,
+      passed: passed ? 1 : 0,
+      updated_at: Date.now(),
+    })
+    .catch(() => {});
+
   return true;
 }
 

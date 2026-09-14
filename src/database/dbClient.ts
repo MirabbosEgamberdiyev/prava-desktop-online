@@ -12,13 +12,14 @@ import {
   type DbSavedQuestion,
   type DbWrongAnswer,
   type DbOutboxItem,
+  type DbSyncMeta,
   SQLITE_INIT_SCRIPTS,
 } from "./schema";
 
 export { SQLITE_INIT_SCRIPTS };
 
 const DB_NAME = "prava_desktop_db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let isInitialized = false;
 
@@ -55,6 +56,9 @@ function openIndexedDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("sync_queue")) {
         const sStore = db.createObjectStore("sync_queue", { keyPath: "id" });
         sStore.createIndex("status", "status", { unique: false });
+      }
+      if (!db.objectStoreNames.contains("sync_meta")) {
+        db.createObjectStore("sync_meta", { keyPath: "key" });
       }
     };
 
@@ -133,6 +137,39 @@ export const dbClient = {
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);
     });
+  },
+
+  async getQuestionCount(): Promise<number> {
+    const db = await openIndexedDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("questions", "readonly");
+      const store = tx.objectStore("questions");
+      const countReq = store.count();
+      countReq.onsuccess = () => resolve(countReq.result);
+      countReq.onerror = () => reject(countReq.error);
+    });
+  },
+
+  async getAllQuestions(): Promise<DbQuestion[]> {
+    const db = await openIndexedDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("questions", "readonly");
+      const store = tx.objectStore("questions");
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  async getRandomQuestions(count: number, topicId?: number): Promise<DbQuestion[]> {
+    const all = topicId ? await this.getQuestionsByTopic(topicId) : await this.getAllQuestions();
+    if (all.length === 0) return [];
+    const shuffled = [...all];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, Math.min(count, shuffled.length));
   },
 
   // ── TOPICS & TICKETS ──
@@ -356,5 +393,48 @@ export const dbClient = {
       };
       request.onerror = () => reject(request.error);
     });
+  },
+
+  // ── SYNC METADATA ──
+  async getSyncMeta(key: string): Promise<string | null> {
+    const db = await openIndexedDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("sync_meta", "readonly");
+      const store = tx.objectStore("sync_meta");
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result?.value ?? null);
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  async setSyncMeta(key: string, value: string): Promise<void> {
+    const item: DbSyncMeta = {
+      key,
+      value,
+      updated_at: Date.now(),
+    };
+    await idbTx("sync_meta", "readwrite", (store) => store.put(item));
+  },
+
+  // ── SEEDING & PRELOADING HELPER ──
+  async seedInitialDataIfEmpty(
+    questions: DbQuestion[],
+    tickets: DbTicket[],
+    topics: DbTopic[]
+  ): Promise<{ seeded: boolean; questionCount: number }> {
+    const existingCount = await this.getQuestionCount();
+    if (existingCount > 0) {
+      return { seeded: false, questionCount: existingCount };
+    }
+
+    console.info(`[dbClient] Seeding local database with ${questions.length} questions, ${tickets.length} tickets, ${topics.length} topics...`);
+    if (topics.length > 0) await this.saveTopics(topics);
+    if (tickets.length > 0) await this.saveTickets(tickets);
+    if (questions.length > 0) await this.saveQuestions(questions);
+
+    await this.setSyncMeta("initial_seed_applied", "true");
+    await this.setSyncMeta("last_sync_at", Date.now().toString());
+
+    return { seeded: true, questionCount: questions.length };
   },
 };

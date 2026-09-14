@@ -1,21 +1,42 @@
+import { useState, useEffect } from "react";
 import { IconWifiOff, IconWifi } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useConnectionMonitor } from "../../hooks/useConnectionMonitor";
+import { OutboxQueue } from "../../sync/outboxQueue";
 
 /**
  * Imtihon davomida internet holatini ko'rsatadi.
  *
- * `useConnectionMonitor` hooki mavjud edi, lekin hech qayerda ISHLATILMAGAN edi
- * (o'lik kod). Natijada internet uzilganda foydalanuvchi buni bilmasdan
- * javob berishda davom etardi va faqat "Yakunlash" bosganda xato ko'rardi.
- *
- * Endi: offline bo'lganda doimiy ogohlantirish + javoblar qurilmada
- * saqlanayotgani haqida tinchlantiruvchi xabar; internet qaytganda esa
- * qisqa muddatli tasdiq.
+ * Offline bo'lganda doimiy ogohlantirish + javoblar qurilmada
+ * saqlanayotgani va kutayotgan navbat soni haqida tinchlantiruvchi xabar;
+ * internet qaytganda esa avtomatik sinxronlash tasdig'i.
  */
 export function OfflineBanner() {
   const { t } = useTranslation();
   const { isOnline, wasOffline } = useConnectionMonitor();
+  const [pendingCount, setPendingCount] = useState<number>(0);
+
+  useEffect(() => {
+    let mounted = true;
+    const updateCount = async () => {
+      try {
+        const pending = await OutboxQueue.getPending();
+        if (mounted) setPendingCount(pending.length);
+      } catch {
+        // ignore
+      }
+    };
+
+    updateCount();
+    window.addEventListener("prava-storage-changed", updateCount);
+    window.addEventListener("sync-status-changed", updateCount);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("prava-storage-changed", updateCount);
+      window.removeEventListener("sync-status-changed", updateCount);
+    };
+  }, [isOnline]);
 
   if (!isOnline) {
     return (
@@ -44,13 +65,18 @@ export function OfflineBanner() {
         <IconWifiOff size={18} stroke={2.2} style={{ flexShrink: 0 }} />
         <span>
           <strong style={{ fontWeight: 800 }}>
-            {t("errors.noInternetTitle", { defaultValue: "Internet aloqasi yo'q" })}
+            {t("errors.noInternetTitle", { defaultValue: "Internet aloqasi yo'q (Oflayn rejim)" })}
           </strong>
           {" — "}
-          {t("exam.offlineAnswersSafe", {
-            defaultValue:
-              "Javoblaringiz qurilmangizda saqlanmoqda. Aloqa tiklangach avtomatik yuboriladi.",
-          })}
+          {pendingCount > 0
+            ? t("exam.offlineAnswersCount", {
+                defaultValue: `Javoblaringiz (${pendingCount} ta o'zgarish) qurilmada xavfsiz saqlanmoqda. Aloqa tiklangach avtomatik sinxronlanadi.`,
+                count: pendingCount,
+              })
+            : t("exam.offlineAnswersSafe", {
+                defaultValue:
+                  "Ilova 100% oflayn rejimda ishlamoqda. Javoblaringiz qurilmangizda xavfsiz saqlanadi.",
+              })}
         </span>
       </div>
     );
