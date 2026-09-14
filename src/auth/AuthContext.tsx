@@ -10,6 +10,8 @@ import React, {
 } from "react";
 import Cookies from "js-cookie";
 import { useNavigate } from "react-router-dom";
+import { notifications } from "@mantine/notifications";
+import { useTranslation } from "react-i18next";
 import type { User, AuthData } from "../types";
 import api from "../api/api";
 
@@ -85,6 +87,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     useState<boolean>(checkAuthStatus());
   const [user, setUser] = useState<User | null>(getInitialUser());
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
 
   // Keep a ref in sync so syncAuthState never closes over stale state
   const isAuthenticatedRef = useRef(isAuthenticated);
@@ -179,6 +182,74 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     setIsAuthenticated(true);
     setUser(userData);
   };
+
+  useEffect(() => {
+    let unlistenAuth: (() => void) | undefined;
+    const isTauri =
+      typeof window !== "undefined" &&
+      Boolean(
+        (window as unknown as { __TAURI_INTERNALS__?: unknown })
+          .__TAURI_INTERNALS__
+      );
+
+    if (isTauri) {
+      import("@tauri-apps/api/event")
+        .then(({ listen }) => {
+          return listen<{
+            accessToken: string;
+            refreshToken?: string;
+            user?: User;
+          }>("desktop-auth-success", async (event) => {
+            const { accessToken, refreshToken, user: userData } = event.payload;
+            if (accessToken) {
+              let finalUser = userData;
+              if (!finalUser || !finalUser.id) {
+                try {
+                  const res = await api.get("/api/v1/auth/me", {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                  });
+                  if (res.data?.success && res.data?.data) {
+                    finalUser = res.data.data;
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+
+              const userLang = finalUser?.preferredLanguage;
+              if (userLang) {
+                i18n.changeLanguage(userLang);
+              }
+
+              saveAuthData({
+                accessToken,
+                refreshToken: refreshToken || "",
+                user: finalUser || ({} as User),
+              });
+
+              notifications.show({
+                title: t("auth.loginSuccess", { defaultValue: "Xush kelibsiz!" }),
+                message: t("auth.loginSuccessDesc", {
+                  defaultValue: "Prava Online tizimiga muvaffaqiyatli kirdingiz",
+                }),
+                color: "green",
+                withBorder: true,
+              });
+
+              navigate("/me", { replace: true });
+            }
+          });
+        })
+        .then((unsub) => {
+          unlistenAuth = unsub;
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      if (unlistenAuth) unlistenAuth();
+    };
+  }, [navigate, t, i18n]);
 
   const login = (authData: AuthData) => {
     saveAuthData(authData);

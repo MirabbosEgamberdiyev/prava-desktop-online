@@ -73,6 +73,28 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
     },
   });
 
+  const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+
+  const handleClick = async () => {
+    if (isTauri) {
+      setLoading(true);
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("open_oauth_window", { provider: "google" });
+      } catch (err: unknown) {
+        notifications.show({
+          color: "red",
+          title: t("common.error"),
+          message: getErrorMessage(err, t("auth.google.errorMessage")),
+        });
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      googleLogin();
+    }
+  };
+
   return (
     <Button
       leftSection={<GoogleIcon />}
@@ -82,7 +104,7 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
       fullWidth
       radius="md"
       loading={loading}
-      onClick={() => googleLogin()}
+      onClick={handleClick}
       styles={{
         root: { fontWeight: 600, fontSize: compact ? 13 : undefined },
       }}

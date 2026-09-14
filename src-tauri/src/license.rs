@@ -139,6 +139,7 @@ pub fn load_license_file(app_data_dir: &std::path::Path) -> Result<String> {
 }
 
 /// License bor yoki yo'qligini tekshirish
+#[allow(dead_code)]
 pub fn check_license_exists(app_data_dir: &std::path::Path) -> bool {
     app_data_dir.join("license.key").exists()
 }

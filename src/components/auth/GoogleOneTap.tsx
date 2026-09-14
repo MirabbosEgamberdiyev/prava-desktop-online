@@ -80,7 +80,8 @@ export function GoogleOneTap() {
   const handleCredentialRef = useRef<((r: CredentialResponse) => Promise<void>) | null>(null);
 
   const isExcluded = EXCLUDED_PATHS.some((p) => location.pathname.startsWith(p));
-  const shouldShow = !isAuthenticated && !!ENV.GOOGLE_CLIENT_ID && !isExcluded;
+  const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+  const shouldShow = !isAuthenticated && !isTauri && !!ENV.GOOGLE_CLIENT_ID && !isExcluded;
 
   // handleCredential ni doim yangilab turish (i18n, navigate, t o'zgarganda ham)
   useEffect(() => {

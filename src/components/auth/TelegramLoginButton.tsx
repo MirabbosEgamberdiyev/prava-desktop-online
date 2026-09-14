@@ -138,7 +138,26 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
     }
   };
 
-  const handleTelegramLogin = useCallback(() => {
+  const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+
+  const handleTelegramLogin = useCallback(async () => {
+    if (isTauri) {
+      setLoading(true);
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("open_oauth_window", { provider: "telegram" });
+      } catch (err: unknown) {
+        notifications.show({
+          color: "red",
+          title: t("common.error"),
+          message: getErrorMessage(err, t("auth.telegram.errorMessage")),
+        });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (window.Telegram?.Login?.auth) {
       setLoading(true);
       startSafetyTimeout();
@@ -247,6 +266,19 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
           ? t("auth.telegram.loginButton", { defaultValue: "Telegram bilan kirish" })
           : t("auth.telegram.registerButton", { defaultValue: "Telegram orqali ro'yxatdan o'tish" })}
       </Button>
+
+      {isTauri && !compact && (
+        <Text
+          size="xs"
+          c="dimmed"
+          ta="center"
+          mt={4}
+          style={{ cursor: "pointer", textDecoration: "underline" }}
+          onClick={() => setModalOpened(true)}
+        >
+          {t("auth.telegram.botOption", { defaultValue: "Yoki @pravaonlineuzbot orqali kirish" })}
+        </Text>
+      )}
 
       {/* Modal: Telegram Bot orqali tezkor kirish (Desktop uchun 100% ishonchli usul) */}
       <Modal
