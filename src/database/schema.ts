@@ -10,12 +10,14 @@ export interface DbQuestion {
   order_num: number;
   text_uzl: string;
   text_uzc: string | null;
+  text_en?: string | null;
   text_ru: string | null;
   explanation_uzl: string | null;
   explanation_uzc: string | null;
+  explanation_en?: string | null;
   explanation_ru: string | null;
   image_url: string | null;
-  options_json: string; // JSON: Array<{ uzl: string; uzc?: string; ru?: string; is_correct?: boolean }>
+  options_json: string; // JSON: Array<{ uzl: string; uzc?: string; en?: string; ru?: string; is_correct?: boolean }>
   correct_option: number;
   updated_at: number;
   version?: number;
@@ -27,6 +29,7 @@ export interface DbTopic {
   code: string;
   name_uzl: string;
   name_uzc: string | null;
+  name_en?: string | null;
   name_ru: string | null;
   order_num: number;
   question_count: number;
@@ -36,9 +39,24 @@ export interface DbTopic {
 export interface DbTicket {
   id: number;
   ticket_number: number;
+  name_uzl?: string | null;
+  name_uzc?: string | null;
+  name_en?: string | null;
+  name_ru?: string | null;
+  duration_minutes?: number;
+  passing_score?: number;
   question_count: number;
   updated_at: number;
 }
+
+export type OfflineDatasetStatus =
+  | "IDLE"
+  | "CHECKING"
+  | "DOWNLOADING"
+  | "VALIDATING"
+  | "READY"
+  | "FAILED"
+  | "OUTDATED";
 
 export interface DbExamSession {
   local_id: string; // UUID v4
@@ -57,6 +75,7 @@ export interface DbExamSession {
   questions_json?: string; // JSON: Array<OfflineQuestion>
   current_index?: number;
   synced: number; // 0 = not synced, 1 = synced
+  dataset_version?: string;
 }
 
 export interface DbUserProgress {

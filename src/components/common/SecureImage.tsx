@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { getImageUrl } from "../../utils/imageUtils";
+import { offlineMediaManager } from "../../services/offlineMediaManager";
+import { networkModeManager } from "../../sync/networkModeManager";
 import SteeringWheelPlaceholder from "./SteeringWheelPlaceholder";
 
 interface Props {
@@ -12,16 +14,45 @@ interface Props {
 
 export default function SecureImage({ path, alt = "", className, style, onOpen }: Props) {
   const [hasError, setHasError] = useState(false);
+  const [localSrc, setLocalSrc] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     setHasError(false);
+
+    if (!path) {
+      setLocalSrc(null);
+      return;
+    }
+
+    offlineMediaManager.getLocalImageUrl(path).then((cached) => {
+      if (!active) return;
+      if (cached) {
+        setLocalSrc(cached);
+      } else {
+        setLocalSrc(null);
+        // If online, background-cache it for future offline sessions
+        if (networkModeManager.isOnlineAllowed()) {
+          offlineMediaManager.cacheImage(path).catch(() => {});
+        }
+      }
+    });
+
+    return () => {
+      active = false;
+    };
   }, [path]);
 
   if (!path || hasError) {
     return <SteeringWheelPlaceholder />;
   }
 
-  const src = getImageUrl(path) || path;
+  // In OFFLINE mode: if no local cached image exists, render placeholder immediately with 0 network calls!
+  if (networkModeManager.isOfflineOnly() && !localSrc) {
+    return <SteeringWheelPlaceholder />;
+  }
+
+  const src = localSrc || getImageUrl(path) || path;
 
   return (
     <img

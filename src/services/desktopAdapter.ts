@@ -22,6 +22,7 @@ import {
   topicRepository,
 } from "../database";
 import { OutboxQueue, syncEngine, networkModeManager } from "../sync";
+import { offlineDatasetManager } from "./offlineDatasetManager";
 
 export function getLang(): AppLanguage {
   const l = i18n.resolvedLanguage || i18n.language;
@@ -226,11 +227,34 @@ export async function submitExamSession(
     })),
   };
 
+  // STRICT OFFLINE MODE: ZERO remote network calls!
+  if (networkModeManager.isOfflineOnly()) {
+    try {
+      await OutboxQueue.enqueue("SUBMIT_EXAM", "/api/v2/exams/submit", "POST", payload);
+    } catch (e) {
+      console.error("OutboxQueue xatosi:", e);
+    }
+    try {
+      await dbClient.completeExamSession(String(sessionId), {
+        status: "COMPLETED",
+        completed_at: Date.now(),
+      });
+    } catch {
+      // ignore
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("prava-storage-changed"));
+    }
+    return true;
+  }
+
   let isOnlineSuccess = false;
   try {
     await api.post("/api/v2/exams/submit", payload);
     isOnlineSuccess = true;
-    window.dispatchEvent(new Event("prava-storage-changed"));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("prava-storage-changed"));
+    }
   } catch (err) {
     console.warn("Serverga imtihon natijasini yuborib bo'lmadi, OutboxQueue navbatiga joylanmoqda:", err);
     try {
@@ -263,7 +287,12 @@ export async function submitExamSession(
 export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
   // 1. LOCAL DATABASE FIRST (Primary Runtime Source of Truth)
   try {
-    const localDbQuestions = await questionRepository.getRandomQuestions(count);
+    let localDbQuestions = await questionRepository.getRandomQuestions(count);
+    if (!localDbQuestions || localDbQuestions.length === 0) {
+      // Auto-seed if local database is empty
+      await offlineDatasetManager.autoSeedIfEmpty();
+      localDbQuestions = await questionRepository.getRandomQuestions(count);
+    }
     if (localDbQuestions && localDbQuestions.length > 0) {
       activeExamSessionId = Date.now();
       return localDbQuestions.map(dbQuestionToOfflineQuestion);
@@ -272,8 +301,13 @@ export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
     console.warn("Lokal DB dan imtihon savollarini olishda xatolik:", err);
   }
 
-  // 2. If Local DB is empty, attempt on-demand fetch from backend
-  if (navigator.onLine) {
+  // If in OFFLINE mode, DO NOT attempt network fetch! Zero network requests rule.
+  if (networkModeManager.isOfflineOnly()) {
+    return [];
+  }
+
+  // 2. If Local DB is empty and online allowed, attempt on-demand fetch from backend
+  if (navigator.onLine && networkModeManager.isOnlineAllowed()) {
     try {
       const res = await api.post<{
         data: { sessionId?: number; questions: any[] };
@@ -319,7 +353,11 @@ export async function getMarathonQuestions(topicId?: number, count = 100): Promi
 
   // 1. LOCAL DATABASE FIRST (Primary Runtime Source of Truth)
   try {
-    const localDbQuestions = await questionRepository.getRandomQuestions(actualCount, topicId);
+    let localDbQuestions = await questionRepository.getRandomQuestions(actualCount, topicId);
+    if (!localDbQuestions || localDbQuestions.length === 0) {
+      await offlineDatasetManager.autoSeedIfEmpty();
+      localDbQuestions = await questionRepository.getRandomQuestions(actualCount, topicId);
+    }
     if (localDbQuestions && localDbQuestions.length > 0) {
       activeMarathonSessionId = Date.now();
       return localDbQuestions.map(dbQuestionToOfflineQuestion);
@@ -328,8 +366,13 @@ export async function getMarathonQuestions(topicId?: number, count = 100): Promi
     console.warn("Lokal DB dan marafon savollarini olishda xatolik:", err);
   }
 
-  // 2. If Local DB is empty, attempt on-demand fetch from backend
-  if (navigator.onLine) {
+  // If in OFFLINE mode, DO NOT attempt network fetch! Zero network requests rule.
+  if (networkModeManager.isOfflineOnly()) {
+    return [];
+  }
+
+  // 2. If Local DB is empty and online allowed, attempt on-demand fetch from backend
+  if (navigator.onLine && networkModeManager.isOnlineAllowed()) {
     try {
       const res = await api.post<{
         data: { sessionId?: number; questions: any[] };
@@ -401,18 +444,22 @@ function generateDefaultTickets(): OfflineTicket[] {
 export async function getTickets(): Promise<OfflineTicket[]> {
   // 1. LOCAL DATABASE FIRST
   try {
-    const dbTickets = await ticketRepository.getAllTickets();
+    let dbTickets = await ticketRepository.getAllTickets();
+    if (!dbTickets || dbTickets.length === 0) {
+      await offlineDatasetManager.autoSeedIfEmpty();
+      dbTickets = await ticketRepository.getAllTickets();
+    }
     if (dbTickets && dbTickets.length > 0) {
       return dbTickets.map((t) => ({
         id: t.id,
         topic_id: null,
         ticket_number: t.ticket_number,
-        name_uzl: `${t.ticket_number}-bilet`,
-        name_uzc: `${t.ticket_number}-билет`,
-        name_en: `Ticket #${t.ticket_number}`,
-        name_ru: `Билет #${t.ticket_number}`,
-        duration_minutes: 20,
-        passing_score: 90,
+        name_uzl: t.name_uzl || `${t.ticket_number}-bilet`,
+        name_uzc: t.name_uzc || `${t.ticket_number}-билет`,
+        name_en: t.name_en || `Ticket #${t.ticket_number}`,
+        name_ru: t.name_ru || `Билет #${t.ticket_number}`,
+        duration_minutes: t.duration_minutes || 20,
+        passing_score: t.passing_score || 90,
         question_count: t.question_count || 20,
         is_blocked: false,
       }));
@@ -469,7 +516,11 @@ export async function getTickets(): Promise<OfflineTicket[]> {
 export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQuestion[]> {
   // 1. LOCAL DATABASE FIRST (Primary Runtime Source of Truth)
   try {
-    const localDbQuestions = await questionRepository.getQuestionsByTicket(ticketId);
+    let localDbQuestions = await questionRepository.getQuestionsByTicket(ticketId);
+    if (!localDbQuestions || localDbQuestions.length === 0) {
+      await offlineDatasetManager.autoSeedIfEmpty();
+      localDbQuestions = await questionRepository.getQuestionsByTicket(ticketId);
+    }
     if (localDbQuestions && localDbQuestions.length > 0) {
       activeTicketSessionId = Date.now();
       return localDbQuestions.map(dbQuestionToOfflineQuestion);
@@ -478,8 +529,13 @@ export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQue
     console.warn(`Lokal DB dan ${ticketId}-bilet savollarini olishda xatolik:`, err);
   }
 
-  // 2. If Local DB is empty, attempt on-demand fetch from backend
-  if (navigator.onLine) {
+  // If in OFFLINE mode, DO NOT attempt network fetch! Zero network requests rule.
+  if (networkModeManager.isOfflineOnly()) {
+    return [];
+  }
+
+  // 2. If Local DB is empty and online allowed, attempt on-demand fetch from backend
+  if (navigator.onLine && networkModeManager.isOnlineAllowed()) {
     try {
       const res = await api.post<{
         data: { sessionId?: number; questions: any[] };
@@ -517,14 +573,18 @@ export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQue
 export async function getTopics(): Promise<OfflineTopic[]> {
   // 1. LOCAL DATABASE FIRST
   try {
-    const dbTopics = await topicRepository.getAllTopics();
+    let dbTopics = await topicRepository.getAllTopics();
+    if (!dbTopics || dbTopics.length === 0) {
+      await offlineDatasetManager.autoSeedIfEmpty();
+      dbTopics = await topicRepository.getAllTopics();
+    }
     if (dbTopics && dbTopics.length > 0) {
       return dbTopics.map((tp) => ({
         id: tp.id,
         code: tp.code,
         name_uzl: tp.name_uzl,
         name_uzc: tp.name_uzc,
-        name_en: tp.name_uzl,
+        name_en: tp.name_en || tp.name_uzl,
         name_ru: tp.name_ru,
         question_count: tp.question_count,
       }));

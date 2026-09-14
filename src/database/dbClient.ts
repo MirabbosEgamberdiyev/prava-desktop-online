@@ -96,6 +96,10 @@ export const dbClient = {
     try {
       await openIndexedDb();
       isInitialized = true;
+      // Background auto-seed if question database is empty
+      import("../services/offlineDatasetManager")
+        .then((m) => m.offlineDatasetManager.autoSeedIfEmpty())
+        .catch(() => {});
     } catch (err) {
       console.warn("Lokal DB initializatsiya xatosi:", err);
     }
@@ -221,12 +225,12 @@ export const dbClient = {
     });
   },
 
-  // ── EXAM SESSIONS (CRASH RESISTANT) ──
+  // ── EXAM SESSIONS (CRASH RESISTANT & USER SCOPED) ──
   async saveExamSession(session: DbExamSession): Promise<void> {
     await idbTx("exam_sessions", "readwrite", (store) => store.put(session));
   },
 
-  async getActiveExamSession(examType?: string): Promise<DbExamSession | null> {
+  async getActiveExamSession(examType?: string, userId?: string | number | null): Promise<DbExamSession | null> {
     const db = await openIndexedDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction("exam_sessions", "readonly");
@@ -237,7 +241,8 @@ export const dbClient = {
         const active = list.find(
           (s) =>
             s.status === "IN_PROGRESS" &&
-            (!examType || s.exam_type === examType)
+            (!examType || s.exam_type === examType) &&
+            (userId === undefined || userId === null || String(s.user_id) === String(userId))
         );
         resolve(active || null);
       };
@@ -281,24 +286,31 @@ export const dbClient = {
     });
   },
 
-  // ── USER PROGRESS ──
+  // ── USER PROGRESS (USER SCOPED) ──
   async saveUserProgress(progress: DbUserProgress): Promise<void> {
     await idbTx("user_progress", "readwrite", (store) => store.put(progress));
   },
 
-  async getUserProgress(key: string): Promise<DbUserProgress | null> {
+  async getUserProgress(key: string, userId?: string | number | null): Promise<DbUserProgress | null> {
     const db = await openIndexedDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction("user_progress", "readonly");
       const store = tx.objectStore("user_progress");
       const request = store.get(key);
-      request.onsuccess = () => resolve(request.result || null);
+      request.onsuccess = () => {
+        const res: DbUserProgress | undefined = request.result;
+        if (!res) return resolve(null);
+        if (userId !== undefined && userId !== null && res.user_id !== undefined && res.user_id !== null) {
+          if (String(res.user_id) !== String(userId)) return resolve(null);
+        }
+        resolve(res);
+      };
       request.onerror = () => reject(request.error);
     });
   },
 
-  // ── WRONG ANSWERS ──
-  async recordWrongAnswer(questionId: number): Promise<void> {
+  // ── WRONG ANSWERS (USER SCOPED) ──
+  async recordWrongAnswer(questionId: number, userId?: string | number | null): Promise<void> {
     const db = await openIndexedDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction("wrong_answers", "readwrite");
@@ -308,6 +320,7 @@ export const dbClient = {
         const existing: DbWrongAnswer | undefined = getReq.result;
         const updated: DbWrongAnswer = {
           question_id: questionId,
+          user_id: userId ?? existing?.user_id ?? null,
           wrong_count: (existing?.wrong_count || 0) + 1,
           last_wrong_at: Date.now(),
         };
@@ -318,14 +331,19 @@ export const dbClient = {
     });
   },
 
-  async getWrongAnswerQuestionIds(): Promise<number[]> {
+  async getWrongAnswerQuestionIds(userId?: string | number | null): Promise<number[]> {
     const db = await openIndexedDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction("wrong_answers", "readonly");
       const store = tx.objectStore("wrong_answers");
       const request = store.getAll();
       request.onsuccess = () => {
-        const items: DbWrongAnswer[] = request.result || [];
+        let items: DbWrongAnswer[] = request.result || [];
+        if (userId !== undefined && userId !== null) {
+          items = items.filter(
+            (i) => i.user_id === undefined || i.user_id === null || String(i.user_id) === String(userId)
+          );
+        }
         resolve(items.map((i) => i.question_id));
       };
       request.onerror = () => reject(request.error);
@@ -378,10 +396,11 @@ export const dbClient = {
     await idbTx("sync_queue", "readwrite", (store) => store.delete(id));
   },
 
-  // ── SAVED QUESTIONS ──
-  async setQuestionSaved(questionId: number, isSaved: boolean): Promise<void> {
+  // ── SAVED QUESTIONS (USER SCOPED) ──
+  async setQuestionSaved(questionId: number, isSaved: boolean, userId?: string | number | null): Promise<void> {
     const item: DbSavedQuestion = {
       question_id: questionId,
+      user_id: userId ?? null,
       saved_at: Date.now(),
       is_deleted: isSaved ? 0 : 1,
       synced: 0,
@@ -389,14 +408,19 @@ export const dbClient = {
     await idbTx("saved_questions", "readwrite", (store) => store.put(item));
   },
 
-  async getActiveSavedQuestions(): Promise<number[]> {
+  async getActiveSavedQuestions(userId?: string | number | null): Promise<number[]> {
     const db = await openIndexedDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction("saved_questions", "readonly");
       const store = tx.objectStore("saved_questions");
       const request = store.getAll();
       request.onsuccess = () => {
-        const items: DbSavedQuestion[] = request.result || [];
+        let items: DbSavedQuestion[] = request.result || [];
+        if (userId !== undefined && userId !== null) {
+          items = items.filter(
+            (i) => i.user_id === undefined || i.user_id === null || String(i.user_id) === String(userId)
+          );
+        }
         resolve(items.filter((i) => i.is_deleted === 0).map((i) => i.question_id));
       };
       request.onerror = () => reject(request.error);

@@ -24,6 +24,7 @@ import QuizReviewModal from "../../components/quiz/QuizReviewModal";
 import { dbClient } from "../../database";
 import { generateUUID } from "../../sync";
 import { showToast } from "../../utils/notificationUtils";
+import OfflinePreparationModal from "../../components/offline/OfflinePreparationModal";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -32,6 +33,7 @@ import {
   IconArrowLeft,
   IconSteeringWheel,
   IconAlertTriangle,
+  IconDownload,
 } from "@tabler/icons-react";
 
 type Phase = "loading" | "exam" | "result";
@@ -63,6 +65,7 @@ export default function Exam_Page() {
   const [savedScore, setSavedScore] = useState(0);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirmFinishOpen, setConfirmFinishOpen] = useState(false);
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(Date.now());
@@ -411,18 +414,58 @@ export default function Exam_Page() {
     if (errorMsg) {
       return (
         <div className="exam-result-screen">
-          <div className="exam-result-card">
+          <div className="exam-result-card" style={{ maxWidth: 480, margin: "0 auto", textAlign: "center" }}>
             <div className="exam-result-icon failed">
               <IconAlertTriangle size={36} stroke={1.5} />
             </div>
             <h2 className="exam-result-title failed">{t("common.error", "Xatolik")}</h2>
-            <p className="exam-result-sub">{errorMsg}</p>
-            <div className="exam-result-actions">
-              <button className="exam-result-btn primary" onClick={onBack} type="button">
+            <p className="exam-result-sub" style={{ marginBottom: 20 }}>
+              {errorMsg === t("exam.noQuestions", "Savollar topilmadi")
+                ? t("offline.questionsNotPreloaded", "Lokal bazada savollar topilmadi yoki to'liq tayyorlanmagan.")
+                : errorMsg}
+            </p>
+            <div className="exam-result-actions" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button
+                className="exam-result-btn primary"
+                onClick={() => setShowOfflineModal(true)}
+                type="button"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "12px 20px",
+                  fontWeight: 600,
+                  borderRadius: 10,
+                }}
+              >
+                <IconDownload size={18} /> {t("offline.prepareDataset", "Offline bazani tayyorlash / yuklash")}
+              </button>
+              <button
+                className="exam-result-btn secondary"
+                onClick={onBack}
+                type="button"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                }}
+              >
                 <IconArrowLeft size={18} /> {t("common.backToHome", "Bosh sahifaga qaytish")}
               </button>
             </div>
           </div>
+          <OfflinePreparationModal
+            opened={showOfflineModal}
+            onClose={() => setShowOfflineModal(false)}
+            onSuccess={() => {
+              setShowOfflineModal(false);
+              loadQuestions(true);
+            }}
+          />
         </div>
       );
     }

@@ -1841,5 +1841,21 @@
     "authRequiredDesc": "Desktop ilovani ulash uchun avval o'z hisobingizga kiring. Agar hisobingiz bo'lmasa, yangi hisob ochishingiz mumkin.",
     "loginExisting": "Mavjud hisob bilan kirish",
     "registerNew": "Yangi hisob yaratish"
+  },
+  "offline": {
+    "preparationTitle": "Offline rejimni tayyorlash",
+    "preparationDesc": "Imtihonlarni internetsiz topshirish uchun barcha savollar, biletlar va rasmlar xotiraga yuklanadi.",
+    "questionsNotPreloaded": "Lokal bazada savollar topilmadi yoki to'liq tayyorlanmagan.",
+    "prepareDataset": "Offline bazani tayyorlash / yuklash",
+    "questionsProgress": "Savollar",
+    "ticketsProgress": "Biletlar",
+    "mediaProgress": "Rasmlar",
+    "overallProgress": "Umumiy yuklanish",
+    "startDownload": "Yuklashni boshlash",
+    "downloading": "Yuklanmoqda...",
+    "ready": "Offline rejim tayyor",
+    "readyDesc": "Internet bo'lmasa ham imtihon topshirishingiz mumkin.",
+    "startExam": "Imtihonni boshlash",
+    "integrityCheck": "Butunlik tekshiruvi"
   }
 }

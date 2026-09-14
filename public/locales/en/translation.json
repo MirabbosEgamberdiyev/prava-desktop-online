@@ -1007,5 +1007,21 @@
     "statePending": "Pending",
     "startLearning": "Start Learning",
     "retry": "Try Again"
+  },
+  "offline": {
+    "preparationTitle": "Offline Mode Preparation",
+    "preparationDesc": "Preload all questions, tickets, and media into local storage to take exams without internet.",
+    "questionsNotPreloaded": "Questions not found in local database or dataset is incomplete.",
+    "prepareDataset": "Prepare / Preload Offline Database",
+    "questionsProgress": "Questions",
+    "ticketsProgress": "Tickets",
+    "mediaProgress": "Images",
+    "overallProgress": "Overall Progress",
+    "startDownload": "Start Download",
+    "downloading": "Downloading...",
+    "ready": "Offline Mode Ready",
+    "readyDesc": "You can take exams completely offline without internet.",
+    "startExam": "Start Exam",
+    "integrityCheck": "Integrity Check"
   }
 }

@@ -39,7 +39,10 @@ import {
   IconBookmark,
   IconBookmarkFilled,
   IconAlertTriangle,
+  IconArrowLeft,
+  IconDownload,
 } from "@tabler/icons-react";
+import OfflinePreparationModal from "../../components/offline/OfflinePreparationModal";
 
 type Phase = "setup" | "loading" | "exam" | "result";
 
@@ -77,6 +80,7 @@ export default function Marafon_Page() {
   const [zoomSrc, setZoomSrc] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirmFinishOpen, setConfirmFinishOpen] = useState(false);
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
 
   const autoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
@@ -473,6 +477,73 @@ export default function Marafon_Page() {
 
   // ─── RESULT ───
   if (phase === "result") {
+    if (errorMsg) {
+      return (
+        <div className="exam-result-screen" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="exam-result-card" style={{ maxWidth: 480, margin: "0 auto", textAlign: "center", background: "var(--card-bg, #fff)", padding: 32, borderRadius: 16, border: "1px solid var(--border)" }}>
+            <div className="exam-result-icon failed" style={{ margin: "0 auto 16px", color: "#fa5252" }}>
+              <IconAlertTriangle size={36} stroke={1.5} />
+            </div>
+            <h2 className="exam-result-title failed" style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>{t("common.error", "Xatolik")}</h2>
+            <p className="exam-result-sub" style={{ color: "var(--text-muted)", marginBottom: 24 }}>
+              {errorMsg === t("marathon.noQuestions", "Savollar topilmadi")
+                ? t("offline.questionsNotPreloaded", "Lokal bazada savollar topilmadi yoki to'liq tayyorlanmagan.")
+                : errorMsg}
+            </p>
+            <div className="exam-result-actions" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button
+                className="exam-result-btn primary"
+                onClick={() => setShowOfflineModal(true)}
+                type="button"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "12px 20px",
+                  fontWeight: 600,
+                  borderRadius: 10,
+                  background: "var(--primary, #228be6)",
+                  color: "#fff",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                <IconDownload size={18} /> {t("offline.prepareDataset", "Offline bazani tayyorlash / yuklash")}
+              </button>
+              <button
+                className="exam-result-btn secondary"
+                onClick={() => setPhase("setup")}
+                type="button"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                }}
+              >
+                <IconArrowLeft size={18} /> {t("common.back", "Orqaga")}
+              </button>
+            </div>
+          </div>
+          <OfflinePreparationModal
+            opened={showOfflineModal}
+            onClose={() => setShowOfflineModal(false)}
+            onSuccess={() => {
+              setShowOfflineModal(false);
+              startExam(true);
+            }}
+          />
+        </div>
+      );
+    }
+
     const answeredCount = Object.values(answers).length;
     const correct = Object.values(answers).filter((a) => a.selected === a.correct).length;
     const total = questions.length;

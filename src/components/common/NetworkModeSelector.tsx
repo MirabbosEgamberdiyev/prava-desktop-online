@@ -8,12 +8,15 @@ import {
   IconCheck,
   IconChevronDown,
   IconDatabase,
+  IconDownload,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { syncEngine, type SyncState } from "../../sync/syncEngine";
 import { networkHeartbeat } from "../../sync/networkHeartbeat";
 import { networkModeManager, type NetworkMode } from "../../sync/networkModeManager";
 import { OutboxQueue } from "../../sync/outboxQueue";
+import { offlineDatasetManager } from "../../services/offlineDatasetManager";
+import OfflinePreparationModal from "../offline/OfflinePreparationModal";
 
 export interface NetworkModeSelectorProps {
   size?: "xs" | "sm" | "md";
@@ -28,6 +31,7 @@ export function NetworkModeSelector({ size = "xs" }: NetworkModeSelectorProps) {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [showPrepModal, setShowPrepModal] = useState<boolean>(false);
 
   useEffect(() => {
     let mounted = true;
@@ -82,10 +86,15 @@ export function NetworkModeSelector({ size = "xs" }: NetworkModeSelectorProps) {
     };
   }, []);
 
-  const handleModeChange = (newMode: NetworkMode) => {
+  const handleModeChange = async (newMode: NetworkMode) => {
     networkModeManager.setMode(newMode);
     setMode(networkModeManager.getMode());
-    if (newMode !== "OFFLINE" && newMode !== "OFFLINE_ONLY") {
+    if (newMode === "OFFLINE" || newMode === "OFFLINE_ONLY") {
+      const readiness = await offlineDatasetManager.checkReadiness();
+      if (!readiness.ready) {
+        setShowPrepModal(true);
+      }
+    } else {
       syncEngine.triggerSync().catch(() => {});
     }
   };
@@ -334,7 +343,33 @@ export function NetworkModeSelector({ size = "xs" }: NetworkModeSelectorProps) {
             </Menu.Item>
           </Box>
         )}
+
+        <Divider my={6} />
+
+        {/* ── 4. Offline Rejimni Tayyorlash ── */}
+        <Box px={4} py={2}>
+          <Menu.Item
+            leftSection={<IconDownload size={15} color="var(--mantine-color-teal-6)" />}
+            onClick={() => setShowPrepModal(true)}
+            style={{ borderRadius: 6 }}
+          >
+            <Group justify="space-between" wrap="nowrap">
+              <Text size="xs" fw={600}>
+                {t("offline.prepMenu", { defaultValue: "Offline tayyorgarlik" })}
+              </Text>
+              <Badge size="xs" variant="outline" color="teal">
+                1 190 Q
+              </Badge>
+            </Group>
+          </Menu.Item>
+        </Box>
       </Menu.Dropdown>
+
+      {/* Offline Preparation & Preload Modal */}
+      <OfflinePreparationModal
+        opened={showPrepModal}
+        onClose={() => setShowPrepModal(false)}
+      />
     </Menu>
   );
 }
