@@ -1,39 +1,36 @@
 import { useState, useEffect, useRef } from "react";
+import { networkHeartbeat } from "../sync/networkHeartbeat";
 
 /**
- * Online/offline holatini kuzatadi.
- * `wasOffline` — aloqa yangi tiklangandan keyin 5 soniya davomida `true`.
+ * Online/offline holatini dual-tier networkHeartbeat orqali kuzatadi.
+ * `wasOffline` — aloqa yangi tiklangandan keyin 4 soniya davomida `true`.
  */
 export function useConnectionMonitor() {
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [isOnline, setIsOnline] = useState(() => networkHeartbeat.getStatus().isOnline);
   const [wasOffline, setWasOffline] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setWasOffline(true);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => setWasOffline(false), 5000);
-    };
+    let hadOfflinePeriod = false;
 
-    const handleOffline = () => {
-      setIsOnline(false);
-      setWasOffline(false);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    // Mount paytida holat o'zgargan bo'lishi mumkin (event o'tkazib yuborilgan)
-    setIsOnline(navigator.onLine);
+    const unsubscribe = networkHeartbeat.subscribe((online) => {
+      setIsOnline(online);
+      if (!online) {
+        hadOfflinePeriod = true;
+        setWasOffline(false);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      } else if (hadOfflinePeriod) {
+        setWasOffline(true);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+          setWasOffline(false);
+          hadOfflinePeriod = false;
+        }, 4000);
+      }
+    });
 
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-      // BUG FIX: avval `setTimeout` tozalanmasdi — unmount'dan keyin
-      // setState chaqirilardi (leak).
+      unsubscribe();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);

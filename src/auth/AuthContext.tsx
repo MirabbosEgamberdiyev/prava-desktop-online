@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import type { User, AuthData } from "../types";
 import api from "../api/api";
 import { showToast } from "../utils/notificationUtils";
+import { AccountManager } from "./accountManager";
 
 const ACCESS_TOKEN_KEY = "accessToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
@@ -249,6 +250,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     try {
+      AccountManager.saveAccount(userData, accessToken, refreshToken);
       localStorage.setItem("auth_sync_event", `login_${Date.now()}`);
     } catch {
       // ignore

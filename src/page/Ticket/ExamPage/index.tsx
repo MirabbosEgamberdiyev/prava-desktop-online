@@ -236,12 +236,41 @@ export default function TicketExamPage() {
     });
   }, [current]);
 
-  // F1–F5 and 1–5 keyboard shortcuts
+  // Full Desktop Keyboard Navigation (1-5, F1-F5, Arrows, Space, Enter, Esc)
   useEffect(() => {
     if (phase !== "exam") return;
     const handleKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (zoomSrc) {
+          setZoomSrc(null);
+        } else if (confirmFinishOpen) {
+          setConfirmFinishOpen(false);
+        }
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (confirmFinishOpen) {
+          setConfirmFinishOpen(false);
+          triggerFinish(false);
+        } else {
+          handleFinishClick();
+        }
+        return;
+      }
+
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (answers[current] !== undefined) {
+          setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
+        }
+        return;
+      }
 
       const map: Record<string, number> = {
         F1: 0, F2: 1, F3: 2, F4: 3, F5: 4,
@@ -251,13 +280,18 @@ export default function TicketExamPage() {
         e.preventDefault();
         handleSelect(map[e.key]);
       }
-      if (e.key === "ArrowLeft") setCurrent((c) => Math.max(0, c - 1));
-      if (e.key === "ArrowRight")
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setCurrent((c) => Math.max(0, c - 1));
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
         setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
+      }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [phase, answers, current, questions.length]);
+  }, [phase, answers, current, questions.length, zoomSrc, confirmFinishOpen, triggerFinish]);
 
   const handleSelect = (optIdx: number) => {
     if (answers[current] !== undefined) return;
