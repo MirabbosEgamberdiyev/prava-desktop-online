@@ -41,6 +41,27 @@ export interface StoredTicketStat {
   fastPerfectCount: number;
 }
 
+import Cookies from "js-cookie";
+
+function getCurrentUserId(): string {
+  try {
+    const rawCookie = typeof Cookies !== "undefined" ? Cookies.get("userData") : null;
+    const raw = rawCookie || (typeof localStorage !== "undefined" ? localStorage.getItem("userData") : null);
+    if (raw) {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (parsed?.id) return String(parsed.id);
+    }
+  } catch {
+    // ignore
+  }
+  return "global";
+}
+
+function getScopedKey(baseKey: string): string {
+  const uid = getCurrentUserId();
+  return uid === "global" ? baseKey : `${baseKey}_u${uid}`;
+}
+
 const STORAGE_KEYS = {
   WRONG_ANSWERS: "prava_wrong_answers_v1",
   SAVED_QUESTIONS: "prava_saved_questions_v1",
@@ -49,18 +70,28 @@ const STORAGE_KEYS = {
   QUESTION_ATTEMPTS: "prava_question_attempts_v1",
 };
 
-function safeGet<T>(key: string, defaultValue: T): T {
+function safeGet<T>(baseKey: string, defaultValue: T): T {
   try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : defaultValue;
+    const scopedKey = getScopedKey(baseKey);
+    const rawScoped = localStorage.getItem(scopedKey);
+    if (rawScoped) return JSON.parse(rawScoped);
+
+    // Fallback to legacy un-scoped key if available
+    const rawLegacy = localStorage.getItem(baseKey);
+    if (rawLegacy) {
+      return JSON.parse(rawLegacy);
+    }
+
+    return defaultValue;
   } catch {
     return defaultValue;
   }
 }
 
-function safeSet(key: string, value: unknown): void {
+function safeSet(baseKey: string, value: unknown): void {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    const scopedKey = getScopedKey(baseKey);
+    localStorage.setItem(scopedKey, JSON.stringify(value));
     window.dispatchEvent(new Event("prava-storage-changed"));
   } catch {
     // ignore
@@ -206,11 +237,20 @@ export const storageService = {
 
   // ── RESET ALL STATS ──
   resetAllStats(): void {
-    localStorage.removeItem(STORAGE_KEYS.WRONG_ANSWERS);
-    localStorage.removeItem(STORAGE_KEYS.SAVED_QUESTIONS);
-    localStorage.removeItem(STORAGE_KEYS.EXAM_HISTORY);
-    localStorage.removeItem(STORAGE_KEYS.TICKET_STATS);
-    localStorage.removeItem(STORAGE_KEYS.QUESTION_ATTEMPTS);
+    const uid = getCurrentUserId();
+    const keys = [
+      STORAGE_KEYS.WRONG_ANSWERS,
+      STORAGE_KEYS.SAVED_QUESTIONS,
+      STORAGE_KEYS.EXAM_HISTORY,
+      STORAGE_KEYS.TICKET_STATS,
+      STORAGE_KEYS.QUESTION_ATTEMPTS,
+    ];
+    for (const key of keys) {
+      localStorage.removeItem(key);
+      if (uid !== "global") {
+        localStorage.removeItem(`${key}_u${uid}`);
+      }
+    }
     window.dispatchEvent(new Event("prava-storage-changed"));
   },
 };

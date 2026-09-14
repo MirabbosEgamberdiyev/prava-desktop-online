@@ -17,6 +17,21 @@ function generateUUID(): string {
   });
 }
 
+import Cookies from "js-cookie";
+
+function getCurrentUserId(): string | number | null {
+  try {
+    const raw = Cookies.get("userData");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.id) return parsed.id;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export const outboxRepository = {
   /**
    * Enqueue a new mutation into the outbox queue
@@ -26,11 +41,13 @@ export const outboxRepository = {
     endpoint: string,
     httpMethod: "POST" | "PUT" | "DELETE" | "PATCH",
     payload: any,
-    idempotencyKey?: string
+    idempotencyKey?: string,
+    explicitUserId?: string | number | null
   ): Promise<string> {
     const id = idempotencyKey || generateUUID();
     const item: DbOutboxItem = {
       id,
+      user_id: explicitUserId !== undefined ? explicitUserId : getCurrentUserId(),
       action_type: actionType,
       endpoint,
       http_method: httpMethod,
