@@ -3,9 +3,16 @@
  * Dual-tier connection monitor with real HTTP probes, sleep/wake detection, and debounce.
  */
 
-import api from "../api/api";
+import axios from "axios";
+import { ENV } from "../config/env";
 
 export type NetworkStatusListener = (isOnline: boolean, latencyMs: number | null) => void;
+
+// Isolated probe client: NO global interceptors, will never trigger UI error toasts!
+const probeClient = axios.create({
+  baseURL: ENV.API_BASE_URL,
+  timeout: 6000,
+});
 
 class NetworkHeartbeat {
   private isOnline: boolean = typeof navigator !== "undefined" ? navigator.onLine : true;
@@ -19,8 +26,8 @@ class NetworkHeartbeat {
   private consecutiveFailures: number = 0;
 
   // Configuration
-  private readonly PING_INTERVAL_MS = 15000; // 15 seconds regular ping
-  private readonly PING_TIMEOUT_MS = 5000;   // 5 seconds timeout
+  private readonly PING_INTERVAL_MS = 20000; // 20 seconds regular ping
+  private readonly PING_TIMEOUT_MS = 6000;   // 6 seconds timeout
   private readonly SLEEP_THRESHOLD_MS = 12000; // If gap > 12s, machine woke up from sleep
   private readonly MAX_CONSECUTIVE_FAILURES = 2; // Require 2 failed probes before marking offline
 
@@ -91,19 +98,18 @@ class NetworkHeartbeat {
 
     const startTime = Date.now();
     try {
-      // Fast, lightweight, non-authenticated endpoint
-      await api.get("/api/v1/auth/config", {
+      // Fast, lightweight, non-authenticated endpoint using isolated probeClient
+      await probeClient.get("/api/v1/auth/config", {
         timeout: this.PING_TIMEOUT_MS,
-        skipDeduplication: true,
         headers: { "Cache-Control": "no-cache" },
-      } as any);
+      });
 
       const latency = Date.now() - startTime;
       this.consecutiveFailures = 0;
       this.updateStatus(true, latency);
       return true;
     } catch (err: any) {
-      // Agar backend javob bergan bo'lsa (masalan 401 yoki 404), demak tarmoq BOR
+      // Agar backend har qanday HTTP javob bergan bo'lsa (hatto 401 yoki 404), demak tarmoq BOR
       if (err.response) {
         const latency = Date.now() - startTime;
         this.consecutiveFailures = 0;

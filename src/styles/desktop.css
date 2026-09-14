@@ -1513,7 +1513,9 @@ body:has(.app) {
 
 /* ============ HOME SCREEN ============ */
 .home-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
   background: var(--bg);
@@ -3644,7 +3646,9 @@ body:has(.app) {
 
 /* ============ EXAM SCREEN ============ */
 .exam-screen {
-  height: 100vh;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);

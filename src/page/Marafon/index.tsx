@@ -425,7 +425,7 @@ export default function Marafon_Page() {
           description="Yo'l harakati qoidalari bo'yicha mustahkamlash testi"
           canonical="/marafon"
         />
-        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--bg)" }}>
+        <div style={{ height: "100%", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", background: "var(--bg)", overflowY: "auto" }}>
           <header className="home-header">
             <div className="home-header-inner">
               <div
@@ -492,7 +492,7 @@ export default function Marafon_Page() {
           description="Prava Online test natijalari va statistikasi"
           canonical="/marafon"
         />
-        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--bg)" }}>
+        <div style={{ height: "100%", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", background: "var(--bg)", overflowY: "auto" }}>
           <header className="home-header">
             <div className="home-header-inner">
               <div

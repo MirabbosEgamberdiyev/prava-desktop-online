@@ -253,8 +253,8 @@ export const GamificationResult: React.FC<GamificationResultProps> = ({
               style={{
                 width: "100%",
                 minHeight: "46px",
-                background: "var(--primary, #1971c2)",
-                color: "#fff",
+                background: "#1971c2",
+                color: "#ffffff",
                 border: "none",
                 borderRadius: "12px",
                 fontSize: "14px",
@@ -265,7 +265,7 @@ export const GamificationResult: React.FC<GamificationResultProps> = ({
                 gap: "8px",
                 cursor: "pointer",
                 transition: "all 0.2s ease",
-                boxShadow: "0 4px 14px rgba(25, 113, 194, 0.3)",
+                boxShadow: "0 4px 14px rgba(25, 113, 194, 0.35)",
               }}
             >
               <IconSearch size={18} stroke={2.2} />

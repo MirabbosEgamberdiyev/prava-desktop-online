@@ -9,6 +9,7 @@ import GoogleOneTap from "./components/auth/GoogleOneTap";
 import { showToast } from "./utils/notificationUtils";
 import { useTranslation } from "react-i18next";
 import { ScrollManager } from "./components/common/ScrollManager";
+import { networkHeartbeat } from "./sync/networkHeartbeat";
 
 /**
  * Global API error listener with deduplication cooldown.
@@ -26,23 +27,21 @@ function ApiErrorListener() {
         isOffline?: boolean;
       };
 
-      // Network / Connectivity errors deduplication (GLOBAL across all endpoints)
+      // Network / Connectivity errors (status: 0)
       if (detail.status === 0) {
-        const isActuallyOffline =
-          detail.isOffline ?? (typeof navigator !== "undefined" && !navigator.onLine);
+        // Agar OfflineBanner allaqachon ko'rinib turgan bo'lsa, ekran burchagida takroriy toast chiqarmaymiz
+        if (!networkHeartbeat.getStatus().isOnline) {
+          return;
+        }
 
         showToast({
           id: "global-network-toast",
           dedupeKey: "global-network-toast",
-          cooldownMs: 20_000,
-          title: isActuallyOffline
-            ? t("errors.noInternetTitle", "Internet aloqasi yo‘q")
-            : t("common.error", "Xatolik"),
-          message: isActuallyOffline
-            ? t("errors.networkError", "Internetga ulanishni tekshiring")
-            : (detail.message || t("errors.serverError", "Server bilan aloqa uzildi")),
-          color: isActuallyOffline ? "red" : "orange",
-          autoClose: 5000,
+          cooldownMs: 30_000,
+          title: t("errors.noInternetTitle", "Internet aloqasi yo‘q"),
+          message: t("errors.networkError", "Internetga ulanishni tekshiring"),
+          color: "orange",
+          autoClose: 4000,
         });
         return;
       }

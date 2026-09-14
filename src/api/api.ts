@@ -175,6 +175,11 @@ api.interceptors.response.use(
           "/api/v2/exams/start-visible",     // page o'zi error ko'rsatadi
           "/api/v2/exams/start-secure",      // page o'zi error ko'rsatadi
           "/api/v2/exams/submit",            // QuizNav o'zi notification ko'rsatadi
+          "/api/v1/auth/config",             // Heartbeat check
+          "/api/v1/app/wrong-answers",       // Local fallback mavjud
+          "/api/v1/app/saved-questions",     // Local fallback mavjud
+          "/api/v2/my-statistics",           // Local fallback mavjud
+          "/api/v2/exams/history",           // Local fallback mavjud
         ];
         const isSelfHandled = SELF_HANDLED_URLS.some((u) => requestUrl.includes(u));
         if (!isSelfHandled) {
@@ -186,20 +191,28 @@ api.interceptors.response.use(
         }
       }
     } else if (!axios.isCancel(error) && error.code !== "ERR_CANCELED") {
+      // Tarmoq uzilishi, timeout yoki server javob bermagan holat (status: 0)
       const SELF_HANDLED = [
         "/auth/logout",
         "/api/v2/exams/active",
         "/api/v1/auth/me",
+        "/api/v1/auth/config",
+        "/api/v1/app/wrong-answers",
+        "/api/v1/app/saved-questions",
+        "/api/v2/my-statistics",
+        "/api/v2/exams/history",
+        "/api/v2/tickets",
+        "/api/v2/topics",
+        "/api/v2/exams/submit",
       ];
       const isSelfHandled = SELF_HANDLED.some((u) => requestUrl.includes(u));
       if (!isSelfHandled) {
-        const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
         window.dispatchEvent(
           new CustomEvent("api-error", {
             detail: {
               status: 0,
-              isOffline,
-              message: isOffline ? i18n.t("errors.networkError") : i18n.t("errors.serverError"),
+              isOffline: true,
+              message: i18n.t("errors.networkError"),
               url: requestUrl,
             },
           }),

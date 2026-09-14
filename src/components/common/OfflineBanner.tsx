@@ -1,4 +1,3 @@
-import { Alert, Text } from "@mantine/core";
 import { IconWifiOff, IconWifi } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useConnectionMonitor } from "../../hooks/useConnectionMonitor";
@@ -20,45 +19,78 @@ export function OfflineBanner() {
 
   if (!isOnline) {
     return (
-      <Alert
-        color="orange"
-        variant="filled"
-        radius={0}
-        icon={<IconWifiOff size={18} />}
+      <div
         role="status"
         aria-live="assertive"
-        p="xs"
+        style={{
+          flexShrink: 0,
+          width: "100%",
+          minHeight: "38px",
+          background: "linear-gradient(90deg, #d9480f 0%, #f76707 100%)",
+          color: "#ffffff",
+          padding: "8px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "10px",
+          fontSize: "13px",
+          fontWeight: 600,
+          boxShadow: "0 2px 10px rgba(217, 72, 15, 0.35)",
+          zIndex: 999,
+          lineHeight: 1.4,
+          textAlign: "center",
+        }}
       >
-        <Text size="sm" fw={600}>
-          {t("errors.noInternetTitle", { defaultValue: "Internet aloqasi yo'q" })}
-        </Text>
-        <Text size="xs">
+        <IconWifiOff size={18} stroke={2.2} style={{ flexShrink: 0 }} />
+        <span>
+          <strong style={{ fontWeight: 800 }}>
+            {t("errors.noInternetTitle", { defaultValue: "Internet aloqasi yo'q" })}
+          </strong>
+          {" — "}
           {t("exam.offlineAnswersSafe", {
             defaultValue:
               "Javoblaringiz qurilmangizda saqlanmoqda. Aloqa tiklangach avtomatik yuboriladi.",
           })}
-        </Text>
-      </Alert>
+        </span>
+      </div>
     );
   }
 
   if (wasOffline) {
     return (
-      <Alert
-        color="green"
-        variant="light"
-        radius={0}
-        icon={<IconWifi size={18} />}
+      <div
         role="status"
         aria-live="polite"
-        p="xs"
+        style={{
+          flexShrink: 0,
+          width: "100%",
+          minHeight: "36px",
+          background: "linear-gradient(90deg, #2b8a3e 0%, #37b24d 100%)",
+          color: "#ffffff",
+          padding: "7px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "10px",
+          fontSize: "13px",
+          fontWeight: 600,
+          boxShadow: "0 2px 10px rgba(43, 138, 62, 0.35)",
+          zIndex: 999,
+          lineHeight: 1.4,
+          textAlign: "center",
+        }}
       >
-        <Text size="sm">
+        <IconWifi size={18} stroke={2.2} style={{ flexShrink: 0 }} />
+        <span>
+          <strong style={{ fontWeight: 800 }}>
+            {t("exam.backOnlineTitle", { defaultValue: "Internet aloqasi tiklandi" })}
+          </strong>
+          {" — "}
           {t("exam.backOnline", {
-            defaultValue: "Internet aloqasi tiklandi.",
+            defaultValue: "Ma'lumotlar server bilan sinxronlanmoqda.",
           })}
-        </Text>
-      </Alert>
+        </span>
+      </div>
     );
   }
 
