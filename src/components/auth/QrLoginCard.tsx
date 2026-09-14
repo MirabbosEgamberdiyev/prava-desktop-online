@@ -120,6 +120,14 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
                 refreshToken: res.refreshToken,
               });
 
+              // Trigger background data sync immediately
+              try {
+                const { syncEngine } = await import("../../sync/syncEngine");
+                syncEngine.triggerSync();
+              } catch {
+                // Non-blocking sync trigger
+              }
+
               showToast({
                 id: "qr-login-success",
                 dedupeKey: "qr-login-success",
@@ -309,9 +317,9 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
                 }
               >
                 {status === "SCANNED"
-                  ? "Skanerlandi! Mobil ilovada tasdiqlang..."
+                  ? "Skanerlandi! Telefonda tasdiqlashni bosing..."
                   : status === "APPROVED"
-                  ? "Tasdiqlandi!"
+                  ? "Tasdiqlandi! Tizimga kirilmoqda..."
                   : `Muddati: ${timeLeft}s`}
               </Badge>
             </div>
@@ -328,17 +336,17 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
               <Group gap="xs">
                 <IconDeviceMobile size={18} color="var(--mantine-color-blue-6)" />
                 <Text fw={600} fz="xs">
-                  Mobil ilova orqali tezkor kirish:
+                  Tezkor ulanish yo'riqnomasi:
                 </Text>
               </Group>
               <Text fz="xs" c="dimmed">
-                1. <strong>Prava Online</strong> mobil ilovangizni oching.
+                1. Telefoningiz <strong>kamerasini</strong> QR kodga qarating va havolani oching (yoki mobil ilovadan skanerlang).
               </Text>
               <Text fz="xs" c="dimmed">
-                2. <strong>Profil</strong> → <strong>Sozlamalar</strong> bo‘limiga o‘ting.
+                2. Profilingizga kiring va <strong>«Tasdiqlash»</strong> tugmasini bosing.
               </Text>
               <Text fz="xs" c="dimmed">
-                3. <strong>QR kod orqali ulanish</strong> tugmasini bosing va ushbu kodni skanerlang.
+                3. Desktop ilovaga avtomatik kiriladi va ma'lumotlar sinxronlashadi.
               </Text>
             </Stack>
           </Paper>

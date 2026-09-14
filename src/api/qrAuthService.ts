@@ -56,14 +56,15 @@ export class QrAuthService {
     try {
       const response = await api.post<{
         success: boolean;
-        data: { sessionId: string; qrPayload: string; expiresIn: number };
+        data: { sessionId: string; qrPayload?: string; pairingUrl?: string; expiresIn?: number };
       }>("/api/v1/auth/qr/init", payload, { timeout: 8000 });
 
       if (response.data?.success && response.data?.data?.sessionId) {
+        const d = response.data.data;
         return {
-          sessionId: response.data.data.sessionId,
-          qrPayload: response.data.data.qrPayload || `prava://pair?sessionId=${response.data.data.sessionId}`,
-          expiresIn: response.data.data.expiresIn || 90,
+          sessionId: d.sessionId,
+          qrPayload: d.pairingUrl || d.qrPayload || `https://pravaonline.uz/auth/pair?sessionId=${d.sessionId}`,
+          expiresIn: d.expiresIn || 90,
           createdAt: Date.now(),
         };
       }
