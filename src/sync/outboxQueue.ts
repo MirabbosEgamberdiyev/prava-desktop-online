@@ -1,10 +1,20 @@
-/**
- * PRAVA DESKTOP ONLINE — OUTBOX QUEUE MANAGER
- * Outbox pattern implementation for offline mutations with idempotency.
- */
-
+import Cookies from "js-cookie";
 import { dbClient } from "../database/dbClient";
 import type { DbOutboxItem, OutboxAction } from "../database/schema";
+
+// Helper to determine currently active user ID for outbox isolation
+export function getCurrentUserId(): string | number | null {
+  try {
+    const raw = Cookies.get("userData");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.id) return parsed.id;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 // Deterministic UUID v4 generator without external dependency
 export function generateUUID(): string {
@@ -21,18 +31,22 @@ export function generateUUID(): string {
 export class OutboxQueue {
   /**
    * Yangi mutatsiyani navbatga qo'shish (Offline rejimda yoki onlayn vaqtinchalik xatoda).
+   * Foydalanuvchi hisobi bo'yicha avtomatik izolyatsiya qilinadi.
    */
   static async enqueue<T>(
     actionType: OutboxAction,
     endpoint: string,
     httpMethod: "POST" | "PUT" | "DELETE" | "PATCH",
-    payload: T
+    payload: T,
+    explicitUserId?: string | number | null
   ): Promise<string> {
     const id = generateUUID();
     const now = Date.now();
+    const userId = explicitUserId !== undefined ? explicitUserId : getCurrentUserId();
 
     const item: DbOutboxItem = {
       id,
+      user_id: userId,
       action_type: actionType,
       endpoint,
       http_method: httpMethod,
@@ -49,10 +63,10 @@ export class OutboxQueue {
   }
 
   /**
-   * Barcha kutilayotgan (PENDING) mutatsiyalarni olish.
+   * Barcha kutilayotgan (PENDING) mutatsiyalarni olish (ixtiyoriy userId bo'yicha filtrlangan).
    */
-  static async getPending(): Promise<DbOutboxItem[]> {
-    return dbClient.getPendingOutbox();
+  static async getPending(userId?: string | number | null): Promise<DbOutboxItem[]> {
+    return dbClient.getPendingOutbox(userId ?? undefined);
   }
 
   /**

@@ -6,6 +6,7 @@ import axios, {
 import Cookies from "js-cookie";
 import { ENV } from "../config/env";
 import i18n from "../utils/i18n";
+import { networkModeManager } from "../sync/networkModeManager";
 
 const ACCESS_TOKEN_KEY = "accessToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
@@ -55,6 +56,12 @@ let isProactiveRefreshing = false;
 
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    // 0. OFFLINE_ONLY Circuit breaker: if user chose explicit offline mode, abort immediately (0 ms latency)
+    if (networkModeManager.isOfflineOnly()) {
+      const offlineErr: any = new AxiosError("Faqat oflayn rejim faollashtirilgan", "ERR_OFFLINE_MODE", config);
+      offlineErr.isOffline = true;
+      return Promise.reject(offlineErr);
+    }
     // 1. Tokenni olish
     const token = Cookies.get(ACCESS_TOKEN_KEY);
 

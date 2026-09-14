@@ -337,14 +337,22 @@ export const dbClient = {
     await idbTx("sync_queue", "readwrite", (store) => store.put(item));
   },
 
-  async getPendingOutbox(): Promise<DbOutboxItem[]> {
+  async getPendingOutbox(userId?: string | number): Promise<DbOutboxItem[]> {
     const db = await openIndexedDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction("sync_queue", "readonly");
       const store = tx.objectStore("sync_queue");
       const index = store.index("status");
       const request = index.getAll("PENDING");
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        let items: DbOutboxItem[] = request.result || [];
+        if (userId !== undefined && userId !== null) {
+          items = items.filter(
+            (i) => i.user_id === undefined || i.user_id === null || String(i.user_id) === String(userId)
+          );
+        }
+        resolve(items);
+      };
       request.onerror = () => reject(request.error);
     });
   },

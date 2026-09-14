@@ -5,6 +5,7 @@
 
 import axios from "axios";
 import { ENV } from "../config/env";
+import { networkModeManager } from "./networkModeManager";
 
 export type NetworkStatusListener = (isOnline: boolean, latencyMs: number | null) => void;
 
@@ -15,7 +16,7 @@ const probeClient = axios.create({
 });
 
 class NetworkHeartbeat {
-  private isOnline: boolean = typeof navigator !== "undefined" ? navigator.onLine : true;
+  private isOnline: boolean = typeof navigator !== "undefined" ? (!networkModeManager.isOfflineOnly() && navigator.onLine) : true;
   private latencyMs: number | null = null;
   private lastCheckedAt: number | null = null;
   private listeners: Set<NetworkStatusListener> = new Set();
@@ -33,8 +34,19 @@ class NetworkHeartbeat {
 
   constructor() {
     this.setupSystemListeners();
+    this.setupModeListener();
     this.startSleepWatcher();
     this.startPeriodicProbe();
+  }
+
+  private setupModeListener(): void {
+    networkModeManager.subscribe((mode) => {
+      if (mode === "OFFLINE_ONLY") {
+        this.updateStatus(false, null);
+      } else {
+        this.checkNow();
+      }
+    });
   }
 
   /**
@@ -85,7 +97,9 @@ class NetworkHeartbeat {
     if (typeof window === "undefined") return;
 
     this.checkTimer = setInterval(() => {
-      this.checkNow();
+      if (!networkModeManager.isOfflineOnly()) {
+        this.checkNow();
+      }
     }, this.PING_INTERVAL_MS);
   }
 
@@ -93,6 +107,11 @@ class NetworkHeartbeat {
    * Real HTTP probe against backend health/config endpoint
    */
   public async checkNow(): Promise<boolean> {
+    if (networkModeManager.isOfflineOnly()) {
+      this.updateStatus(false, null);
+      return false;
+    }
+
     if (this.isChecking) return this.isOnline;
     this.isChecking = true;
 

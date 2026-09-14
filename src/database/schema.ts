@@ -43,6 +43,7 @@ export interface DbTicket {
 export interface DbExamSession {
   local_id: string; // UUID v4
   server_id: number | null;
+  user_id?: string | number | null;
   exam_type: "EXAM" | "TICKET" | "MARATHON" | "TOPIC" | "WRONG_EXAM";
   status: "IN_PROGRESS" | "COMPLETED" | "ABANDONED";
   total_questions: number;
@@ -60,6 +61,7 @@ export interface DbExamSession {
 
 export interface DbUserProgress {
   progress_key: string; // e.g. "ticket_1" or "topic_12"
+  user_id?: string | number | null;
   progress_type: "TICKET" | "TOPIC" | "MARATHON";
   total_items: number;
   completed_items: number;
@@ -71,6 +73,7 @@ export interface DbUserProgress {
 
 export interface DbSavedQuestion {
   question_id: number;
+  user_id?: string | number | null;
   saved_at: number;
   is_deleted: number; // 0 = active, 1 = tombstone (deleted offline, to be synced)
   synced: number; // 0 = pending sync, 1 = synced
@@ -78,6 +81,7 @@ export interface DbSavedQuestion {
 
 export interface DbWrongAnswer {
   question_id: number;
+  user_id?: string | number | null;
   wrong_count: number;
   last_wrong_at: number;
 }
@@ -91,6 +95,7 @@ export type OutboxAction =
 
 export interface DbOutboxItem {
   id: string; // UUID v4
+  user_id?: string | number | null;
   action_type: OutboxAction;
   endpoint: string;
   http_method: "POST" | "PUT" | "DELETE" | "PATCH";
@@ -204,6 +209,7 @@ export const SQLITE_INIT_SCRIPTS: string[] = [
   // 8. Outbox Queue Table (For Offline-First Mutations)
   `CREATE TABLE IF NOT EXISTS sync_queue (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     action_type TEXT NOT NULL,
     endpoint TEXT NOT NULL,
     http_method TEXT NOT NULL,
@@ -216,6 +222,7 @@ export const SQLITE_INIT_SCRIPTS: string[] = [
   );`,
 
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, created_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_queue_user ON sync_queue(user_id);`,
 
   // 9. Sync Metadata Table (Bidirectional sync cursors & versions)
   `CREATE TABLE IF NOT EXISTS sync_meta (

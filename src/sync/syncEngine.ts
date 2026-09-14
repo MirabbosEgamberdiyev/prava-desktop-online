@@ -5,8 +5,9 @@
  */
 
 import api from "../api/api";
-import { OutboxQueue } from "./outboxQueue";
+import { OutboxQueue, getCurrentUserId } from "./outboxQueue";
 import { networkHeartbeat } from "./networkHeartbeat";
+import { networkModeManager } from "./networkModeManager";
 import { dbClient } from "../database/dbClient";
 import { ConflictResolver } from "./conflictResolver";
 import {
@@ -140,20 +141,53 @@ export class SyncEngine {
         });
       }
 
-      // 7. Periodic background sweep
+      // 7. React to network mode changes (AUTO, ONLINE_SYNC, OFFLINE_ONLY)
+      networkModeManager.subscribe((mode) => {
+        if (mode === "OFFLINE_ONLY") {
+          this.state = "OFFLINE";
+          this.broadcastStatus();
+        } else if (networkHeartbeat.getStatus().isOnline) {
+          this.triggerSync().catch(() => {});
+        }
+      });
+
+      // 8. Periodic background sweep
       this.syncIntervalTimer = setInterval(() => {
+        if (networkModeManager.isOfflineOnly()) return;
         const { isOnline } = networkHeartbeat.getStatus();
         if (isOnline && !this.isRunning) {
           this.triggerSync().catch(() => {});
+          this.checkDailySync().catch(() => {});
         }
       }, this.SYNC_INTERVAL_MS);
 
-      // 8. Initial sync run if already online
-      if (networkHeartbeat.getStatus().isOnline) {
+      // 9. Initial sync and daily sync check
+      if (networkHeartbeat.getStatus().isOnline && !networkModeManager.isOfflineOnly()) {
         this.triggerSync().catch(() => {});
+        this.checkDailySync().catch(() => {});
       }
     } catch (err) {
       console.error("[SyncEngine] Initialization error:", err);
+    }
+  }
+
+  /**
+   * Daily Automatic Sync: Guarantees at least 1 background synchronization every 24 hours.
+   */
+  public async checkDailySync(): Promise<void> {
+    if (networkModeManager.isOfflineOnly()) return;
+    try {
+      const lastDailySync = await dbClient.getSyncMeta("last_daily_sync_at");
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      if (!lastDailySync || now - parseInt(lastDailySync, 10) > ONE_DAY_MS) {
+        if (networkHeartbeat.getStatus().isOnline) {
+          console.info("[SyncEngine] 24h threshold reached. Executing daily auto-synchronization...");
+          await this.triggerSync();
+        }
+      }
+    } catch (err) {
+      console.warn("[SyncEngine] Daily sync check error:", err);
     }
   }
 
@@ -163,7 +197,7 @@ export class SyncEngine {
   private async checkAndTriggerInitialSync(): Promise<void> {
     try {
       const count = await questionRepository.getQuestionCount();
-      if (count === 0 && networkHeartbeat.getStatus().isOnline) {
+      if (count === 0 && networkHeartbeat.getStatus().isOnline && !networkModeManager.isOfflineOnly()) {
         console.info("[SyncEngine] Local database empty. Triggering background initial sync...");
         this.triggerSync().catch(() => {});
       }
@@ -198,6 +232,12 @@ export class SyncEngine {
       return this.activeSyncPromise;
     }
 
+    if (networkModeManager.isOfflineOnly()) {
+      this.state = "OFFLINE";
+      this.broadcastStatus();
+      return { success: false, pushedCount: 0, pulledCount: 0, error: "Offline mode active" };
+    }
+
     const { isOnline } = networkHeartbeat.getStatus();
     if (!isOnline) {
       this.state = "OFFLINE";
@@ -229,7 +269,8 @@ export class SyncEngine {
       // ═════════════════════════════════════════════════════════════
       // PHASE 1: PUSH (Local -> Server)
       // ═════════════════════════════════════════════════════════════
-      const pendingItems = await OutboxQueue.getPending();
+      const currentUserId = getCurrentUserId();
+      const pendingItems = await OutboxQueue.getPending(currentUserId);
       if (pendingItems.length > 0) {
         console.info(`[SyncEngine] Pushing ${pendingItems.length} pending local outbox mutation(s)...`);
 
@@ -259,6 +300,7 @@ export class SyncEngine {
       // Update sync metadata and dispatch notification
       this.lastSyncAt = Date.now();
       await dbClient.setSyncMeta("last_sync_at", this.lastSyncAt.toString());
+      await dbClient.setSyncMeta("last_daily_sync_at", this.lastSyncAt.toString());
 
       this.state = "IDLE";
       this.broadcastStatus();

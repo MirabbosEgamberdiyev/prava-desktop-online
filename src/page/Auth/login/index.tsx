@@ -10,6 +10,7 @@ import {
   Image,
   Paper,
   PasswordInput,
+  SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
@@ -29,6 +30,7 @@ import {
   IconLock,
   IconMail,
   IconUser,
+  IconQrcode,
 } from "@tabler/icons-react";
 import GoogleLoginButton from "../../../components/auth/GoogleLoginButton";
 import TelegramLoginButton from "../../../components/auth/TelegramLoginButton";
@@ -38,6 +40,7 @@ import { useCapsLock } from "../../../hooks/useCapsLock";
 import CapsLockWarning from "../../../components/auth/CapsLockWarning";
 import AuthSecurityBadge from "../../../components/auth/AuthSecurityBadge";
 import { normalizeUzPhone } from "../../../utils/phoneUtils";
+import QrLoginCard from "../../../components/auth/QrLoginCard";
 
 const Login_Page = () => {
   const { t, i18n } = useTranslation();
@@ -47,6 +50,7 @@ const Login_Page = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<"password" | "qr">("password");
   const isCapsLock = useCapsLock();
 
   // Redirect destination after login (from ProtectedRoute state or default /me)
@@ -194,106 +198,143 @@ const Login_Page = () => {
             boxShadow: "var(--card-shadow-md)",
           }}
         >
-          {errorMessage && (
-            <Alert
-              icon={<IconAlertCircle size={18} />}
-              color="red"
-              variant="light"
-              radius="md"
-              mb="md"
-              withCloseButton
-              onClose={() => setErrorMessage(null)}
-              role="alert"
-            >
-              {errorMessage}
-            </Alert>
-          )}
+          <SegmentedControl
+            value={loginMethod}
+            onChange={(val) => {
+              setLoginMethod(val as "password" | "qr");
+              setErrorMessage(null);
+            }}
+            fullWidth
+            mb="md"
+            radius="md"
+            data={[
+              {
+                label: (
+                  <Center style={{ gap: 6 }}>
+                    <IconLock size={15} />
+                    <span>{t("auth.byPassword", { defaultValue: "Parol bilan" })}</span>
+                  </Center>
+                ),
+                value: "password",
+              },
+              {
+                label: (
+                  <Center style={{ gap: 6 }}>
+                    <IconQrcode size={15} />
+                    <span>{t("auth.byQr", { defaultValue: "QR kod bilan" })}</span>
+                  </Center>
+                ),
+                value: "qr",
+              },
+            ]}
+          />
 
-          <form
-            onSubmit={form.onSubmit(handleSubmit)}
-            onChange={() => errorMessage && setErrorMessage(null)}
-            noValidate
-          >
-            <Stack gap={14}>
-              <TextInput
-                label={t("auth.identifier")}
-                placeholder={t("auth.identifierPlaceholder")}
-                required
-                size="sm"
-                radius="md"
-                autoComplete="username"
-                leftSection={getIdentifierIcon()}
-                styles={{
-                  input: { height: 46, fontSize: "14.5px" },
-                  label: { fontSize: "13px", fontWeight: 600, marginBottom: 4 }
-                }}
-                aria-required="true"
-                aria-invalid={!!form.errors.identifier}
-                {...form.getInputProps("identifier")}
-              />
-
-              <Box>
-                <PasswordInput
-                  label={t("auth.password")}
-                  placeholder={t("auth.passwordPlaceholder")}
-                  required
-                  size="sm"
+          {loginMethod === "qr" ? (
+            <QrLoginCard />
+          ) : (
+            <>
+              {errorMessage && (
+                <Alert
+                  icon={<IconAlertCircle size={18} />}
+                  color="red"
+                  variant="light"
                   radius="md"
-                  autoComplete="current-password"
-                  leftSection={<IconLock size={18} />}
-                  styles={{
-                    input: { height: 46, fontSize: "14.5px" },
-                    label: { fontSize: "13px", fontWeight: 600, marginBottom: 4 }
-                  }}
-                  aria-required="true"
-                  aria-invalid={!!form.errors.password}
-                  onFocus={() => setPasswordFocused(true)}
-                  onBlur={() => setPasswordFocused(false)}
-                  {...form.getInputProps("password")}
-                />
-                <CapsLockWarning active={isCapsLock && passwordFocused} />
-              </Box>
-
-              <Group justify="flex-end" mt={-4}>
-                <Anchor
-                  component={Link}
-                  to="/auth/forgot-password"
-                  size="xs"
-                  c="dimmed"
-                  fw={600}
+                  mb="md"
+                  withCloseButton
+                  onClose={() => setErrorMessage(null)}
+                  role="alert"
                 >
-                  {t("auth.forgotPassword")}
-                </Anchor>
-              </Group>
+                  {errorMessage}
+                </Alert>
+              )}
 
-              <Button
-                size="md"
-                fullWidth
-                radius="md"
-                type="submit"
-                loading={loading}
-                h={48}
-                style={{
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  boxShadow: "0 4px 14px rgba(25, 113, 194, 0.25)",
-                }}
+              <form
+                onSubmit={form.onSubmit(handleSubmit)}
+                onChange={() => errorMessage && setErrorMessage(null)}
+                noValidate
               >
-                {t("auth.login")}
-              </Button>
+                <Stack gap={14}>
+                  <TextInput
+                    label={t("auth.identifier")}
+                    placeholder={t("auth.identifierPlaceholder")}
+                    required
+                    size="sm"
+                    radius="md"
+                    autoComplete="username"
+                    leftSection={getIdentifierIcon()}
+                    styles={{
+                      input: { height: 46, fontSize: "14.5px" },
+                      label: { fontSize: "13px", fontWeight: 600, marginBottom: 4 },
+                    }}
+                    aria-required="true"
+                    aria-invalid={!!form.errors.identifier}
+                    {...form.getInputProps("identifier")}
+                  />
 
-              <Divider
-                label={t("auth.orContinueWith")}
-                labelPosition="center"
-                my={2}
-              />
+                  <Box>
+                    <PasswordInput
+                      label={t("auth.password")}
+                      placeholder={t("auth.passwordPlaceholder")}
+                      required
+                      size="sm"
+                      radius="md"
+                      autoComplete="current-password"
+                      leftSection={<IconLock size={18} />}
+                      styles={{
+                        input: { height: 46, fontSize: "14.5px" },
+                        label: { fontSize: "13px", fontWeight: 600, marginBottom: 4 },
+                      }}
+                      aria-required="true"
+                      aria-invalid={!!form.errors.password}
+                      onFocus={() => setPasswordFocused(true)}
+                      onBlur={() => setPasswordFocused(false)}
+                      {...form.getInputProps("password")}
+                    />
+                    <CapsLockWarning active={isCapsLock && passwordFocused} />
+                  </Box>
 
-              <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="xs">
-                <GoogleLoginButton mode="login" />
-                <TelegramLoginButton mode="login" />
-              </SimpleGrid>
-            </Stack>
-          </form>
+                  <Group justify="flex-end" mt={-4}>
+                    <Anchor
+                      component={Link}
+                      to="/auth/forgot-password"
+                      size="xs"
+                      c="dimmed"
+                      fw={600}
+                    >
+                      {t("auth.forgotPassword")}
+                    </Anchor>
+                  </Group>
+
+                  <Button
+                    size="md"
+                    fullWidth
+                    radius="md"
+                    type="submit"
+                    loading={loading}
+                    h={48}
+                    style={{
+                      fontSize: "15px",
+                      fontWeight: 700,
+                      boxShadow: "0 4px 14px rgba(25, 113, 194, 0.25)",
+                    }}
+                  >
+                    {t("auth.login")}
+                  </Button>
+
+                  <Divider
+                    label={t("auth.orContinueWith")}
+                    labelPosition="center"
+                    my={2}
+                  />
+
+                  <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="xs">
+                    <GoogleLoginButton mode="login" />
+                    <TelegramLoginButton mode="login" />
+                  </SimpleGrid>
+                </Stack>
+              </form>
+            </>
+          )}
 
           <AuthSecurityBadge compact />
         </Paper>

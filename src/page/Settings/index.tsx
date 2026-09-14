@@ -12,6 +12,8 @@ import {
   Container,
   Button,
   Kbd,
+  SegmentedControl,
+  Alert,
 } from "@mantine/core";
 import {
   IconUser,
@@ -24,14 +26,22 @@ import {
   IconKeyboard,
   IconRefresh,
   IconTrash,
+  IconLogout,
+  IconWifi,
+  IconWifiOff,
+  IconCloudUpload,
+  IconInfoCircle,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import { useAuth } from "../../auth/AuthContext";
 import { AccountManager, type StoredAccount } from "../../auth/accountManager";
 import { syncEngine, type SyncState } from "../../sync/syncEngine";
 import { networkHeartbeat } from "../../sync/networkHeartbeat";
+import { networkModeManager, type NetworkMode } from "../../sync/networkModeManager";
+import { QrAuthService } from "../../api/qrAuthService";
+import { showToast } from "../../utils/notificationUtils";
 import { ProfileInfoCard } from "../../features/me/components/ProfileInfoCard";
 import { ChangePasswordForm } from "../../features/me/components/ChangePasswordForm";
 import SEO from "../../components/common/SEO";
@@ -59,8 +69,9 @@ const Settings_Page = () => {
 
   const deviceInfo = deviceResponse?.data;
 
-  // Multi-account and Sync state for Desktop
   const [savedAccounts, setSavedAccounts] = useState<StoredAccount[]>([]);
+  const [networkMode, setNetworkMode] = useState<NetworkMode>(networkModeManager.getMode());
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [syncState, setSyncState] = useState<SyncState>("IDLE");
   const [syncing, setSyncing] = useState<boolean>(false);
@@ -91,11 +102,16 @@ const Settings_Page = () => {
     setSavedAccounts(AccountManager.getSavedAccounts());
     setIsOnline(networkHeartbeat.getStatus().isOnline);
     setSyncState(syncEngine.getState());
+    setNetworkMode(networkModeManager.getMode());
     loadSyncMetrics();
 
     const unsubHeartbeat = networkHeartbeat.subscribe((online) => {
       setIsOnline(online);
       loadSyncMetrics();
+    });
+
+    const unsubMode = networkModeManager.subscribe((mode) => {
+      setNetworkMode(mode);
     });
 
     const handleSyncStatus = (e: Event) => {
@@ -114,10 +130,46 @@ const Settings_Page = () => {
 
     return () => {
       unsubHeartbeat();
+      unsubMode();
       window.removeEventListener("sync-status-changed", handleSyncStatus);
       window.removeEventListener("prava-storage-changed", handleStorageChanged);
     };
   }, []);
+
+  const handleNetworkModeChange = (mode: NetworkMode) => {
+    networkModeManager.setMode(mode);
+    setNetworkMode(mode);
+    if (mode !== "OFFLINE_ONLY") {
+      syncEngine.triggerSync().catch(() => {});
+    }
+  };
+
+  const handleRevokeDevice = async (deviceId: string, deviceName: string) => {
+    setRevokingDeviceId(deviceId);
+    try {
+      await QrAuthService.revokeDevice(deviceId);
+      showToast({
+        id: "device-revoke-success",
+        dedupeKey: "device-revoke-success",
+        title: "Sessiya tugatildi",
+        message: `${deviceName} qurilmasi hisobdan muvaffaqiyatli uzildi.`,
+        color: "teal",
+        withBorder: true,
+      });
+      mutate("/api/v2/my-statistics/devices");
+    } catch {
+      showToast({
+        id: "device-revoke-error",
+        dedupeKey: "device-revoke-error",
+        title: "Xatolik",
+        message: "Qurilma sessiyasini tugatishda xatolik yuz berdi.",
+        color: "red",
+        withBorder: true,
+      });
+    } finally {
+      setRevokingDeviceId(null);
+    }
+  };
 
   const handleSwitchAccount = (accountId: string | number) => {
     AccountManager.switchAccount(accountId);
@@ -252,10 +304,21 @@ const Settings_Page = () => {
                                     </Text>
                                   </div>
                                 </Group>
-                                {device.isCurrent && (
+                                {device.isCurrent ? (
                                   <Badge size="sm" color="blue" variant="light">
                                     {t("settings.currentDevice", "Joriy qurilma")}
                                   </Badge>
+                                ) : (
+                                  <Button
+                                    size="xs"
+                                    color="red"
+                                    variant="subtle"
+                                    leftSection={<IconLogout size={14} />}
+                                    loading={revokingDeviceId === device.deviceId}
+                                    onClick={() => handleRevokeDevice(device.deviceId, device.deviceName)}
+                                  >
+                                    Sessiyani tugatish
+                                  </Button>
                                 )}
                               </Group>
                             </Paper>
@@ -330,7 +393,89 @@ const Settings_Page = () => {
                     </SimpleGrid>
                   </Paper>
 
-                  {/* 2. Oflayn rejim va Sinxronizatsiya */}
+                  {/* 2. Tarmoq Ish Rejimi (Network Mode) */}
+                  <Paper p="lg" radius="md" withBorder shadow="sm">
+                    <Group justify="space-between" mb="xs">
+                      <Group gap="xs">
+                        <IconWifi size={20} color="var(--mantine-color-blue-5)" />
+                        <Text fw={600} fz="md">
+                          Tarmoq Ish Rejimi (Network Mode)
+                        </Text>
+                      </Group>
+                      <Badge
+                        color={
+                          networkMode === "ONLINE_SYNC"
+                            ? "blue"
+                            : networkMode === "OFFLINE_ONLY"
+                            ? "orange"
+                            : "teal"
+                        }
+                        variant="light"
+                      >
+                        {networkMode === "ONLINE_SYNC"
+                          ? "Onlayn Sinxron"
+                          : networkMode === "OFFLINE_ONLY"
+                          ? "Faqat Oflayn"
+                          : "Avtomatik (Dynamic)"}
+                      </Badge>
+                    </Group>
+                    <Text size="sm" c="dimmed" mb="md">
+                      Qaysi rejim tanlanganidan qat'i nazar, barcha savollar va imtihonlar doimo kompyuteringizdagi mahalliy SQLite bazasidan 0 ms kechikish bilan ochiladi.
+                    </Text>
+
+                    <SegmentedControl
+                      value={networkMode}
+                      onChange={(val) => handleNetworkModeChange(val as NetworkMode)}
+                      fullWidth
+                      radius="md"
+                      mb="md"
+                      data={[
+                        {
+                          label: (
+                            <Center style={{ gap: 6 }}>
+                              <IconRefresh size={15} />
+                              <span>Avtomatik (AUTO)</span>
+                            </Center>
+                          ),
+                          value: "AUTO",
+                        },
+                        {
+                          label: (
+                            <Center style={{ gap: 6 }}>
+                              <IconCloudUpload size={15} />
+                              <span>Onlayn (ONLINE_SYNC)</span>
+                            </Center>
+                          ),
+                          value: "ONLINE_SYNC",
+                        },
+                        {
+                          label: (
+                            <Center style={{ gap: 6 }}>
+                              <IconWifiOff size={15} />
+                              <span>Faqat Oflayn (OFFLINE_ONLY)</span>
+                            </Center>
+                          ),
+                          value: "OFFLINE_ONLY",
+                        },
+                      ]}
+                    />
+
+                    <Alert
+                      icon={<IconInfoCircle size={16} />}
+                      color={networkMode === "OFFLINE_ONLY" ? "orange" : "blue"}
+                      variant="light"
+                      radius="md"
+                    >
+                      {networkMode === "AUTO" &&
+                        "Avtomatik rejim: Tarmoq aloqasi avtomatik tekshirib turiladi. Internet bo'lganda yangilanishlar fonda sinxronlanadi, aloqa uzilganda esa hech qanday to'xtovsiz lokal bazadan foydalaniladi."}
+                      {networkMode === "ONLINE_SYNC" &&
+                        "Onlayn Sinxron rejimi: Tarmoq bilan faol aloqa saqlanadi va bajarilgan har bir imtihon yoki o'zgarish zudlik bilan serverga yuklanadi."}
+                      {networkMode === "OFFLINE_ONLY" &&
+                        "Faqat Oflayn rejimi: Barcha tarmoq so'rovlari va fon pinglari to'xtatiladi, internet sarflanmaydi. Ilova 100% kompyuterdagi mahalliy bazada 0 ms tezlikda ishlaydi."}
+                    </Alert>
+                  </Paper>
+
+                  {/* 3. Oflayn ma'lumotlar va Sinxronizatsiya */}
                   <Paper p="lg" radius="md" withBorder shadow="sm">
                     <Group justify="space-between" mb="xs">
                       <Text fw={600} fz="md">
