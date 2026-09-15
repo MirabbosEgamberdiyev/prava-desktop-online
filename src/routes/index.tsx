@@ -7,6 +7,7 @@ import User_Layout from "../layout/User_Layout";
 import DesktopAuthLayout from "../layout/DesktopAuthLayout";
 
 // ── Auth Pages ──
+const Language_Page = lazy(() => import("../page/Auth/language"));
 const Login_Page = lazy(() => import("../page/Auth/login"));
 const Register_Page = lazy(() => import("../page/Auth/register"));
 const ForgotPassword_Page = lazy(() => import("../page/Auth/forgot-password"));
@@ -60,15 +61,24 @@ function RootLoadingFallback() {
   );
 }
 
+function RootRedirect() {
+  const hasLang = !!localStorage.getItem("prava_lang_selected");
+  if (!hasLang) {
+    return <Navigate to="/auth/language" replace />;
+  }
+  return <Navigate to="/me" replace />;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<RootLoadingFallback />}>
       <Routes>
-        {/* Root redirect: immediately routes to authenticated dashboard /me (or login if unauth) */}
-        <Route path="/" element={<Navigate to="/me" replace />} />
+        {/* Root redirect: immediately routes to language if first time, or dashboard /me (which redirects to login if unauth) */}
+        <Route path="/" element={<RootRedirect />} />
 
         {/* Auth Routes: clean desktop auth layout without marketing navbar */}
         <Route path="/auth" element={<DesktopAuthLayout />}>
+          <Route path="language" element={<Language_Page />} />
           <Route path="login" element={<Login_Page />} />
           <Route path="register" element={<Register_Page />} />
           <Route path="forgot-password" element={<ForgotPassword_Page />} />

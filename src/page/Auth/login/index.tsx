@@ -4,22 +4,21 @@ import {
   Box,
   Button,
   Center,
+  Checkbox,
   Container,
   Divider,
   Group,
   Image,
   Paper,
   PasswordInput,
-  SegmentedControl,
-  SimpleGrid,
   Stack,
   Text,
   TextInput,
   Title,
 } from "@mantine/core";
-import { Link, useNavigate, useLocation, Navigate } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams, Navigate } from "react-router-dom";
 import { useForm } from "@mantine/form";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../../auth/AuthContext";
 import api from "../../../api/api";
 import { showToast } from "../../../utils/notificationUtils";
@@ -30,7 +29,6 @@ import {
   IconLock,
   IconMail,
   IconUser,
-  IconQrcode,
 } from "@tabler/icons-react";
 import GoogleLoginButton from "../../../components/auth/GoogleLoginButton";
 import TelegramLoginButton from "../../../components/auth/TelegramLoginButton";
@@ -47,11 +45,21 @@ const Login_Page = () => {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const currentTab = searchParams.get("tab");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<"password" | "qr">("password");
+  const [loginMethod, setLoginMethod] = useState<"password" | "qr">(currentTab === "qr" ? "qr" : "password");
   const isCapsLock = useCapsLock();
+
+  useEffect(() => {
+    if (currentTab === "qr") {
+      setLoginMethod("qr");
+    } else if (!currentTab) {
+      setLoginMethod("password");
+    }
+  }, [currentTab]);
 
   // Redirect destination after login (from ProtectedRoute state or default /me)
   const from =
@@ -198,39 +206,24 @@ const Login_Page = () => {
             boxShadow: "var(--card-shadow-md)",
           }}
         >
-          <SegmentedControl
-            value={loginMethod}
-            onChange={(val) => {
-              setLoginMethod(val as "password" | "qr");
-              setErrorMessage(null);
-            }}
-            fullWidth
-            mb="md"
-            radius="md"
-            data={[
-              {
-                label: (
-                  <Center style={{ gap: 6 }}>
-                    <IconLock size={15} />
-                    <span>{t("auth.byPassword", { defaultValue: "Parol bilan" })}</span>
-                  </Center>
-                ),
-                value: "password",
-              },
-              {
-                label: (
-                  <Center style={{ gap: 6 }}>
-                    <IconQrcode size={15} />
-                    <span>{t("auth.byQr", { defaultValue: "QR kod bilan" })}</span>
-                  </Center>
-                ),
-                value: "qr",
-              },
-            ]}
-          />
-
-          {loginMethod === "qr" ? (
-            <QrLoginCard onSwitchToPassword={() => setLoginMethod("password")} />
+          {currentTab === "telegram" ? (
+            <Stack align="center" gap={16} py={24} style={{ textAlign: "center" }}>
+              <Title order={2} fw={800} fz={22} style={{ letterSpacing: "-0.02em" }}>
+                {i18n.language === "ru" ? "Вход через Telegram" : i18n.language === "uzc" ? "Telegram орқали кириш" : "Telegram orqali kirish"}
+              </Title>
+              <Text c="dimmed" fz={13.5} maw={340}>
+                {i18n.language === "ru"
+                  ? "Войдите в систему в один клик через официального Telegram бота"
+                  : i18n.language === "uzc"
+                  ? "Расмий Telegram ботимиз орқали бир босишда тизимга киринг"
+                  : "Rasmiy Telegram botimiz orqali bir bosishda tizimga kiring"}
+              </Text>
+              <Box mt={12} w="100%" maw={320}>
+                <TelegramLoginButton mode="login" />
+              </Box>
+            </Stack>
+          ) : (currentTab === "qr" || loginMethod === "qr") ? (
+            <QrLoginCard onSwitchToPassword={() => navigate("/auth/login")} />
           ) : (
             <>
               {errorMessage && (
@@ -293,7 +286,12 @@ const Login_Page = () => {
                     <CapsLockWarning active={isCapsLock && passwordFocused} />
                   </Box>
 
-                  <Group justify="flex-end" mt={-4}>
+                  <Group justify="space-between" mt={-4}>
+                    <Checkbox
+                      label={t("auth.rememberMe", { defaultValue: "Eslab qolish" })}
+                      size="xs"
+                      defaultChecked
+                    />
                     <Anchor
                       component={Link}
                       to="/auth/forgot-password"
@@ -318,7 +316,7 @@ const Login_Page = () => {
                       boxShadow: "0 4px 14px rgba(25, 113, 194, 0.25)",
                     }}
                   >
-                    {t("auth.login")}
+                    {t("auth.login")} →
                   </Button>
 
                   <Divider
@@ -327,10 +325,7 @@ const Login_Page = () => {
                     my={2}
                   />
 
-                  <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="xs">
-                    <GoogleLoginButton mode="login" />
-                    <TelegramLoginButton mode="login" />
-                  </SimpleGrid>
+                  <GoogleLoginButton mode="login" />
                 </Stack>
               </form>
             </>

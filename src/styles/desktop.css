@@ -6240,4 +6240,21 @@ body:has(.app) {
   }
 }
 
+/* In Desktop Auth Card, eliminate double borders and nested paddings */
+.desktop-auth-card .auth-page-container {
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+.desktop-auth-card .auth-page-inner {
+  max-width: 100% !important;
+}
+
+.desktop-auth-card .mantine-Paper-root {
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
 

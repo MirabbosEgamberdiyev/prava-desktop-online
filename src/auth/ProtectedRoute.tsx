@@ -7,8 +7,10 @@ const ProtectedRoute: React.FC = () => {
   const location = useLocation();
 
   if (!isAuthenticated) {
-    // Agar foydalanuvchi tizimdan chiqsa, u turgan sahifa (location)
-    // state-ga yozib olinadi va Login sahifasiga yuboriladi.
+    const hasLang = !!localStorage.getItem("prava_lang_selected");
+    if (!hasLang) {
+      return <Navigate to="/auth/language" state={{ from: location }} replace />;
+    }
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 

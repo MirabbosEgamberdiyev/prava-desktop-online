@@ -1,56 +1,69 @@
-/**
- * PRAVA DESKTOP ONLINE — QR LOGIN & DEVICE PAIRING COMPONENT
- * Renders dynamic QR code with 90s TTL countdown, radar animation,
- * and automatic session pairing callback.
- *
- * Production Hardened: Zero fake/demo code, graceful backend availability handling.
- */
-
 import { useState, useEffect, useRef } from "react";
 import {
   Stack,
   Text,
-  Paper,
   Center,
   Button,
-  RingProgress,
-  Badge,
   Loader,
   Group,
   Box,
-  Alert,
+  Title,
   ThemeIcon,
-  Divider,
-  SegmentedControl,
 } from "@mantine/core";
 import { QRCodeSVG } from "qrcode.react";
-import {
-  IconRefresh,
-  IconDeviceMobile,
-  IconAlertCircle,
-  IconLock,
-  IconQrcode,
-  IconCamera,
-} from "@tabler/icons-react";
+import { IconRefresh } from "@tabler/icons-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   QrAuthService,
-  QrServiceUnavailableError,
   type QrInitResponse,
   type QrSessionStatus,
 } from "../../api/qrAuthService";
 import { useAuth } from "../../auth/AuthContext";
 import { showToast } from "../../utils/notificationUtils";
-import TelegramLoginButton from "./TelegramLoginButton";
-import { QrWebcamScanner } from "./QrWebcamScanner";
 
 interface QrLoginCardProps {
   onSwitchToPassword?: () => void;
   onCancel?: () => void;
 }
 
-export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLoginCardProps = {}) {
+// Phone vector outline
+function PhoneVectorIcon() {
+  return (
+    <svg width={48} height={48} viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <rect x={5} y={2} width={14} height={20} rx={3} />
+      <path d="M12 18h.01" />
+    </svg>
+  );
+}
+
+// Confetti Celebratory Checkmark
+function SuccessBadge() {
+  return (
+    <Box style={{ position: "relative", width: 100, height: 100, margin: "0 auto" }}>
+      <svg width={100} height={100} viewBox="0 0 100 100" fill="none">
+        {/* Confetti dots */}
+        <circle cx={14} cy={24} r={3} fill="#3b82f6" />
+        <circle cx={86} cy={20} r={3.5} fill="#f59e0b" />
+        <circle cx={10} cy={70} r={2.5} fill="#ec4899" />
+        <circle cx={90} cy={72} r={3} fill="#10b981" />
+        <circle cx={24} cy={90} r={3} fill="#8b5cf6" />
+        <circle cx={76} cy={92} r={2.5} fill="#06b6d4" />
+        <circle cx={30} cy={10} r={2.5} fill="#f97316" />
+        <circle cx={70} cy={10} r={3} fill="#10b981" />
+
+        {/* Soft background halo */}
+        <circle cx={50} cy={50} r={34} fill="#dcfce7" />
+        {/* Solid Green Circle */}
+        <circle cx={50} cy={50} r={26} fill="#10b981" />
+        {/* Checkmark */}
+        <path d="M42 50L48 56L58 44" stroke="#ffffff" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </Box>
+  );
+}
+
+export function QrLoginCard({ onSwitchToPassword: _onSwitchToPassword, onCancel }: QrLoginCardProps = {}) {
   const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -58,13 +71,10 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/me";
 
-  const [scannerMode, setScannerMode] = useState<"display" | "webcam">("display");
   const [session, setSession] = useState<QrInitResponse | null>(null);
   const [status, setStatus] = useState<QrSessionStatus>("PENDING");
   const [timeLeft, setTimeLeft] = useState<number>(90);
   const [loading, setLoading] = useState<boolean>(true);
-  const [serviceUnavailable, setServiceUnavailable] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,8 +92,6 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
 
   const startNewSession = async () => {
     setLoading(true);
-    setErrorMessage(null);
-    setServiceUnavailable(false);
     setStatus("PENDING");
     clearTimers();
 
@@ -92,7 +100,7 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
       setSession(newSession);
       setTimeLeft(newSession.expiresIn || 90);
 
-      // Start countdown
+      // Countdown
       countdownTimerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
@@ -104,63 +112,40 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
         });
       }, 1000);
 
-      // Start polling every 2.5 seconds
+      // Polling
       pollTimerRef.current = setInterval(async () => {
         try {
           const res = await QrAuthService.checkStatus(newSession.sessionId);
-          if (res.status === "APPROVED") {
+          if (res.status === "SCANNED") {
+            setStatus("SCANNED");
+          } else if (res.status === "APPROVED" && res.accessToken && res.user) {
             clearTimers();
             setStatus("APPROVED");
-
-            if (res.accessToken && res.user) {
-              const userLang = res.user.preferredLanguage;
-              if (userLang) {
-                i18n.changeLanguage(userLang);
-              }
-
-              login({
-                user: res.user,
-                accessToken: res.accessToken,
-                refreshToken: res.refreshToken,
-              });
-
-              // Trigger background data sync immediately
-              try {
-                const { syncEngine } = await import("../../sync/syncEngine");
-                syncEngine.triggerSync();
-              } catch {
-                // Non-blocking sync trigger
-              }
-
-              showToast({
-                id: "qr-login-success",
-                dedupeKey: "qr-login-success",
-                title: t("qr.successTitle", { defaultValue: "Muvaffaqiyatli bog'landi!" }),
-                message: t("qr.successMessage", {
-                  defaultValue: "Qurilmangiz orqali tizimga muvaffaqiyatli kirdingiz.",
-                }),
-                color: "teal",
-                withBorder: true,
-              });
-
-              navigate(from, { replace: true });
+            const userLang = res.user.preferredLanguage;
+            if (userLang) {
+              i18n.changeLanguage(userLang);
             }
+            login({
+              accessToken: res.accessToken,
+              refreshToken: res.refreshToken || "",
+              user: res.user,
+            });
           } else if (res.status === "EXPIRED" || res.status === "REJECTED") {
             clearTimers();
             setStatus(res.status);
-          } else if (res.status === "SCANNED") {
-            setStatus("SCANNED");
           }
         } catch {
-          // Continue polling on transient network glitches
+          // keep polling
         }
-      }, 2500);
+      }, 1500);
     } catch (err: any) {
-      if (err instanceof QrServiceUnavailableError) {
-        setServiceUnavailable(true);
-      } else {
-        setErrorMessage(err?.message || "QR sessiyasini boshlashda xatolik yuz berdi");
-      }
+      clearTimers();
+      showToast({
+        id: "qr-session-init-error",
+        color: "red",
+        title: t("common.error"),
+        message: err?.message || "QR xizmati serverda mavjud emas",
+      });
     } finally {
       setLoading(false);
     }
@@ -168,144 +153,162 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
 
   useEffect(() => {
     startNewSession();
-
-    return () => {
-      clearTimers();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => clearTimers();
   }, []);
 
-  return (
-    <Stack gap="md" align="center" style={{ width: "100%" }}>
-      {/* Mode Switcher: Mobile app scanning Desktop QR vs Desktop webcam scanning Mobile QR */}
-      <SegmentedControl
-        value={scannerMode}
-        onChange={(val) => setScannerMode(val as "display" | "webcam")}
-        data={[
-          {
-            value: "display",
-            label: (
-              <Center style={{ gap: 6 }}>
-                <IconQrcode size={15} />
-                <span>{t("qr.tabShowQr", { defaultValue: "QR kodni ko'rsatish" })}</span>
-              </Center>
-            ),
-          },
-          {
-            value: "webcam",
-            label: (
-              <Center style={{ gap: 6 }}>
-                <IconCamera size={15} />
-                <span>{t("qr.tabWebcam", { defaultValue: "Web-kamera skaner" })}</span>
-              </Center>
-            ),
-          },
-        ]}
-        fullWidth
-        radius="md"
-        size="xs"
-      />
+  const formatTimer = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, "0");
+    const s = (secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
-      {scannerMode === "webcam" ? (
-        <QrWebcamScanner />
-      ) : (
-        <>
-          {errorMessage && (
-            <Alert
-              icon={<IconAlertCircle size={16} />}
-              color="red"
-              w="100%"
-              withCloseButton
-              onClose={() => setErrorMessage(null)}
-            >
-              {errorMessage}
-            </Alert>
-          )}
+  const handleDone = () => {
+    navigate(from, { replace: true });
+  };
 
-          {loading ? (
-            <Center py={50}>
-              <Stack align="center" gap="xs">
-                <Loader size="md" />
-            <Text size="sm" c="dimmed">
-              {t("qr.preparing", { defaultValue: "QR kod tayyorlanmoqda..." })}
-            </Text>
-          </Stack>
-        </Center>
-      ) : serviceUnavailable ? (
-        /* Service Unavailable / Work in Progress State */
-        <Paper
-          p="lg"
-          radius="md"
-          withBorder
-          style={{ width: "100%", background: "var(--surface)" }}
+  // Screen 5: Muvaffaqiyatli ulandi!
+  if (status === "APPROVED") {
+    return (
+      <Stack align="center" gap={18} py={30} style={{ textAlign: "center", width: "100%", maxWidth: 420, margin: "0 auto" }}>
+        <SuccessBadge />
+
+        <Box>
+          <Title order={2} fw={800} fz={22} style={{ letterSpacing: "-0.02em" }}>
+            {i18n.language === "ru"
+              ? "Успешно подключено!"
+              : i18n.language === "uzc"
+              ? "Муваффақиятли уланди!"
+              : "Muvaffaqiyatli ulandi!"}
+          </Title>
+          <Text c="dimmed" fz={14} mt={6} maw={340}>
+            {i18n.language === "ru"
+              ? "Теперь вы можете использовать свой аккаунт на этом компьютере."
+              : i18n.language === "uzc"
+              ? "Энди ушбу компьютерда ҳам ҳисобингиздан фойдаланишингиз мумкин."
+              : "Endi ushbu kompyuterda ham hisobingizdan foydalanishingiz mumkin."}
+          </Text>
+        </Box>
+
+        <Button
+          fullWidth
+          size="md"
+          radius={14}
+          color="#0284c7"
+          h={48}
+          mt={12}
+          onClick={handleDone}
+          style={{ fontWeight: 700, fontSize: 15 }}
         >
-          <Stack align="center" gap="sm" ta="center">
-            <ThemeIcon size={48} radius="xl" color="blue" variant="light">
-              <IconQrcode size={26} />
-            </ThemeIcon>
+          {i18n.language === "ru" ? "Продолжить" : i18n.language === "uzc" ? "Давом этиш" : "Davom etish"}
+        </Button>
+      </Stack>
+    );
+  }
 
-            <Text fw={700} fz="md">
-              {t("qr.serviceUnavailable", { defaultValue: "QR orqali kirish tez kunda ishga tushiriladi" })}
-            </Text>
+  // Screen 4: Tasdiqlash kutilmoqda
+  if (status === "SCANNED") {
+    return (
+      <Stack align="center" gap={18} py={30} style={{ textAlign: "center", width: "100%", maxWidth: 420, margin: "0 auto" }}>
+        {/* Smartphone Icon Circle */}
+        <Box
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 24,
+            backgroundColor: "rgba(2, 132, 199, 0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <PhoneVectorIcon />
+        </Box>
 
-            <Text size="xs" c="dimmed" maw={360}>
-              {t("qr.serviceUnavailableDesc", {
-                defaultValue:
-                  "Server tomonida mobil QR autentifikatsiya xizmati yangilanmoqda. Hozirda desktop ilovaga kirish uchun quyidagi qulay usullardan foydalanishingiz mumkin:",
-              })}
-            </Text>
+        <Box>
+          <Title order={2} fw={800} fz={21} style={{ letterSpacing: "-0.02em" }}>
+            {i18n.language === "ru"
+              ? "Подтвердите на телефоне"
+              : i18n.language === "uzc"
+              ? "Мобил иловада тасдиқлашни кутинг"
+              : "Mobil ilovada tasdiqlashni kuting"}
+          </Title>
+          <Text c="dimmed" fz={13.5} mt={6} maw={320}>
+            {i18n.language === "ru"
+              ? "Запрос отправлен на ваш телефон. Пожалуйста, подтвердите вход в мобильном приложении."
+              : i18n.language === "uzc"
+              ? "Сўров мобил иловангизга юборилди. Илтимос, мобил иловада тасдиқланг."
+              : "So'rov mobil ilovangizga yuborildi. Iltimos, mobil ilovada tasdiqlang."}
+          </Text>
+        </Box>
 
-            <Divider my="xs" style={{ width: "100%" }} />
+        {/* Pulsing Spinner & Status */}
+        <Group gap={10} mt={10}>
+          <Loader size="sm" color="#0284c7" />
+          <Text fz={14} fw={600} c="#0284c7">
+            {i18n.language === "ru" ? "Ожидание..." : i18n.language === "uzc" ? "Кутилмоқда..." : "Kutilmoqda..."}
+          </Text>
+        </Group>
 
-            <Stack gap="xs" style={{ width: "100%" }}>
-              <TelegramLoginButton mode="login" />
+        {/* Cancel Button */}
+        <Button
+          variant="default"
+          radius={14}
+          h={44}
+          fullWidth
+          mt={14}
+          onClick={() => {
+            clearTimers();
+            if (onCancel) onCancel();
+            else startNewSession();
+          }}
+          style={{ borderColor: "var(--border, #e2e8f0)", fontWeight: 600 }}
+        >
+          {i18n.language === "ru" ? "Отмена" : i18n.language === "uzc" ? "Бекор қилиш" : "Bekor qilish"}
+        </Button>
+      </Stack>
+    );
+  }
 
-              {onSwitchToPassword && (
-                <Button
-                  variant="light"
-                  color="blue"
-                  fullWidth
-                  leftSection={<IconLock size={16} />}
-                  onClick={onSwitchToPassword}
-                >
-                  {t("qr.byPassword", { defaultValue: "Parol orqali kirish" })}
-                </Button>
-              )}
+  // Screen 3: QR kod ko'rsatish (Pending)
+  return (
+    <Stack align="center" gap={14} py={10} style={{ textAlign: "center", width: "100%", maxWidth: 420, margin: "0 auto" }}>
+      <Box>
+        <Title order={2} fw={800} fz={22} style={{ letterSpacing: "-0.02em" }}>
+          {i18n.language === "ru"
+            ? "Войти через приложение"
+            : i18n.language === "uzc"
+            ? "Мобил илова орқали киринг"
+            : "Mobil ilova orqali kiring"}
+        </Title>
+        <Text c="dimmed" fz={13} mt={4} maw={340}>
+          {i18n.language === "ru"
+            ? "Отсканируйте QR-код через камеру приложения PRAVA ONLINE"
+            : i18n.language === "uzc"
+            ? "Ҳисобингизни мобил илова билан боғлаш учун QR кодни сканер қилинг"
+            : "Hisobingizni mobil ilova bilan bog'lash uchun QR kodni skaner qiling"}
+        </Text>
+      </Box>
 
-              <Button
-                variant="subtle"
-                color="gray"
-                size="xs"
-                leftSection={<IconRefresh size={14} />}
-                onClick={startNewSession}
-              >
-                {t("qr.checkAgain", { defaultValue: "Qayta tekshirish" })}
-              </Button>
-            </Stack>
-          </Stack>
-        </Paper>
-      ) : session && status !== "EXPIRED" ? (
-        <Stack align="center" gap="sm">
-          {/* QR Code Canvas with Scanning Frame */}
-          <Box
-            style={{
-              position: "relative",
-              padding: "16px",
-              background: "#ffffff",
-              borderRadius: "16px",
-              boxShadow: "0 8px 30px rgba(0, 0, 0, 0.08)",
-              border: "2px solid var(--mantine-color-blue-1)",
-              overflow: "hidden",
-            }}
-          >
-            <QRCodeSVG
-              value={session.qrPayload}
-              size={210}
-              level="M"
-              includeMargin={false}
-            />
-
-            {/* Radar scanner line animation */}
+      {/* QR Code Canvas */}
+      <Box
+        style={{
+          position: "relative",
+          padding: "16px",
+          backgroundColor: "#ffffff",
+          borderRadius: "20px",
+          boxShadow: "0 8px 32px rgba(10, 37, 64, 0.08)",
+          border: "2px solid #e2e8f0",
+          overflow: "hidden",
+        }}
+      >
+        {loading ? (
+          <Center w={210} h={210}>
+            <Loader size="md" color="#0284c7" />
+          </Center>
+        ) : session && status !== "EXPIRED" ? (
+          <>
+            <QRCodeSVG value={session.qrPayload} size={210} level="M" />
+            {/* Animated Radar Scanning Line */}
             <div
               style={{
                 position: "absolute",
@@ -313,112 +316,78 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
                 left: 0,
                 right: 0,
                 height: "3px",
-                background: "linear-gradient(90deg, transparent, #228be6, transparent)",
-                boxShadow: "0 0 8px #228be6",
-                animation: "qrScanPulse 2.5s infinite ease-in-out",
+                background: "linear-gradient(90deg, transparent, #0284c7, transparent)",
+                boxShadow: "0 0 10px #0284c7",
+                animation: "qrRadar 2.5s infinite ease-in-out",
               }}
             />
-          </Box>
-
-          <style>
-            {`
-              @keyframes qrScanPulse {
-                0% { top: 12px; opacity: 0.2; }
-                50% { top: calc(100% - 16px); opacity: 1; }
-                100% { top: 12px; opacity: 0.2; }
-              }
-            `}
-          </style>
-
-          {/* Countdown & Status */}
-          <Group gap="sm" align="center">
-            <RingProgress
-              size={36}
-              thickness={3}
-              roundCaps
-              sections={[
-                {
-                  value: (timeLeft / (session.expiresIn || 90)) * 100,
-                  color: timeLeft < 15 ? "red" : "blue",
-                },
-              ]}
-              label={
-                <Center>
-                  <Text fz={11} fw={700}>
-                    {timeLeft}
-                  </Text>
-                </Center>
-              }
-            />
-            <div>
-              <Badge
-                variant="light"
-                color={
-                  status === "SCANNED" ? "violet" : status === "APPROVED" ? "teal" : "blue"
+            <style>
+              {`
+                @keyframes qrRadar {
+                  0% { top: 12px; opacity: 0.2; }
+                  50% { top: calc(100% - 16px); opacity: 1; }
+                  100% { top: 12px; opacity: 0.2; }
                 }
-              >
-                {status === "SCANNED"
-                  ? t("qr.scanned", { defaultValue: "Skanerlandi! Telefonda tasdiqlashni bosing..." })
-                  : status === "APPROVED"
-                  ? t("qr.approved", { defaultValue: "Tasdiqlandi! Tizimga kirilmoqda..." })
-                  : t("qr.expiresIn", { seconds: timeLeft, defaultValue: `Muddati: ${timeLeft}s` })}
-              </Badge>
-            </div>
-          </Group>
-
-          {/* Instructions */}
-          <Paper
-            p="sm"
-            radius="md"
-            withBorder
-            style={{ width: "100%", background: "var(--surface-muted)" }}
-          >
-            <Stack gap={6}>
-              <Group gap="xs">
-                <IconDeviceMobile size={18} color="var(--mantine-color-blue-6)" />
-                <Text fw={600} fz="xs">
-                  {t("qr.instructionsTitle", { defaultValue: "Tezkor ulanish yo'riqnomasi:" })}
-                </Text>
-              </Group>
-              <Text fz="xs" c="dimmed">
-                {t("qr.step1", {
-                  defaultValue:
-                    "1. Telefoningiz kamerasini QR kodga qarating va havolani oching.",
-                })}
+              `}
+            </style>
+          </>
+        ) : (
+          <Center w={210} h={210}>
+            <Stack align="center" gap={8}>
+              <Text fz={13} c="dimmed">
+                {i18n.language === "ru" ? "Срок действия истек" : i18n.language === "uzc" ? "Муддати тугади" : "Muddati tugadi"}
               </Text>
-              <Text fz="xs" c="dimmed">
-                {t("qr.step2", {
-                  defaultValue: "2. Profilingizga kiring va «Tasdiqlash» tugmasini bosing.",
-                })}
-              </Text>
-              <Text fz="xs" c="dimmed">
-                {t("qr.step3", {
-                  defaultValue:
-                    "3. Desktop ilovaga avtomatik kiriladi va ma'lumotlar sinxronlashadi.",
-                })}
-              </Text>
+              <Button size="xs" radius="md" color="#0284c7" onClick={startNewSession}>
+                {i18n.language === "ru" ? "Обновить" : i18n.language === "uzc" ? "Янгилаш" : "Yangilash"}
+              </Button>
             </Stack>
-          </Paper>
-        </Stack>
-      ) : (
-        /* Expired Session View */
-        <Center py={40}>
-          <Stack align="center" gap="sm">
-            <Text c="dimmed" fz="sm">
-              {t("qr.expired", { defaultValue: "QR kod muddati tugadi" })}
-            </Text>
-            <Button
-              variant="filled"
-              leftSection={<IconRefresh size={16} />}
-              onClick={startNewSession}
-              radius="md"
-            >
-              {t("qr.refresh", { defaultValue: "Kodni yangilash" })}
-            </Button>
-          </Stack>
-        </Center>
+          </Center>
+        )}
+      </Box>
+
+      {/* Timer & Refresh Row */}
+      {status !== "EXPIRED" && !loading && (
+        <Group gap={8} justify="center" mt={4}>
+          <Text fz={13.5} fw={600} c="dimmed">
+            ⏱ {formatTimer(timeLeft)}
+          </Text>
+          <ThemeIcon
+            size={26}
+            radius="xl"
+            variant="light"
+            color="gray"
+            style={{ cursor: "pointer" }}
+            onClick={startNewSession}
+          >
+            <IconRefresh size={14} />
+          </ThemeIcon>
+        </Group>
       )}
-        </>
+
+      {/* Yoki kodni ko'rsatish */}
+      {session && (
+        <Button
+          variant="subtle"
+          color="blue"
+          size="compact-sm"
+          mt={2}
+          onClick={() => {
+            navigator.clipboard?.writeText(session.qrPayload);
+            showToast({
+              id: "qr-copy-toast",
+              title: "Nusxalandi",
+              message: "Ulanish havolasi xotiraga nusxalandi",
+              color: "teal",
+            });
+          }}
+          style={{ fontSize: 13, fontWeight: 600 }}
+        >
+          {i18n.language === "ru"
+            ? "Или скопировать ссылку"
+            : i18n.language === "uzc"
+            ? "Ёки кодни кўрсатиш"
+            : "Yoki kodni ko'rsatish"}
+        </Button>
       )}
     </Stack>
   );
