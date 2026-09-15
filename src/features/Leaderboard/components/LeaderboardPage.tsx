@@ -17,10 +17,12 @@ import {
   useComputedColorScheme,
 } from "@mantine/core";
 import { IconFlame, IconMedal } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
-import type { LeaderboardResponse, TopicsResponse } from "../types";
+import { getTopics } from "../../../services/desktopAdapter";
+import type { LeaderboardResponse } from "../types";
 
 export function LeaderboardPage() {
   const { t, i18n } = useTranslation();
@@ -30,10 +32,21 @@ export function LeaderboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Math.max(0, Number(searchParams.get("page") ?? 0));
   const selectedTopic = searchParams.get("topic") ?? null;
+  const [topics, setTopics] = useState<any[]>([]);
 
-  const { data: topicsResponse } = useSWR<TopicsResponse>(
-    "/api/v1/admin/topics/with-questions",
-  );
+  useEffect(() => {
+    let mounted = true;
+    getTopics()
+      .then((res: any[]) => {
+        if (mounted && Array.isArray(res) && res.length > 0) {
+          setTopics(res);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const leaderboardUrl = selectedTopic
     ? `/api/v1/statistics/leaderboard/${selectedTopic}?page=${page}&size=20`
@@ -43,16 +56,25 @@ export function LeaderboardPage() {
     useSWR<LeaderboardResponse>(leaderboardUrl);
 
   const leaderboard = leaderboardResponse?.data;
-  const topics = topicsResponse?.data || [];
+
+  const getTopicName = (tp: any): string => {
+    if (!tp) return "";
+    const lang = i18n.language;
+    if (lang === "uzc" && tp.name_uzc) return tp.name_uzc;
+    if (lang === "ru" && tp.name_ru) return tp.name_ru;
+    if (lang === "en" && tp.name_en) return tp.name_en;
+    if (tp.name_uzl) return tp.name_uzl;
+    if (typeof tp.name === "object" && tp.name) {
+      return tp.name[lang] || tp.name.uzl || tp.name.ru || tp.name.en || "";
+    }
+    return String(tp.name || "");
+  };
 
   const topicOptions = [
     { value: "", label: t("leaderboard.global", "Umumiy reyting") },
     ...topics.map((topic: any) => ({
       value: String(topic.id),
-      label:
-        typeof topic.name === "object"
-          ? topic.name[i18n.language] || topic.name.uzl || topic.name.ru || ""
-          : String(topic.name || ""),
+      label: getTopicName(topic),
     })),
   ];
 

@@ -1,0 +1,30 @@
+{
+  "applicationName": "Prava Online Desktop",
+  "version": "1.0.0",
+  "platform": "Windows (x86_64)",
+  "framework": "Tauri v2 + React 18 + Vite + SQLite/IndexedDB",
+  "generatedAt": "2026-09-15T13:15:36.335Z",
+  "artifacts": [
+    {
+      "fileName": "prava-desktop-online.exe",
+      "type": "Standalone Portable Binary",
+      "fileSizeBytes": 11674112,
+      "fileSizeMB": "11.13 MB",
+      "sha256": "4f12d7d5111e53538c3527bd134bf170a20627d6b26e1af0cf4a1323f20e856f"
+    },
+    {
+      "fileName": "Prava-Online-1.0.0.msi",
+      "type": "MSI Windows Installer",
+      "fileSizeBytes": 5382144,
+      "fileSizeMB": "5.13 MB",
+      "sha256": "9246c34d46433ccd1ebd11d81743c6fb56d40681ce2189aeef21b849b43afc87"
+    },
+    {
+      "fileName": "Prava-Online-Setup-1.0.0.exe",
+      "type": "NSIS Setup Installer",
+      "fileSizeBytes": 4209923,
+      "fileSizeMB": "4.01 MB",
+      "sha256": "522cbf5c0af857c322a134e81d741c27bd9d99abf0dd08c618fba35b94ab7ed6"
+    }
+  ]
+}

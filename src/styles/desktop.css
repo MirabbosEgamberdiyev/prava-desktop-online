@@ -2522,6 +2522,11 @@ body:has(.app) {
   transform: translateX(3px);
   color: var(--primary);
 }
+
+.home-menu-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;

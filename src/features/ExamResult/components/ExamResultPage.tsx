@@ -18,11 +18,14 @@ import {
   useComputedColorScheme,
 } from "@mantine/core";
 import { IconArrowLeft, IconCheck, IconX } from "@tabler/icons-react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import useSWR from "swr";
 import { useLanguage } from "../../../hooks/useLanguage";
 import { getImageUrl } from "../../../utils/imageUtils";
+import { dbClient } from "../../../database/dbClient";
+import storageService from "../../../services/storageService";
 import type { LocalizedText } from "../../../types";
 import type { ExamResultResponse, AnswerDetail } from "../types";
 
@@ -35,18 +38,126 @@ export function ExamResultPage() {
     getInitialValueInEffect: true,
   });
 
+  const [localResult, setLocalResult] = useState<ExamResultResponse["data"] | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!sessionId) return;
+    const sid: string = sessionId;
+    async function loadLocal() {
+      try {
+        const localSession = await dbClient.getExamSessionById(sid);
+        if (localSession) {
+          let answerDetails: AnswerDetail[] = [];
+          if (localSession.questions_json && localSession.answers_json) {
+            try {
+              const qs = JSON.parse(localSession.questions_json);
+              const answers = JSON.parse(localSession.answers_json);
+              answerDetails = qs.map((q: any, idx: number) => {
+                const ans = answers[idx];
+                const selected = ans?.selected ?? null;
+                const correct = ans?.correct ?? q.correct_option;
+                let opts: any[] = [];
+                try {
+                  opts = typeof q.options_json === "string" ? JSON.parse(q.options_json) : (q.options || []);
+                } catch {}
+                return {
+                  questionId: q.id,
+                  questionOrder: idx + 1,
+                  questionText: { uzl: q.text_uzl, uzc: q.text_uzc, ru: q.text_ru, en: q.text_en },
+                  imageUrl: q.image_url,
+                  options: opts.map((opt: any, optIdx: number) => ({
+                    id: optIdx,
+                    index: optIdx,
+                    text: typeof opt === "object" ? opt : { uzl: String(opt) },
+                  })),
+                  correctOptionIndex: correct,
+                  selectedOptionIndex: selected,
+                  isCorrect: selected !== null ? selected === correct : null,
+                  timeSpentSeconds: null,
+                  explanation: { uzl: q.explanation_uzl, uzc: q.explanation_uzc, ru: q.explanation_ru, en: q.explanation_en },
+                };
+              });
+            } catch {}
+          }
+
+          const isPassed = localSession.score >= 90;
+          const mapped: ExamResultResponse["data"] = {
+            sessionId: typeof sessionId === "number" ? sessionId : 0,
+            packageId: null,
+            packageName: null,
+            topicId: null,
+            topicName: null,
+            status: localSession.status,
+            isMarathonMode: localSession.exam_type === "MARATHON",
+            totalQuestions: localSession.total_questions || 20,
+            answeredCount: localSession.correct_answers,
+            correctCount: localSession.correct_answers,
+            incorrectCount: Math.max(0, (localSession.total_questions || 20) - localSession.correct_answers),
+            unansweredCount: 0,
+            score: localSession.score,
+            percentage: localSession.score,
+            isPassed,
+            passingScore: 90,
+            startedAt: new Date(localSession.started_at).toISOString(),
+            finishedAt: localSession.completed_at ? new Date(localSession.completed_at).toISOString() : new Date().toISOString(),
+            durationSeconds: localSession.duration_seconds,
+            averageTimePerQuestion: localSession.total_questions > 0 ? localSession.duration_seconds / localSession.total_questions : 0,
+            answerDetails,
+          };
+
+          if (mounted) setLocalResult(mapped);
+          return;
+        }
+
+        const stored = storageService.getExamHistory().find((h) => String(h.id) === String(sessionId));
+        if (stored) {
+          const isPassed = stored.score >= 90;
+          const mapped: ExamResultResponse["data"] = {
+            sessionId: typeof sessionId === "number" ? sessionId : 0,
+            packageId: null,
+            packageName: null,
+            topicId: null,
+            topicName: null,
+            status: "COMPLETED",
+            isMarathonMode: stored.examType === "MARATHON" || stored.examType === "marathon",
+            totalQuestions: stored.totalQuestions,
+            answeredCount: stored.correctAnswers,
+            correctCount: stored.correctAnswers,
+            incorrectCount: Math.max(0, stored.totalQuestions - stored.correctAnswers),
+            unansweredCount: 0,
+            score: stored.score,
+            percentage: stored.score,
+            isPassed,
+            passingScore: 90,
+            startedAt: stored.createdAt,
+            finishedAt: stored.createdAt,
+            durationSeconds: stored.durationSeconds,
+            averageTimePerQuestion: stored.totalQuestions > 0 ? stored.durationSeconds / stored.totalQuestions : 0,
+            answerDetails: [],
+          };
+          if (mounted) setLocalResult(mapped);
+        }
+      } catch {}
+    }
+    loadLocal();
+    return () => {
+      mounted = false;
+    };
+  }, [sessionId]);
+
   const {
     data: resultResponse,
     isLoading,
     error,
     mutate,
   } = useSWR<ExamResultResponse>(
-    sessionId ? `/api/v2/exams/${sessionId}/result` : null,
+    sessionId && !isNaN(Number(sessionId)) ? `/api/v2/exams/${sessionId}/result` : null,
   );
 
-  const result = resultResponse?.data;
+  const result = resultResponse?.data || localResult;
 
-  if (isLoading) {
+  if (isLoading && !result) {
     return (
       <Center h="80vh">
         <Stack align="center">
@@ -59,11 +170,10 @@ export function ExamResultPage() {
 
   /*
    * BUG FIX: avval tarmoq/server xatosi ham "natija topilmadi" deb
-   * ko'rsatilardi va qayta urinish tugmasi yo'q edi — foydalanuvchi
-   * endigina yakunlagan imtihoni natijasini butunlay yo'qotgandek his
-   * qilardi. Endi xato alohida holat va uni qayta yuklash mumkin.
+   * ko'rsatilardi va qayta urinish tugmasi yo'q edi. Agar offline/lokal
+   * natija mavjud bo'lsa, xato o'rniga lokal natija ko'rsatiladi.
    */
-  if (error) {
+  if (error && !result) {
     return (
       <Center h="80vh">
         <Stack align="center">

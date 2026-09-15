@@ -21,6 +21,7 @@ import {
   Alert,
   ThemeIcon,
   Divider,
+  SegmentedControl,
 } from "@mantine/core";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -29,6 +30,7 @@ import {
   IconAlertCircle,
   IconLock,
   IconQrcode,
+  IconCamera,
 } from "@tabler/icons-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -41,6 +43,7 @@ import {
 import { useAuth } from "../../auth/AuthContext";
 import { showToast } from "../../utils/notificationUtils";
 import TelegramLoginButton from "./TelegramLoginButton";
+import { QrWebcamScanner } from "./QrWebcamScanner";
 
 interface QrLoginCardProps {
   onSwitchToPassword?: () => void;
@@ -55,6 +58,7 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/me";
 
+  const [scannerMode, setScannerMode] = useState<"display" | "webcam">("display");
   const [session, setSession] = useState<QrInitResponse | null>(null);
   const [status, setStatus] = useState<QrSessionStatus>("PENDING");
   const [timeLeft, setTimeLeft] = useState<number>(90);
@@ -173,22 +177,55 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
 
   return (
     <Stack gap="md" align="center" style={{ width: "100%" }}>
-      {errorMessage && (
-        <Alert
-          icon={<IconAlertCircle size={16} />}
-          color="red"
-          w="100%"
-          withCloseButton
-          onClose={() => setErrorMessage(null)}
-        >
-          {errorMessage}
-        </Alert>
-      )}
+      {/* Mode Switcher: Mobile app scanning Desktop QR vs Desktop webcam scanning Mobile QR */}
+      <SegmentedControl
+        value={scannerMode}
+        onChange={(val) => setScannerMode(val as "display" | "webcam")}
+        data={[
+          {
+            value: "display",
+            label: (
+              <Center style={{ gap: 6 }}>
+                <IconQrcode size={15} />
+                <span>{t("qr.tabShowQr", { defaultValue: "QR kodni ko'rsatish" })}</span>
+              </Center>
+            ),
+          },
+          {
+            value: "webcam",
+            label: (
+              <Center style={{ gap: 6 }}>
+                <IconCamera size={15} />
+                <span>{t("qr.tabWebcam", { defaultValue: "Web-kamera skaner" })}</span>
+              </Center>
+            ),
+          },
+        ]}
+        fullWidth
+        radius="md"
+        size="xs"
+      />
 
-      {loading ? (
-        <Center py={50}>
-          <Stack align="center" gap="xs">
-            <Loader size="md" />
+      {scannerMode === "webcam" ? (
+        <QrWebcamScanner />
+      ) : (
+        <>
+          {errorMessage && (
+            <Alert
+              icon={<IconAlertCircle size={16} />}
+              color="red"
+              w="100%"
+              withCloseButton
+              onClose={() => setErrorMessage(null)}
+            >
+              {errorMessage}
+            </Alert>
+          )}
+
+          {loading ? (
+            <Center py={50}>
+              <Stack align="center" gap="xs">
+                <Loader size="md" />
             <Text size="sm" c="dimmed">
               {t("qr.preparing", { defaultValue: "QR kod tayyorlanmoqda..." })}
             </Text>
@@ -380,6 +417,8 @@ export function QrLoginCard({ onSwitchToPassword, onCancel: _onCancel }: QrLogin
             </Button>
           </Stack>
         </Center>
+      )}
+        </>
       )}
     </Stack>
   );

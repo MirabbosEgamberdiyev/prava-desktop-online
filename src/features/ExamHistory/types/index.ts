@@ -14,7 +14,8 @@ export function getApiStatus(filter: HistoryFilterStatus): string | null {
 }
 
 export interface ExamHistoryItem {
-  sessionId: number;
+  sessionId: number | string;
+  isOffline?: boolean;
   status: string;
   score?: number;
   percentage: number;

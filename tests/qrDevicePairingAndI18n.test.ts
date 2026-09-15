@@ -66,4 +66,36 @@ describe("QR Device Pairing & i18n Parity Test Suite", () => {
       expect(typeof QrAuthService.revokeDevice).toBe("function");
     });
   });
+
+  describe("3. Webcam QR Scanner Data Extraction", () => {
+    it("should parse token from callback URLs", async () => {
+      const { parseQrData } = await import("../src/components/auth/QrWebcamScanner");
+      const res = parseQrData("https://pravaonline.uz/auth/telegram-callback?token=telegram_jwt_sample_123");
+      expect(res.token).toBe("telegram_jwt_sample_123");
+    });
+
+    it("should parse sessionId from pairing URLs", async () => {
+      const { parseQrData } = await import("../src/components/auth/QrWebcamScanner");
+      const res = parseQrData("https://pravaonline.uz/auth/pair?sessionId=session_pair_abc_789");
+      expect(res.sessionId).toBe("session_pair_abc_789");
+    });
+
+    it("should parse JSON payload with token or sessionId", async () => {
+      const { parseQrData } = await import("../src/components/auth/QrWebcamScanner");
+      expect(parseQrData(JSON.stringify({ token: "tok_json_456" }))).toEqual({ token: "tok_json_456" });
+      expect(parseQrData(JSON.stringify({ sessionId: "sid_json_789" }))).toEqual({ sessionId: "sid_json_789" });
+    });
+
+    it("should accept raw tokens >= 16 characters", async () => {
+      const { parseQrData } = await import("../src/components/auth/QrWebcamScanner");
+      const raw = "raw_token_value_longer_than_16";
+      expect(parseQrData(raw)).toEqual({ token: raw });
+    });
+
+    it("should reject invalid/short noise strings", async () => {
+      const { parseQrData } = await import("../src/components/auth/QrWebcamScanner");
+      expect(parseQrData("hello")).toEqual({});
+      expect(parseQrData("12345")).toEqual({});
+    });
+  });
 });

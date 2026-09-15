@@ -286,6 +286,37 @@ export const dbClient = {
     });
   },
 
+  async getAllExamSessions(userId?: string | number | null): Promise<DbExamSession[]> {
+    const db = await openIndexedDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("exam_sessions", "readonly");
+      const store = tx.objectStore("exam_sessions");
+      const request = store.getAll();
+      request.onsuccess = () => {
+        let list: DbExamSession[] = request.result || [];
+        if (userId !== undefined && userId !== null) {
+          list = list.filter(
+            (s) => s.user_id === undefined || s.user_id === null || String(s.user_id) === String(userId)
+          );
+        }
+        list.sort((a, b) => (b.completed_at || b.started_at) - (a.completed_at || a.started_at));
+        resolve(list);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  async getExamSessionById(localId: string): Promise<DbExamSession | null> {
+    const db = await openIndexedDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("exam_sessions", "readonly");
+      const store = tx.objectStore("exam_sessions");
+      const request = store.get(localId);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  },
+
   // ── USER PROGRESS (USER SCOPED) ──
   async saveUserProgress(progress: DbUserProgress): Promise<void> {
     await idbTx("user_progress", "readwrite", (store) => store.put(progress));
