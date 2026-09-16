@@ -62,10 +62,9 @@ export function LeaderboardPage() {
     const lang = i18n.language;
     if (lang === "uzc" && tp.name_uzc) return tp.name_uzc;
     if (lang === "ru" && tp.name_ru) return tp.name_ru;
-    if (lang === "en" && tp.name_en) return tp.name_en;
     if (tp.name_uzl) return tp.name_uzl;
     if (typeof tp.name === "object" && tp.name) {
-      return tp.name[lang] || tp.name.uzl || tp.name.ru || tp.name.en || "";
+      return tp.name[lang] || tp.name.uzl || tp.name.ru || "";
     }
     return String(tp.name || "");
   };

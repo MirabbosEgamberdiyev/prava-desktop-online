@@ -116,7 +116,6 @@ export function getReleaseNotes(r: AppReleaseResponse, lang: string): string | u
   switch (lang) {
     case "uzc": return r.releaseNotesUzc || r.releaseNotesUzl;
     case "ru":  return r.releaseNotesRu  || r.releaseNotesUzl;
-    case "en":  return r.releaseNotesEn  || r.releaseNotesUzl;
-    default:    return r.releaseNotesUzl || r.releaseNotesEn;
+    default:    return r.releaseNotesUzl;
   }
 }

@@ -1,11 +1,11 @@
 export interface LocalizedText {
   uzl: string;
   uzc: string;
-  en: string;
+  en?: string;
   ru: string;
 }
 
-export type LanguageKey = "uzl" | "uzc" | "en" | "ru";
+export type LanguageKey = "uzl" | "uzc" | "ru";
 
 export interface Option {
   id: number;

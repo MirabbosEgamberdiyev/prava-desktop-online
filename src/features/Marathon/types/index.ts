@@ -2,7 +2,7 @@
 export interface LocalizedText {
   uzl: string;
   uzc: string;
-  en: string;
+  en?: string;
   ru: string;
 }
 

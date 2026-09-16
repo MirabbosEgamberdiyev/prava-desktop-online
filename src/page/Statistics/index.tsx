@@ -234,8 +234,6 @@ export default function Statistics_Page() {
       const locale =
         i18n.language === "ru"
           ? "ru-RU"
-          : i18n.language === "en"
-          ? "en-US"
           : "uz-UZ";
       return new Date(d).toLocaleDateString(locale, {
         day: "2-digit",

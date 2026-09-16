@@ -2,7 +2,7 @@
 export interface LocalizedText {
   uzl: string;
   uzc: string;
-  en: string;
+  en?: string;
   ru: string;
 }
 
@@ -63,4 +63,4 @@ export interface ExamPageProps {
 }
 
 // Tilni olish uchun type
-export type LanguageKey = "uzl" | "uzc" | "en" | "ru";
+export type LanguageKey = "uzl" | "uzc" | "ru";

@@ -5,7 +5,7 @@ export type TicketStatus = "COMPLETED" | "IN_PROGRESS" | "NOT_STARTED";
 export interface LocalizedText {
   uzl: string;
   uzc: string;
-  en: string;
+  en?: string;
   ru: string;
 }
 
