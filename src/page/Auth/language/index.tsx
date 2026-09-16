@@ -1,16 +1,12 @@
-import { useState } from "react";
 import {
   Box,
-  Button,
   Card,
   Container,
   Group,
   Stack,
   Text,
   Title,
-  ThemeIcon,
 } from "@mantine/core";
-import { IconCheck, IconArrowRight } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage, type AppLanguage } from "../../../context/LanguageContext";
 
@@ -28,16 +24,14 @@ function SteeringWheelLogo({ size = 36 }: { size?: number }) {
 export default function LanguageSelectionPage() {
   const { language, setLanguage } = useLanguage();
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<AppLanguage>(language || "uzl");
 
   const languages: { code: AppLanguage; flag: string; label: string }[] = [
-    { code: "uzl", flag: "🇺🇿", label: "O‘zbekcha (UZL)" },
-    { code: "uzc", flag: "🇺🇿", label: "Ўзбекча (UZC)" },
+    { code: "uzl", flag: "🇺🇿", label: "O‘zbekcha (UZ)" },
     { code: "ru", flag: "🇷🇺", label: "Русский (RU)" },
   ];
 
-  const handleContinue = async () => {
-    await setLanguage(selected);
+  const handleSelectLanguage = async (code: AppLanguage) => {
+    await setLanguage(code);
     localStorage.setItem("prava_lang_selected", "true");
     navigate("/auth/login", { replace: true });
   };
@@ -75,32 +69,26 @@ export default function LanguageSelectionPage() {
 
           <Box>
             <Title order={2} fw={800} fz={24} style={{ letterSpacing: "-0.02em" }}>
-              {selected === "ru"
-                ? "Выберите язык"
-                : selected === "uzc"
-                ? "Тилни танланг"
-                : "Tilni tanlang"}
+              {language === "ru" ? "Добро пожаловать!" : "Xush kelibsiz!"}
             </Title>
             <Text c="dimmed" fz={13.5} mt={4}>
-              {selected === "ru"
-                ? "Выберите язык для использования приложения"
-                : selected === "uzc"
-                ? "Иловадан фойдаланиш учун тилни танланг"
-                : "Ilovadan foydalanish uchun tilni tanlang"}
+              {language === "ru"
+                ? "Выберите язык для использования приложения Prava Online"
+                : "Prava Online ilovasidan foydalanish uchun tilni tanlang"}
             </Text>
           </Box>
 
           {/* Language Options List */}
-          <Stack gap={10} style={{ width: "100%" }} mt={8}>
+          <Stack gap={12} style={{ width: "100%" }} mt={8}>
             {languages.map((item) => {
-              const isSelected = selected === item.code;
+              const isSelected = language === item.code;
               return (
                 <Card
                   key={item.code}
                   withBorder
-                  p={14}
+                  p={16}
                   radius={16}
-                  onClick={() => setSelected(item.code)}
+                  onClick={() => handleSelectLanguage(item.code)}
                   style={{
                     cursor: "pointer",
                     transition: "all 0.18s ease",
@@ -112,49 +100,27 @@ export default function LanguageSelectionPage() {
                   }}
                 >
                   <Group justify="space-between" wrap="nowrap">
-                    <Group gap={12}>
-                      <Text fz={20}>{item.flag}</Text>
-                      <Text fw={isSelected ? 700 : 500} fz={14.5}>
+                    <Group gap={14}>
+                      <Text fz={24}>{item.flag}</Text>
+                      <Text fw={700} fz={15}>
                         {item.label}
                       </Text>
                     </Group>
-                    {isSelected ? (
-                      <ThemeIcon size={24} radius="xl" color="#0284c7">
-                        <IconCheck size={15} stroke={2.5} />
-                      </ThemeIcon>
-                    ) : (
-                      <Text c="dimmed" fz={16}>
-                        ›
-                      </Text>
-                    )}
+                    <Text c={isSelected ? "#0284c7" : "dimmed"} fz={18} fw={700}>
+                      ›
+                    </Text>
                   </Group>
                 </Card>
               );
             })}
           </Stack>
 
-          {/* Primary Continue Button */}
-          <Button
-            fullWidth
-            size="md"
-            radius={14}
-            color="#0284c7"
-            h={48}
-            mt={12}
-            rightSection={<IconArrowRight size={18} />}
-            onClick={handleContinue}
-            style={{
-              fontWeight: 700,
-              fontSize: 15,
-              boxShadow: "0 6px 16px rgba(2, 132, 199, 0.28)",
-            }}
-          >
-            {selected === "ru"
-              ? "Продолжить"
-              : selected === "uzc"
-              ? "Давом этиш"
-              : "Davom etish"}
-          </Button>
+          {/* Terms text */}
+          <Text c="dimmed" fz={12} mt={10}>
+            {language === "ru"
+              ? "Продолжая, вы соглашаетесь с Условиями использования."
+              : "Davom etish orqali siz Foydalanish shartlariga rozilik bildirasiz."}
+          </Text>
         </Stack>
       </Card>
     </Container>

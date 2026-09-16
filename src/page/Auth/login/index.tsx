@@ -25,10 +25,15 @@ import { showToast } from "../../../utils/notificationUtils";
 import { useTranslation } from "react-i18next";
 import {
   IconAlertCircle,
+  IconArrowLeft,
+  IconBrandTelegram,
   IconDeviceMobile,
+  IconKey,
   IconLock,
   IconMail,
+  IconQrcode,
   IconUser,
+  IconUserPlus,
 } from "@tabler/icons-react";
 import GoogleLoginButton from "../../../components/auth/GoogleLoginButton";
 import TelegramLoginButton from "../../../components/auth/TelegramLoginButton";
@@ -50,12 +55,16 @@ const Login_Page = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<"password" | "qr">(currentTab === "qr" ? "qr" : "password");
+  const [loginMethod, setLoginMethod] = useState<"password" | "qr" | "telegram">(
+    currentTab === "qr" ? "qr" : currentTab === "telegram" ? "telegram" : "password"
+  );
   const isCapsLock = useCapsLock();
 
   useEffect(() => {
     if (currentTab === "qr") {
       setLoginMethod("qr");
+    } else if (currentTab === "telegram") {
+      setLoginMethod("telegram");
     } else if (!currentTab) {
       setLoginMethod("password");
     }
@@ -195,6 +204,39 @@ const Login_Page = () => {
           </Group>
         </Stack>
 
+        {/* Top Segmented Navigation: [ Tizimga kirish | Ro'yxatdan o'tish | QR orqali kirish ] */}
+        <Group justify="center" gap={8} mb={16} wrap="nowrap">
+          <Button
+            size="xs"
+            radius="md"
+            variant={loginMethod === "password" ? "filled" : "light"}
+            leftSection={<IconKey size={14} />}
+            onClick={() => setLoginMethod("password")}
+          >
+            {i18n.language === "ru" ? "Вход" : "Tizimga kirish"}
+          </Button>
+
+          <Button
+            size="xs"
+            radius="md"
+            variant="light"
+            leftSection={<IconUserPlus size={14} />}
+            onClick={() => navigate("/auth/register")}
+          >
+            {i18n.language === "ru" ? "Регистрация" : "Ro'yxatdan o'tish"}
+          </Button>
+
+          <Button
+            size="xs"
+            radius="md"
+            variant={loginMethod === "qr" ? "filled" : "light"}
+            leftSection={<IconQrcode size={14} />}
+            onClick={() => setLoginMethod("qr")}
+          >
+            {i18n.language === "ru" ? "QR-код" : "QR orqali kirish"}
+          </Button>
+        </Group>
+
         <Paper
           withBorder
           shadow="sm"
@@ -206,24 +248,34 @@ const Login_Page = () => {
             boxShadow: "var(--card-shadow-md)",
           }}
         >
-          {currentTab === "telegram" ? (
-            <Stack align="center" gap={16} py={24} style={{ textAlign: "center" }}>
+          {loginMethod === "telegram" || currentTab === "telegram" ? (
+            <Stack align="center" gap={16} py={16} style={{ textAlign: "center" }}>
+              <Button
+                variant="subtle"
+                size="xs"
+                leftSection={<IconArrowLeft size={16} />}
+                onClick={() => setLoginMethod("password")}
+                style={{ alignSelf: "flex-start" }}
+              >
+                {i18n.language === "ru" ? "Назад" : "Kirishga qaytish"}
+              </Button>
               <Title order={2} fw={800} fz={22} style={{ letterSpacing: "-0.02em" }}>
-                {i18n.language === "ru" ? "Вход через Telegram" : i18n.language === "uzc" ? "Telegram орқали кириш" : "Telegram orqali kirish"}
+                {i18n.language === "ru" ? "Вход через Telegram" : "Telegram orqali kirish"}
               </Title>
               <Text c="dimmed" fz={13.5} maw={340}>
                 {i18n.language === "ru"
                   ? "Войдите в систему в один клик через официального Telegram бота"
-                  : i18n.language === "uzc"
-                  ? "Расмий Telegram ботимиз орқали бир босишда тизимга киринг"
                   : "Rasmiy Telegram botimiz orqali bir bosishda tizimga kiring"}
               </Text>
               <Box mt={12} w="100%" maw={320}>
                 <TelegramLoginButton mode="login" />
               </Box>
             </Stack>
-          ) : (currentTab === "qr" || loginMethod === "qr") ? (
-            <QrLoginCard onSwitchToPassword={() => navigate("/auth/login")} />
+          ) : (loginMethod === "qr" || currentTab === "qr") ? (
+            <QrLoginCard
+              onSwitchToPassword={() => setLoginMethod("password")}
+              onCancel={() => setLoginMethod("password")}
+            />
           ) : (
             <>
               {errorMessage && (
@@ -325,7 +377,39 @@ const Login_Page = () => {
                     my={2}
                   />
 
-                  <GoogleLoginButton mode="login" />
+                  <Stack gap={8}>
+                    <GoogleLoginButton mode="login" />
+
+                    <Button
+                      variant="default"
+                      fullWidth
+                      radius="md"
+                      h={42}
+                      leftSection={<IconBrandTelegram size={18} color="#0088CC" />}
+                      onClick={() => setLoginMethod("telegram")}
+                      styles={{
+                        inner: { justifyContent: "center" },
+                        label: { fontWeight: 600, fontSize: "13.5px" },
+                      }}
+                    >
+                      {i18n.language === "ru" ? "Войти через Telegram" : "Telegram orqali kirish"}
+                    </Button>
+
+                    <Button
+                      variant="default"
+                      fullWidth
+                      radius="md"
+                      h={42}
+                      leftSection={<IconQrcode size={18} color="#0284c7" />}
+                      onClick={() => setLoginMethod("qr")}
+                      styles={{
+                        inner: { justifyContent: "center" },
+                        label: { fontWeight: 600, fontSize: "13.5px" },
+                      }}
+                    >
+                      {i18n.language === "ru" ? "Войти по QR-коду" : "QR-kod orqali kirish"}
+                    </Button>
+                  </Stack>
                 </Stack>
               </form>
             </>
