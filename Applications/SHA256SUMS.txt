@@ -1,3 +1,3 @@
-4f12d7d5111e53538c3527bd134bf170a20627d6b26e1af0cf4a1323f20e856f  prava-desktop-online.exe
-9246c34d46433ccd1ebd11d81743c6fb56d40681ce2189aeef21b849b43afc87  Prava-Online-1.0.0.msi
-522cbf5c0af857c322a134e81d741c27bd9d99abf0dd08c618fba35b94ab7ed6  Prava-Online-Setup-1.0.0.exe
+﻿619acffc0bc987cc98ed11a3304641ea75b4aa08789c62febbdade50b93c2ff2  Prava-Online-Setup.exe
+9bf27d8e437edf9bd1a548d06344602b10ad15437327ab9ad3a94987456db287  Prava-Online.msi
+bb0e109a2b1e8d5c57999d47946e0c063cb677d870c51b564ec7a5449d77a6f0  Prava-Online.exe
