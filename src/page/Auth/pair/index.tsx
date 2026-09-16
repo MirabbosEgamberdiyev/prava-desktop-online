@@ -119,10 +119,12 @@ export default function QrPairingPage() {
         setSuccess(true);
         showToast({
           id: "qr-paired-success",
-          title: i18n.language === "ru" ? "Успешно" : "Muvaffaqiyatli",
+          title: i18n.language === "ru" ? "Успешно" : i18n.language === "uzc" ? "Муваффақиятли" : "Muvaffaqiyatli",
           message:
             i18n.language === "ru"
               ? "Компьютер успешно подключен!"
+              : i18n.language === "uzc"
+              ? "Компьютер муваффақиятли уланди!"
               : "Kompyuter muvaffaqiyatli ulandi!",
           color: "teal",
         });
@@ -132,6 +134,8 @@ export default function QrPairingPage() {
         err?.response?.data?.message ||
           (i18n.language === "ru"
             ? "Ошибка подтверждения подключения"
+            : i18n.language === "uzc"
+            ? "Уланишни тасдиқлашда хатолик юз берди"
             : "Ulanishni tasdiqlashda xatolik yuz berdi")
       );
     } finally {
@@ -155,6 +159,8 @@ export default function QrPairingPage() {
       setAuthError(
         i18n.language === "ru"
           ? "Заполните логин и пароль"
+          : i18n.language === "uzc"
+          ? "Логин ва паролни киритинг"
           : "Login va parolni kiriting"
       );
       return;
@@ -175,18 +181,14 @@ export default function QrPairingPage() {
         password,
       });
 
-      if (loginRes.data?.success && loginRes.data?.data) {
+      if (loginRes.data?.success) {
         login(loginRes.data.data);
 
-        // Approve QR pairing with newly issued token
+        // Approve after successful login
         const approveRes = await api.post(
           "/api/v1/auth/qr/approve",
           { sessionId, challenge },
-          {
-            headers: {
-              Authorization: `Bearer ${loginRes.data.data.accessToken}`,
-            },
-          }
+          { headers: { Authorization: `Bearer ${loginRes.data.data.accessToken}` } }
         );
 
         if (approveRes.data?.success) {
@@ -198,6 +200,8 @@ export default function QrPairingPage() {
         err?.response?.data?.message ||
           (i18n.language === "ru"
             ? "Неверный логин или пароль"
+            : i18n.language === "uzc"
+            ? "Нотўғри логин ёки парол"
             : "Noto'g'ri login yoki parol")
       );
     } finally {
@@ -214,6 +218,8 @@ export default function QrPairingPage() {
             <Text fz={14} c="dimmed">
               {i18n.language === "ru"
                 ? "Загрузка данных сессии..."
+                : i18n.language === "uzc"
+                ? "Уланиш маълумотлари юкланмоқда..."
                 : "Ulanish ma'lumotlari yuklanmoqda..."}
             </Text>
           </Stack>
@@ -260,6 +266,8 @@ export default function QrPairingPage() {
             <Text c="dimmed" fz={14} maw={340}>
               {i18n.language === "ru"
                 ? "Теперь вы вошли в систему на компьютере."
+                : i18n.language === "uzc"
+                ? "Энди сиз компьютерда тизимга кирдингиз."
                 : "Endi siz kompyuterda tizimga kirdingiz."}
             </Text>
 
@@ -271,7 +279,7 @@ export default function QrPairingPage() {
               h={46}
               onClick={() => navigate("/me", { replace: true })}
             >
-              {i18n.language === "ru" ? "Перейти в профиль" : "Profilga o'tish"}
+              {i18n.language === "ru" ? "Перейти в профиль" : i18n.language === "uzc" ? "Профилга ўтиш" : "Profilga o'tish"}
             </Button>
           </Stack>
         </Card>
@@ -299,7 +307,7 @@ export default function QrPairingPage() {
             </Box>
 
             <Title order={3} fw={700} fz={20}>
-              {i18n.language === "ru" ? "Ошибка подключения" : "Ulanishda xatolik"}
+              {i18n.language === "ru" ? "Ошибка подключения" : i18n.language === "uzc" ? "Уланишда хатолик" : "Ulanishda xatolik"}
             </Title>
 
             <Text c="dimmed" fz={13.5}>
@@ -311,7 +319,7 @@ export default function QrPairingPage() {
               radius={12}
               onClick={() => navigate("/auth/login")}
             >
-              {i18n.language === "ru" ? "На главную" : "Kirish sahifasiga qaytish"}
+              {i18n.language === "ru" ? "На главную" : i18n.language === "uzc" ? "Кириш саҳифасига қайтиш" : "Kirish sahifasiga qaytish"}
             </Button>
           </Stack>
         </Card>
@@ -359,9 +367,13 @@ export default function QrPairingPage() {
               {isAuthenticated
                 ? i18n.language === "ru"
                   ? "Устройство запрашивает доступ к вашему аккаунту. Подтвердить?"
+                  : i18n.language === "uzc"
+                  ? "Қурилма сизнинг ҳисобингизга уланишни сўрамоқда. Тасдиқлайсизми?"
                   : "Qurilma sizning hisobingizga ulanishni so'ramoqda. Tasdiqlaysizmi?"
                 : i18n.language === "ru"
                 ? "Войдите в аккаунт для подтверждения подключения компьютера."
+                : i18n.language === "uzc"
+                ? "Компьютерни улаш учун ҳисобингизга киринг."
                 : "Kompyuterni ulash uchun hisobingizga kiring."}
             </Text>
           </Box>
@@ -380,7 +392,7 @@ export default function QrPairingPage() {
             <Stack gap={10}>
               <Group justify="space-between">
                 <Text fz={13} c="dimmed" fw={600}>
-                  💻 {i18n.language === "ru" ? "Устройство:" : "Qurilma:"}
+                  💻 {i18n.language === "ru" ? "Устройство:" : i18n.language === "uzc" ? "Қурилма:" : "Qurilma:"}
                 </Text>
                 <Text fz={13.5} fw={700}>
                   {sessionInfo?.deviceName || "PRAVA Desktop (Windows)"}
@@ -389,7 +401,7 @@ export default function QrPairingPage() {
 
               <Group justify="space-between">
                 <Text fz={13} c="dimmed" fw={600}>
-                  📍 {i18n.language === "ru" ? "Город:" : "Manzil:"}
+                  📍 {i18n.language === "ru" ? "Город:" : i18n.language === "uzc" ? "Манзил:" : "Manzil:"}
                 </Text>
                 <Text fz={13.5} fw={700}>
                   Toshkent, O'zbekiston
@@ -398,7 +410,7 @@ export default function QrPairingPage() {
 
               <Group justify="space-between">
                 <Text fz={13} c="dimmed" fw={600}>
-                  🕒 {i18n.language === "ru" ? "Время:" : "Vaqt:"}
+                  🕒 {i18n.language === "ru" ? "Время:" : i18n.language === "uzc" ? "Вақт:" : "Vaqt:"}
                 </Text>
                 <Text fz={13.5} fw={700}>
                   {new Date().toLocaleTimeString([], {
@@ -435,7 +447,7 @@ export default function QrPairingPage() {
                 leftSection={<IconX size={18} />}
                 style={{ fontWeight: 700 }}
               >
-                {i18n.language === "ru" ? "Отклонить" : "Rad etish"}
+                {i18n.language === "ru" ? "Отклонить" : i18n.language === "uzc" ? "Рад этиш" : "Rad etish"}
               </Button>
 
               <Button
@@ -448,7 +460,7 @@ export default function QrPairingPage() {
                 leftSection={<IconCheck size={18} />}
                 style={{ fontWeight: 700 }}
               >
-                {i18n.language === "ru" ? "Подтвердить" : "Tasdiqlash"}
+                {i18n.language === "ru" ? "Подтвердить" : i18n.language === "uzc" ? "Тасдиқлаш" : "Tasdiqlash"}
               </Button>
             </Group>
           ) : (
@@ -497,6 +509,8 @@ export default function QrPairingPage() {
                 >
                   {i18n.language === "ru"
                     ? "Войти и подтвердить"
+                    : i18n.language === "uzc"
+                    ? "Кириш ва тасдиқлаш"
                     : "Kirish va tasdiqlash"}
                 </Button>
 
@@ -509,7 +523,7 @@ export default function QrPairingPage() {
                   radius={12}
                   onClick={() => navigate("/auth/login")}
                 >
-                  {i18n.language === "ru" ? "Отмена" : "Bekor qilish"}
+                  {i18n.language === "ru" ? "Отмена" : i18n.language === "uzc" ? "Бекор қилиш" : "Bekor qilish"}
                 </Button>
               </Stack>
             </Box>

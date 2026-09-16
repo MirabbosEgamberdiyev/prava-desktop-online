@@ -86,7 +86,8 @@
     "resendCodeIn": "Повторная отправка через {{seconds}}с",
     "openEmailInbox": "Открыть почту",
     "editInfo": "Изменить данные",
-    "passwordRequirementsNotMet": "Пароль должен отвечать всем требованиям безопасности"
+    "passwordRequirementsNotMet": "Пароль должен отвечать всем требованиям безопасности",
+    "verificationChannel": "Способ подтверждения"
   },
   "forgotPassword": {
     "title": "Сброс пароля",

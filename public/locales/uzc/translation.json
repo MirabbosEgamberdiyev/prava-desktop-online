@@ -86,7 +86,8 @@
     "resendCodeIn": "Кодни қайта юбориш: {{seconds}}с",
     "openEmailInbox": "Почтани очиш",
     "editInfo": "Маълумотларни ўзгартириш",
-    "passwordRequirementsNotMet": "Пароль барча хавфсизлик талабларига жавоб бериши керак"
+    "passwordRequirementsNotMet": "Пароль барча хавфсизлик талабларига жавоб бериши керак",
+    "verificationChannel": "Тасдиқлаш усули"
   },
   "forgotPassword": {
     "title": "Паролни тиклаш",

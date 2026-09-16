@@ -213,7 +213,7 @@ const Login_Page = () => {
             leftSection={<IconKey size={14} />}
             onClick={() => setLoginMethod("password")}
           >
-            {i18n.language === "ru" ? "Вход" : "Tizimga kirish"}
+            {i18n.language === "ru" ? "Вход" : i18n.language === "uzc" ? "Тизимга кириш" : "Tizimga kirish"}
           </Button>
 
           <Button
@@ -223,7 +223,7 @@ const Login_Page = () => {
             leftSection={<IconUserPlus size={14} />}
             onClick={() => navigate("/auth/register")}
           >
-            {i18n.language === "ru" ? "Регистрация" : "Ro'yxatdan o'tish"}
+            {i18n.language === "ru" ? "Регистрация" : i18n.language === "uzc" ? "Рўйхатдан ўтиш" : "Ro'yxatdan o'tish"}
           </Button>
 
           <Button
@@ -233,7 +233,7 @@ const Login_Page = () => {
             leftSection={<IconQrcode size={14} />}
             onClick={() => setLoginMethod("qr")}
           >
-            {i18n.language === "ru" ? "QR-код" : "QR orqali kirish"}
+            {i18n.language === "ru" ? "QR-код" : i18n.language === "uzc" ? "QR орқали кириш" : "QR orqali kirish"}
           </Button>
         </Group>
 
@@ -257,14 +257,16 @@ const Login_Page = () => {
                 onClick={() => setLoginMethod("password")}
                 style={{ alignSelf: "flex-start" }}
               >
-                {i18n.language === "ru" ? "Назад" : "Kirishga qaytish"}
+                {i18n.language === "ru" ? "Назад" : i18n.language === "uzc" ? "Киришга қайтиш" : "Kirishga qaytish"}
               </Button>
               <Title order={2} fw={800} fz={22} style={{ letterSpacing: "-0.02em" }}>
-                {i18n.language === "ru" ? "Вход через Telegram" : "Telegram orqali kirish"}
+                {i18n.language === "ru" ? "Вход через Telegram" : i18n.language === "uzc" ? "Telegram орқали кириш" : "Telegram orqali kirish"}
               </Title>
               <Text c="dimmed" fz={13.5} maw={340}>
                 {i18n.language === "ru"
                   ? "Войдите в систему в один клик через официального Telegram бота"
+                  : i18n.language === "uzc"
+                  ? "Расмий Telegram ботимиз орқали бир босишда тизимга киринг"
                   : "Rasmiy Telegram botimiz orqali bir bosishda tizimga kiring"}
               </Text>
               <Box mt={12} w="100%" maw={320}>
@@ -392,7 +394,7 @@ const Login_Page = () => {
                         label: { fontWeight: 600, fontSize: "13.5px" },
                       }}
                     >
-                      {i18n.language === "ru" ? "Войти через Telegram" : "Telegram orqali kirish"}
+                      {i18n.language === "ru" ? "Войти через Telegram" : i18n.language === "uzc" ? "Telegram орқали кириш" : "Telegram orqali kirish"}
                     </Button>
 
                     <Button
@@ -407,7 +409,7 @@ const Login_Page = () => {
                         label: { fontWeight: 600, fontSize: "13.5px" },
                       }}
                     >
-                      {i18n.language === "ru" ? "Войти по QR-коду" : "QR-kod orqali kirish"}
+                      {i18n.language === "ru" ? "Войти по QR-коду" : i18n.language === "uzc" ? "QR-код орқали кириш" : "QR-kod orqali kirish"}
                     </Button>
                   </Stack>
                 </Stack>

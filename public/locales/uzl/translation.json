@@ -86,7 +86,8 @@
     "resendCodeIn": "Kodni qayta yuborish: {{seconds}}s",
     "openEmailInbox": "Pochtani ochish",
     "editInfo": "Ma'lumotlarni o'zgartirish",
-    "passwordRequirementsNotMet": "Parol barcha xavfsizlik talablariga javob berishi kerak"
+    "passwordRequirementsNotMet": "Parol barcha xavfsizlik talablariga javob berishi kerak",
+    "verificationChannel": "Tasdiqlash usuli"
   },
   "forgotPassword": {
     "title": "Parolni tiklash",
