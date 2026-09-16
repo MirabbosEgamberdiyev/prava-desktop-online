@@ -15,6 +15,9 @@ import {
   submitExamSession,
 } from "../../services/desktopAdapter";
 import SecureImage from "../../components/common/SecureImage";
+import ExamTimerDisplay from "../../components/quiz/ExamTimerDisplay";
+import { offlineMediaManager } from "../../services/offlineMediaManager";
+import { getImageUrl } from "../../utils/imageUtils";
 import ImageZoomModal from "../../components/common/ImageZoomModal";
 import ColorMode from "../../components/other/ColorMode";
 import LanguagePicker from "../../components/language/LanguagePicker";
@@ -383,15 +386,6 @@ export default function Exam_Page() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [phase, answers, current, questions.length, zoomSrc, confirmFinishOpen, triggerFinish]);
 
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  };
-
-  const timerIsRed = timeLeft <= 60;
-  const timerIsYellow = !timerIsRed && timeLeft <= 300;
-
   // ─── LOADING ───
   if (phase === "loading") {
     return (
@@ -510,6 +504,23 @@ export default function Exam_Page() {
   const correct = Object.values(answers).filter((a) => a.selected === a.correct).length;
   const wrong = Object.values(answers).length - correct;
 
+  // Predictive Image Prefetching for 0ms transitions
+  useEffect(() => {
+    if (!questions || questions.length === 0) return;
+    const nextQs = questions.slice(current + 1, current + 4);
+    const prevQs = questions.slice(Math.max(0, current - 2), current);
+    [...nextQs, ...prevQs].forEach((item) => {
+      if (item.image_path) {
+        const url = getImageUrl(item.image_path);
+        if (url) {
+          const img = new Image();
+          img.src = url;
+        }
+        offlineMediaManager.cacheImage(item.image_path).catch(() => {});
+      }
+    });
+  }, [current, questions]);
+
   const handleFinishClick = () => {
     const answeredCount = Object.keys(answers).length;
     if (answeredCount < questions.length) {
@@ -538,11 +549,7 @@ export default function Exam_Page() {
             >
               {t("exam.finish", "Yakunlash")} <IconX size={15} />
             </button>
-            <span
-              className={`exam-timer${timerIsRed ? " red" : timerIsYellow ? " yellow" : ""}`}
-            >
-              {formatTime(timeLeft)}
-            </span>
+            <ExamTimerDisplay initialSeconds={questionCount * 60} onTimeUp={() => { setIsTimeUp(true); triggerFinish(true); }} />
           </div>
 
           <div className="exam-topbar-center">

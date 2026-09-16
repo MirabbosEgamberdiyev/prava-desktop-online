@@ -44,6 +44,23 @@ export class OutboxQueue {
     const now = Date.now();
     const userId = explicitUserId !== undefined ? explicitUserId : getCurrentUserId();
 
+    // Outbox mutation collapsing for opposing SAVE / UNSAVE questions
+    if (actionType === "SAVE_QUESTION" || actionType === "UNSAVE_QUESTION") {
+      const opposingType: OutboxAction = actionType === "SAVE_QUESTION" ? "UNSAVE_QUESTION" : "SAVE_QUESTION";
+      try {
+        const pending = await dbClient.getPendingOutbox(userId ?? undefined);
+        const opposingItem = pending.find(
+          (p) => p.action_type === opposingType && p.endpoint === endpoint
+        );
+        if (opposingItem) {
+          await dbClient.removeOutboxItem(opposingItem.id);
+          return opposingItem.id;
+        }
+      } catch (err) {
+        console.warn("[OutboxQueue] Mutation collapse error:", err);
+      }
+    }
+
     const item: DbOutboxItem = {
       id,
       user_id: userId,

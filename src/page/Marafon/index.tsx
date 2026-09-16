@@ -22,6 +22,8 @@ import {
 import ColorMode from "../../components/other/ColorMode";
 import LanguagePicker from "../../components/language/LanguagePicker";
 import ImageZoomModal, { ZoomableImage } from "../../components/common/ImageZoomModal";
+import { offlineMediaManager } from "../../services/offlineMediaManager";
+import { getImageUrl } from "../../utils/imageUtils";
 import GamificationResult from "../../components/quiz/GamificationResult";
 import QuizReviewModal from "../../components/quiz/QuizReviewModal";
 import TestSetupCard from "../../components/quiz/TestSetupCard";
@@ -273,7 +275,24 @@ export default function Marafon_Page() {
 
   const handleSelect = (optIdx: number) => {
     if (answers[current] !== undefined) return;
-    const q = questions[current];
+    // Predictive Image Prefetching for 0ms transitions
+  useEffect(() => {
+    if (!questions || questions.length === 0) return;
+    const nextQs = questions.slice(current + 1, current + 4);
+    const prevQs = questions.slice(Math.max(0, current - 2), current);
+    [...nextQs, ...prevQs].forEach((item) => {
+      if (item.image_path) {
+        const url = getImageUrl(item.image_path);
+        if (url) {
+          const img = new Image();
+          img.src = url;
+        }
+        offlineMediaManager.cacheImage(item.image_path).catch(() => {});
+      }
+    });
+  }, [current, questions]);
+
+  const q = questions[current];
     if (!q) return;
     const opts = parseOptions(q.options_json);
     if (optIdx >= opts.length) return;

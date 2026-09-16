@@ -970,8 +970,16 @@ export async function removeWrongAnswer(_userId: number, questionId: number): Pr
   return true;
 }
 
+const toggleLocks = new Set<number>();
+
 export async function toggleSavedQuestion(_userId: number, question: OfflineQuestion | number): Promise<boolean> {
   const qId = typeof question === "number" ? question : question.id;
+  if (toggleLocks.has(qId)) {
+    return storageService.getSavedQuestions().some((s) => s.question.id === qId);
+  }
+  toggleLocks.add(qId);
+  setTimeout(() => toggleLocks.delete(qId), 300);
+
   let saved = false;
   if (typeof question === "number") {
     storageService.removeSavedQuestion(question);
