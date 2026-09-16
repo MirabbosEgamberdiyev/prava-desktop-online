@@ -135,18 +135,18 @@ describe("Offline Exam Engine — Zero-Network Invariant Test Suite", () => {
   });
 
   it("4. Offline Media Manager: correctly normalizes media paths", () => {
-    expect(normalizeMediaPath("uploads/general/9219a07f.png")).toBe("/uploads/general/9219a07f.png");
-    expect(normalizeMediaPath("general/9219a07f.png")).toBe("/uploads/general/9219a07f.png");
-    expect(normalizeMediaPath("https://pravaonline.uz/uploads/general/9219a07f.png")).toBe(
-      "/uploads/general/9219a07f.png"
+    expect(normalizeMediaPath("uploads/general/9219a07f.png")).toBe("/api/v1/files/general/9219a07f.png");
+    expect(normalizeMediaPath("general/9219a07f.png")).toBe("/api/v1/files/general/9219a07f.png");
+    expect(normalizeMediaPath("https://pravaonline.uz/api/v1/files/general/9219a07f.png")).toBe(
+      "https://pravaonline.uz/api/v1/files/general/9219a07f.png"
     );
     expect(normalizeMediaPath(null)).toBeNull();
     expect(normalizeMediaPath("")).toBeNull();
   });
 
   it("5. Offline Media Manager: constructs valid remote URL for preloading", () => {
-    const remoteUrl = getRemoteMediaUrl("/uploads/general/sign.png");
-    expect(remoteUrl).toContain("/uploads/general/sign.png");
+    const remoteUrl = getRemoteMediaUrl("/api/v1/files/general/sign.png");
+    expect(remoteUrl).toContain("/api/v1/files/general/sign.png");
     expect(remoteUrl.startsWith("http")).toBe(true);
   });
 

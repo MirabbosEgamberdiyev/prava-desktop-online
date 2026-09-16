@@ -274,8 +274,8 @@ describe("18 Production Failure & Chaos Scenarios", () => {
 
   // 13. Image Load Failure Fallback
   it("Scenario 13: Image URL normalization adds leading slash and handles empty paths", () => {
-    expect(getImageUrl("uploads/img.png")).toContain("/uploads/img.png");
-    expect(getImageUrl("/uploads/img.png")).toContain("/uploads/img.png");
+    expect(getImageUrl("uploads/img.png")).toContain("/api/v1/files/img.png");
+    expect(getImageUrl("/uploads/img.png")).toContain("/api/v1/files/img.png");
     expect(getImageUrl("https://pravaonline.uz/uploads/img.png")).toBe("https://pravaonline.uz/uploads/img.png");
     expect(getImageUrl(null)).toBeUndefined();
   });
