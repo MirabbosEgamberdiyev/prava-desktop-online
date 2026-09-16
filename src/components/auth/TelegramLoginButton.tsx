@@ -364,20 +364,34 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
               2-QADAM:
             </Text>
             <Text size="sm">
-              Bot sizga yuborgan <Text span fw={600}>kirish havolasi</Text> yoki <Text span fw={600}>login kodini</Text> bu yerga kiriting:
+              Bot sizga yuborgan <Text span fw={600}>5 xonali tasdiqlash kodini</Text> bu yerga kiriting:
             </Text>
             <TextInput
-              placeholder="Masalan: https://pravaonline.uz/auth/telegram-callback?token=... yoki kod"
+              placeholder="Masalan: 12345"
               leftSection={<IconKey size={18} />}
               value={tokenInput}
-              onChange={(e) => setTokenInput(e.currentTarget.value)}
+              onChange={(e) => {
+                const val = e.currentTarget.value;
+                setTokenInput(val);
+                if (/^\d{5}$/.test(val.trim())) {
+                  handleTokenSubmit(val.trim());
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   handleTokenSubmit();
                 }
               }}
-              size="sm"
+              size="md"
               radius="md"
+              styles={{
+                input: {
+                  fontSize: 16,
+                  fontWeight: 700,
+                  letterSpacing: tokenInput.length > 0 && /^\d+$/.test(tokenInput) ? 4 : 1,
+                  textAlign: "center",
+                },
+              }}
             />
             <Button
               fullWidth
