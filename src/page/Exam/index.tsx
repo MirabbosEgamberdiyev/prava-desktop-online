@@ -13,7 +13,9 @@ import {
   parseOptions,
   getActiveExamSessionId,
   submitExamSession,
+  toggleSavedQuestion,
 } from "../../services/desktopAdapter";
+import storageService from "../../services/storageService";
 import SecureImage from "../../components/common/SecureImage";
 import ExamTimerDisplay from "../../components/quiz/ExamTimerDisplay";
 import { offlineMediaManager } from "../../services/offlineMediaManager";
@@ -37,6 +39,8 @@ import {
   IconSteeringWheel,
   IconAlertTriangle,
   IconDownload,
+  IconBookmark,
+  IconBookmarkFilled,
 } from "@tabler/icons-react";
 
 type Phase = "loading" | "exam" | "result";
@@ -69,6 +73,24 @@ export default function Exam_Page() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [confirmFinishOpen, setConfirmFinishOpen] = useState(false);
   const [showOfflineModal, setShowOfflineModal] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<number>>(() => {
+    try {
+      const list = storageService.getSavedQuestions();
+      return new Set(list.map((s) => s.question.id));
+    } catch {
+      return new Set();
+    }
+  });
+
+  const handleToggleSave = (q: OfflineQuestion) => {
+    toggleSavedQuestion(userId, q);
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(q.id)) next.delete(q.id);
+      else next.add(q.id);
+      return next;
+    });
+  };
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(Date.now());
@@ -492,6 +514,8 @@ export default function Exam_Page() {
           onClose={() => setReviewOpen(false)}
           questions={questions}
           answers={answers}
+          onToggleSave={handleToggleSave}
+          savedIds={savedIds}
         />
       </>
     );
@@ -573,6 +597,22 @@ export default function Exam_Page() {
         {/* ── Question text ── */}
         <div className="exam-question-header">
           <p className="exam-question-text">{localizeQ(q)}</p>
+          <button
+            className={`exam-bookmark-btn${savedIds.has(q.id) ? " saved" : ""}`}
+            onClick={() => handleToggleSave(q)}
+            title={
+              savedIds.has(q.id)
+                ? t("saved.remove", "Saqlangandan o'chirish")
+                : t("common.save", "Saqlash")
+            }
+            type="button"
+          >
+            {savedIds.has(q.id) ? (
+              <IconBookmarkFilled size={18} />
+            ) : (
+              <IconBookmark size={18} />
+            )}
+          </button>
         </div>
 
         {/* ── Two-column body ── */}

@@ -7,7 +7,8 @@ import LanguagePicker from "../../components/language/LanguagePicker";
 import UserMenuButton from "../../components/nav/UserMenuButton";
 import NetworkModeSelector from "../../components/common/NetworkModeSelector";
 import SEO from "../../components/common/SEO";
-import { getFullStats, getWrongAnswers, getTopics, localizeTopic } from "../../services/desktopAdapter";
+import { getFullStats, getWrongAnswers, getTopics, localizeTopic, getSavedQuestions } from "../../services/desktopAdapter";
+import storageService from "../../services/storageService";
 import type { FullStats, AppScreen, WrongAnswerEntry, OfflineTopic } from "../../types/desktop";
 import {
   IconBook2,
@@ -40,6 +41,13 @@ export default function User_Page() {
   const [stats, setStats] = useState<FullStats | null>(null);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswerEntry[]>([]);
   const [topics, setTopics] = useState<OfflineTopic[]>([]);
+  const [savedCount, setSavedCount] = useState<number>(() => {
+    try {
+      return storageService.getSavedQuestions().length;
+    } catch {
+      return 0;
+    }
+  });
 
   const userId = user?.id ? Number(user.id) : 1;
 
@@ -47,6 +55,19 @@ export default function User_Page() {
     getFullStats(userId).then(setStats).catch(() => {});
     getWrongAnswers(userId).then(setWrongAnswers).catch(() => {});
     getTopics().then(setTopics).catch(() => {});
+
+    const updateSaved = () => {
+      getSavedQuestions(userId)
+        .then((list) => setSavedCount(Array.isArray(list) ? list.length : 0))
+        .catch(() => {
+          try {
+            setSavedCount(storageService.getSavedQuestions().length);
+          } catch {}
+        });
+    };
+    updateSaved();
+    window.addEventListener("prava-storage-changed", updateSaved);
+    return () => window.removeEventListener("prava-storage-changed", updateSaved);
   }, [userId]);
 
   // Sanitized Dynamic User Name (Eliminates {{name}} template interpolation bugs)
@@ -149,9 +170,13 @@ export default function User_Page() {
     {
       screen: "saved-questions" as AppScreen,
       title: t("dashboard.tools.saved.title"),
-      desc: t("dashboard.tools.saved.desc"),
+      desc:
+        savedCount > 0
+          ? `${savedCount} ${t("dashboard.totalUnit", "ta")} ${t("dashboard.tools.saved.title").toLowerCase()}`
+          : t("dashboard.tools.saved.desc"),
       icon: IconBookmark,
       gradient: "linear-gradient(135deg,#4dabf7,#1971c2)",
+      badge: savedCount > 0 ? `${savedCount} ${t("dashboard.totalUnit", "ta")}` : undefined,
     },
     {
       screen: "stats" as AppScreen,
@@ -554,7 +579,24 @@ export default function User_Page() {
                       <s.icon size={20} stroke={1.8} color="#fff" />
                     </div>
                     <div className="secondary-tool-info">
-                      <div className="secondary-tool-name">{s.title}</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                        <div className="secondary-tool-name">{s.title}</div>
+                        {s.badge && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 800,
+                              padding: "2px 8px",
+                              borderRadius: "10px",
+                              background: "rgba(25, 113, 194, 0.12)",
+                              color: "#1971c2",
+                              lineHeight: "1.2",
+                            }}
+                          >
+                            {s.badge}
+                          </span>
+                        )}
+                      </div>
                       <div className="secondary-tool-desc">{s.desc}</div>
                     </div>
                     <IconArrowRight size={16} className="secondary-tool-arrow" stroke={2} />
