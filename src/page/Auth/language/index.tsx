@@ -26,7 +26,8 @@ export default function LanguageSelectionPage() {
   const navigate = useNavigate();
 
   const languages: { code: AppLanguage; flag: string; label: string }[] = [
-    { code: "uzl", flag: "🇺🇿", label: "O‘zbekcha (UZ)" },
+    { code: "uzl", flag: "🇺🇿", label: "O‘zbekcha (UZL)" },
+    { code: "uzc", flag: "🇺🇿", label: "Ўзбекча (UZC)" },
     { code: "ru", flag: "🇷🇺", label: "Русский (RU)" },
   ];
 
@@ -69,11 +70,13 @@ export default function LanguageSelectionPage() {
 
           <Box>
             <Title order={2} fw={800} fz={24} style={{ letterSpacing: "-0.02em" }}>
-              {language === "ru" ? "Добро пожаловать!" : "Xush kelibsiz!"}
+              {language === "ru" ? "Добро пожаловать!" : language === "uzc" ? "Хуш келибсиз!" : "Xush kelibsiz!"}
             </Title>
             <Text c="dimmed" fz={13.5} mt={4}>
               {language === "ru"
                 ? "Выберите язык для использования приложения Prava Online"
+                : language === "uzc"
+                ? "Prava Online иловасидан фойдаланиш учун тилни танланг"
                 : "Prava Online ilovasidan foydalanish uchun tilni tanlang"}
             </Text>
           </Box>
@@ -119,6 +122,8 @@ export default function LanguageSelectionPage() {
           <Text c="dimmed" fz={12} mt={10}>
             {language === "ru"
               ? "Продолжая, вы соглашаетесь с Условиями использования."
+              : language === "uzc"
+              ? "Давом этиш орқали сиз Фойдаланиш шартларига розилик билдирасиз."
               : "Davom etish orqali siz Foydalanish shartlariga rozilik bildirasiz."}
           </Text>
         </Stack>

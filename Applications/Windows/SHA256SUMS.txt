@@ -1,3 +1,7 @@
-﻿BE58098A12E0996E84E7C534AE2C594FE778938F95B78929C64B4C9585AA5E42 *Prava-Online-Setup.exe
-555A8FDB400258D8E9437CCC3550A00757EBDE4E6085E53BDBFE585E7A7D6171 *Prava-Online.msi
-360619C579629C98CBC60BCBF350137CAEAE17E30F261FB7AF4D58C658107737 *Prava-Online.exe
+﻿
+Algorithm       Hash                                                                   Path                            
+---------       ----                                                                   ----                            
+SHA256          5C4D585844C7B3B95332232327F9D27D114196596D5432F18CBE88F0E18DB29F       D:\My-project\prava-desktop-o...
+SHA256          B17A9EA99A5CC9E05145132157E921C3223A413BC95ECE98E7A991E1496A542C       D:\My-project\prava-desktop-o...
+
+
