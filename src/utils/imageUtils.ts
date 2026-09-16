@@ -16,6 +16,10 @@ export const getImageUrl = (url: string | null | undefined): string | undefined 
   }
 
   const cleanPath = normalizeMediaPath(url) || (url.startsWith("/") ? url : `/${url}`);
-  return `${API_BASE_URL}${cleanPath}`;
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    return cleanPath;
+  }
+  const base = API_BASE_URL.replace(/\/+$/, "");
+  return `${base}${cleanPath}`;
 };
 

@@ -18,21 +18,22 @@ export function normalizeMediaPath(rawPath: string | null | undefined): string |
   const trimmed = rawPath.trim();
   if (!trimmed) return null;
 
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:") || trimmed.startsWith("blob:")) {
+    return trimmed;
+  }
+
   // Remove full domain if present
   let clean = trimmed.replace(/^https?:\/\/[^/]+/i, "");
-  // Ensure leading slash
-  if (!clean.startsWith("/")) {
-    clean = "/" + clean;
+  clean = clean.replace(/^\/+/, "");
+
+  if (clean.startsWith("uploads/")) {
+    clean = clean.substring("uploads/".length);
+  }
+  if (clean.startsWith("api/v1/files/")) {
+    clean = clean.substring("api/v1/files/".length);
   }
 
-  // If path doesn't start with /uploads/ and points to general/ or admin/ or questions/
-  if (!clean.startsWith("/uploads/")) {
-    if (clean.startsWith("/general/") || clean.startsWith("/admin/") || clean.startsWith("/questions/")) {
-      clean = "/uploads" + clean;
-    }
-  }
-
-  return clean;
+  return `/api/v1/files/${clean}`;
 }
 
 export function getRemoteMediaUrl(imagePath: string): string {

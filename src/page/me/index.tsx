@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useTranslation } from "react-i18next";
@@ -7,8 +7,8 @@ import LanguagePicker from "../../components/language/LanguagePicker";
 import UserMenuButton from "../../components/nav/UserMenuButton";
 import NetworkModeSelector from "../../components/common/NetworkModeSelector";
 import SEO from "../../components/common/SEO";
-import { getFullStats } from "../../services/desktopAdapter";
-import type { FullStats, AppScreen } from "../../types/desktop";
+import { getFullStats, getWrongAnswers, getTopics, localizeTopic } from "../../services/desktopAdapter";
+import type { FullStats, AppScreen, WrongAnswerEntry, OfflineTopic } from "../../types/desktop";
 import {
   IconBook2,
   IconPencil,
@@ -28,13 +28,6 @@ import {
 
 import { useLanguage } from "../../context/LanguageContext";
 
-const WEAK_TOPICS_CONFIG = [
-  { id: 1, key: "roadSigns", wrongCount: 41 },
-  { id: 2, key: "generalRules", wrongCount: 13 },
-  { id: 3, key: "intersections", wrongCount: 5 },
-  { id: 4, key: "firstAid", wrongCount: 5 },
-];
-
 const EXAM_OPTIONS = [20, 40, 50, 60, 80, 100];
 
 export default function User_Page() {
@@ -45,11 +38,15 @@ export default function User_Page() {
 
   const [showExamPicker, setShowExamPicker] = useState(false);
   const [stats, setStats] = useState<FullStats | null>(null);
+  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswerEntry[]>([]);
+  const [topics, setTopics] = useState<OfflineTopic[]>([]);
 
   const userId = user?.id ? Number(user.id) : 1;
 
   useEffect(() => {
     getFullStats(userId).then(setStats).catch(() => {});
+    getWrongAnswers(userId).then(setWrongAnswers).catch(() => {});
+    getTopics().then(setTopics).catch(() => {});
   }, [userId]);
 
   // Sanitized Dynamic User Name (Eliminates {{name}} template interpolation bugs)
@@ -57,14 +54,18 @@ export default function User_Page() {
   const cleanName = rawName.includes("{{") ? "" : rawName;
   const displayName = cleanName || t("dashboard.fallbackName");
 
-  // Verified EdTech Metrics
-  const qPracticed = stats ? (stats.question_readiness.ready + stats.question_readiness.average + stats.question_readiness.weak) || 322 : 322;
+  // Dynamic Verified EdTech Metrics
+  const qPracticed = stats
+    ? (stats.question_readiness.ready + stats.question_readiness.average + stats.question_readiness.weak)
+    : 0;
   const qTotal = stats?.question_readiness.total || 1190;
-  const qPercent = qTotal > 0 ? Math.round((qPracticed / qTotal) * 100) : 27;
-  const readinessPercent = 14;
+  const qPercent = qTotal > 0 ? Math.round((qPracticed / qTotal) * 100) : 0;
+  const readinessPercent = stats && stats.ticket_total > 0
+    ? Math.round((stats.ticket_ready / stats.ticket_total) * 100)
+    : (qTotal > 0 ? Math.round(((stats?.question_readiness.ready ?? 0) / qTotal) * 100) : 0);
   const dailyTarget = 30;
-  const dailyDone = 12;
-  const dailyPercent = Math.round((dailyDone / dailyTarget) * 100);
+  const dailyDone = Math.min(dailyTarget, qPracticed > 0 ? (qPracticed % dailyTarget || dailyTarget) : 0);
+  const dailyPercent = Math.min(100, Math.round((dailyDone / dailyTarget) * 100));
 
   const handleNav = (screen: AppScreen) => {
     switch (screen) {
@@ -175,11 +176,28 @@ export default function User_Page() {
     },
   ];
 
-  const currentWeakTopics = WEAK_TOPICS_CONFIG.map((item) => ({
-    id: item.id,
-    name: t(`dashboard.weakTopicsList.${item.key}`),
-    wrongCount: item.wrongCount,
-  }));
+  const topicMap = useMemo(() => new Map(topics.map((tp) => [tp.id, tp])), [topics]);
+
+  const currentWeakTopics = useMemo(() => {
+    const errorMap = new Map<number, { id: number; name: string; wrongCount: number }>();
+    for (const item of wrongAnswers) {
+      const q = item.question;
+      const tId = q.topic_id ?? 0;
+      if (!tId) continue;
+      const existing = errorMap.get(tId);
+      const count = item.wrong_count || 1;
+      if (existing) {
+        existing.wrongCount += count;
+      } else {
+        const tp = topicMap.get(tId);
+        const name = tp ? localizeTopic(tp) : ((q as any).topic_name_uzl || `Mavzu #${tId}`);
+        errorMap.set(tId, { id: tId, name, wrongCount: count });
+      }
+    }
+    return Array.from(errorMap.values())
+      .sort((a, b) => b.wrongCount - a.wrongCount)
+      .slice(0, 5);
+  }, [wrongAnswers, topicMap]);
 
   return (
     <>
@@ -490,7 +508,7 @@ export default function User_Page() {
                       <IconFlame size={12} stroke={2.5} />
                       <span>{t("dashboard.quickFix")}</span>
                     </span>
-                    <h4 className="smart-col-title">79 {t("dashboard.mistakesTitle")}</h4>
+                    <h4 className="smart-col-title">{wrongAnswers.length} {t("dashboard.mistakesTitle")}</h4>
                     <p className="smart-col-desc">{t("dashboard.mistakesDesc")}</p>
                   </div>
 
