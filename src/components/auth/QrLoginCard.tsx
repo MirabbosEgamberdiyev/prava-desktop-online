@@ -78,6 +78,7 @@ export function QrLoginCard({ onSwitchToPassword: _onSwitchToPassword, onCancel 
 
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isMountedRef = useRef(true);
 
   const clearTimers = () => {
     if (pollTimerRef.current) {
@@ -91,17 +92,23 @@ export function QrLoginCard({ onSwitchToPassword: _onSwitchToPassword, onCancel 
   };
 
   const startNewSession = async () => {
+    if (!isMountedRef.current) return;
     setLoading(true);
     setStatus("PENDING");
     clearTimers();
 
     try {
       const newSession = await QrAuthService.initSession();
+      if (!isMountedRef.current) return;
       setSession(newSession);
       setTimeLeft(newSession.expiresIn || 90);
 
       // Countdown
       countdownTimerRef.current = setInterval(() => {
+        if (!isMountedRef.current) {
+          clearTimers();
+          return;
+        }
         setTimeLeft((prev) => {
           if (prev <= 1) {
             clearTimers();
@@ -114,8 +121,13 @@ export function QrLoginCard({ onSwitchToPassword: _onSwitchToPassword, onCancel 
 
       // Polling
       pollTimerRef.current = setInterval(async () => {
+        if (!isMountedRef.current) {
+          clearTimers();
+          return;
+        }
         try {
           const res = await QrAuthService.checkStatus(newSession.sessionId);
+          if (!isMountedRef.current) return;
           if (res.status === "SCANNED") {
             setStatus("SCANNED");
           } else if (res.status === "APPROVED" && res.accessToken && res.user) {
@@ -140,6 +152,7 @@ export function QrLoginCard({ onSwitchToPassword: _onSwitchToPassword, onCancel 
       }, 1500);
     } catch (err: any) {
       clearTimers();
+      if (!isMountedRef.current) return;
       showToast({
         id: "qr-session-init-error",
         color: "red",
@@ -147,13 +160,19 @@ export function QrLoginCard({ onSwitchToPassword: _onSwitchToPassword, onCancel 
         message: err?.message || "QR xizmati serverda mavjud emas",
       });
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
     startNewSession();
-    return () => clearTimers();
+    return () => {
+      isMountedRef.current = false;
+      clearTimers();
+    };
   }, []);
 
   const formatTimer = (secs: number) => {

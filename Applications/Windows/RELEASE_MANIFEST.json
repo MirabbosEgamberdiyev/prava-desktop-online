@@ -1,30 +1,30 @@
-﻿{
-    "applicationName":  "Prava Online Desktop",
-    "version":  "1.0.0",
-    "platform":  "Windows (x86_64)",
-    "framework":  "Tauri v2 + React 19 + Vite 7 + SQLite/IndexedDB",
-    "generatedAt":  "2026-09-16T10:03:40.361Z",
-    "artifacts":  [
-                      {
-                          "fileName":  "Prava-Online-Setup.exe",
-                          "type":  "NSIS Windows Setup Installer",
-                          "fileSizeBytes":  4166526,
-                          "fileSizeMB":  "3.97 MB",
-                          "sha256":  "619acffc0bc987cc98ed11a3304641ea75b4aa08789c62febbdade50b93c2ff2"
-                      },
-                      {
-                          "fileName":  "Prava-Online.msi",
-                          "type":  "MSI Windows Enterprise Installer",
-                          "fileSizeBytes":  5337088,
-                          "fileSizeMB":  "5.09 MB",
-                          "sha256":  "9bf27d8e437edf9bd1a548d06344602b10ad15437327ab9ad3a94987456db287"
-                      },
-                      {
-                          "fileName":  "Prava-Online.exe",
-                          "type":  "Standalone Portable Executable",
-                          "fileSizeBytes":  11630080,
-                          "fileSizeMB":  "11.09 MB",
-                          "sha256":  "bb0e109a2b1e8d5c57999d47946e0c063cb677d870c51b564ec7a5449d77a6f0"
-                      }
-                  ]
+{
+  "productName": "Prava Online",
+  "version": "1.0.0",
+  "platform": "windows",
+  "arch": "x64",
+  "releaseDate": "2026-09-17T07:53:00+05:00",
+  "files": [
+    {
+      "name": "Prava-Online-Setup.exe",
+      "type": "installer-nsis",
+      "size": 4182579,
+      "sha256": "4760638db808f9921f9b29f05cda8fd7e9c15fd984592be44442c513a2c5856d",
+      "description": "Windows NSIS Installer (Standard recommended setup)"
+    },
+    {
+      "name": "Prava-Online.msi",
+      "type": "installer-msi",
+      "size": 5365760,
+      "sha256": "2f39ab0992c358bfba07450d322729a4b26a1be827670db4cfbb4e59a79a62ab",
+      "description": "Windows WiX MSI Enterprise Package"
+    },
+    {
+      "name": "Prava-Online.exe",
+      "type": "standalone-executable",
+      "size": 11708416,
+      "sha256": "64652690440a40fe3e24de7793a307ca19ec39b512a854f2825e4f75e088c7e5",
+      "description": "Standalone Portable Executable (No installation required)"
+    }
+  ]
 }

@@ -6,7 +6,6 @@ import {
   Text,
   TextInput,
   Group,
-  Anchor,
   ThemeIcon,
   Divider,
 } from "@mantine/core";
@@ -64,6 +63,7 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
   const [modalOpened, setModalOpened] = useState(false);
   const [tokenInput, setTokenInput] = useState("");
   const [submittingToken, setSubmittingToken] = useState(false);
+  const isSubmittingRef = useRef(false);
   const timeoutRef = useRef<number | null>(null);
   const locationState = location.state as { from?: string | { pathname: string; search?: string } } | undefined;
   let from = "/me";
@@ -89,7 +89,7 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
   };
 
   const handleTokenSubmit = async (tokenValue?: string) => {
-    if (submittingToken) return;
+    if (isSubmittingRef.current) return;
     const raw = (tokenValue || tokenInput).trim();
     if (!raw) return;
 
@@ -104,6 +104,7 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
       }
     }
 
+    isSubmittingRef.current = true;
     setSubmittingToken(true);
     try {
       const response = await api.post("/api/v1/auth/telegram/token-login", {
@@ -145,30 +146,30 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
         ),
       });
     } finally {
+      isSubmittingRef.current = false;
       setSubmittingToken(false);
     }
   };
 
   const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 
+  const openExternalUrl = useCallback(async (url: string) => {
+    if (isTauri) {
+      try {
+        const { openUrl } = await import("@tauri-apps/plugin-opener");
+        await openUrl(url);
+        return;
+      } catch {
+        // fallback
+      }
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [isTauri]);
+
   const handleTelegramLogin = useCallback(async () => {
     if (loading) return;
     if (isTauri) {
-      setLoading(true);
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("open_oauth_window", { provider: "telegram" });
-      } catch (err: unknown) {
-        showToast({
-          id: "auth-telegram-window-error",
-          dedupeKey: "auth-telegram-window-error",
-          color: "red",
-          title: t("common.error"),
-          message: getErrorMessage(err, t("auth.telegram.errorMessage")),
-        });
-      } finally {
-        setLoading(false);
-      }
+      setModalOpened(true);
       return;
     }
 
@@ -308,7 +309,17 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
               <IconBrandTelegram size={20} />
             </ThemeIcon>
             <Text fw={700} fz="md">
-              Telegram orqali kirish
+              {mode === "register"
+                ? (i18n.language === "ru"
+                  ? "Регистрация через Telegram"
+                  : i18n.language === "uzc"
+                  ? "Telegram орқали рўйхатдан ўтиш"
+                  : "Telegram orqali ro'yxatdan o'tish")
+                : (i18n.language === "ru"
+                  ? "Вход через Telegram"
+                  : i18n.language === "uzc"
+                  ? "Telegram орқали кириш"
+                  : "Telegram orqali kirish")}
             </Text>
           </Group>
         }
@@ -318,7 +329,17 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
       >
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            Desktop ilovada eng qulay va tezkor kirish — Telegram botimiz orqali:
+            {mode === "register"
+              ? (i18n.language === "ru"
+                ? "Быстрая регистрация и вход без пароля через Telegram бота:"
+                : i18n.language === "uzc"
+                ? "Telegram ботимиз орқали паролсиз тезкор рўйхатдан ўтиш ва кириш:"
+                : "Telegram botimiz orqali parolsiz tezkor ro'yxatdan o'tish va kirish:")
+              : (i18n.language === "ru"
+                ? "Быстрый вход без пароля через официального Telegram бота:"
+                : i18n.language === "uzc"
+                ? "Расмий Telegram ботимиз орқали паролсиз тезкор кириш:"
+                : "Rasmiy Telegram botimiz orqali parolsiz tezkor kirish:")}
           </Text>
 
           <Stack
@@ -331,25 +352,28 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
             }}
           >
             <Text size="xs" fw={700} c="dimmed">
-              1-QADAM:
+              {i18n.language === "ru" ? "ШАГ 1:" : i18n.language === "uzc" ? "1-ҚАДАМ:" : "1-QADAM:"}
             </Text>
             <Text size="sm">
-              Quyidagi tugmani bosing va botga <Text span fw={700} c="#229ED9">/start</Text> buyrug‘ini yuboring:
+              {i18n.language === "ru"
+                ? <>Нажмите кнопку и отправьте команду <Text span fw={700} c="#229ED9">/start</Text> боту:</>
+                : i18n.language === "uzc"
+                ? <>Қуйидаги тугмани босинг ва ботга <Text span fw={700} c="#229ED9">/start</Text> буйруғини юборинг:</>
+                : <>Quyidagi tugmani bosing va botga <Text span fw={700} c="#229ED9">/start</Text> buyrug‘ini yuboring:</>}
             </Text>
-            <Anchor href={botUrl} target="_blank" rel="noopener noreferrer">
-              <Button
-                fullWidth
-                variant="light"
-                color="#229ED9"
-                leftSection={<IconBrandTelegram size={18} />}
-                rightSection={<IconExternalLink size={16} />}
-              >
-                @{botUsername} botini ochish
-              </Button>
-            </Anchor>
+            <Button
+              fullWidth
+              variant="light"
+              color="#229ED9"
+              leftSection={<IconBrandTelegram size={18} />}
+              rightSection={<IconExternalLink size={16} />}
+              onClick={() => openExternalUrl(botUrl)}
+            >
+              @{botUsername} botini ochish
+            </Button>
           </Stack>
 
-          <Divider label="va keyin" labelPosition="center" />
+          <Divider label={i18n.language === "ru" ? "затем" : i18n.language === "uzc" ? "ва кейин" : "va keyin"} labelPosition="center" />
 
           <Stack
             gap="xs"
@@ -361,10 +385,14 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
             }}
           >
             <Text size="xs" fw={700} c="dimmed">
-              2-QADAM:
+              {i18n.language === "ru" ? "ШАГ 2:" : i18n.language === "uzc" ? "2-ҚАДАМ:" : "2-QADAM:"}
             </Text>
             <Text size="sm">
-              Bot sizga yuborgan <Text span fw={600}>5 xonali tasdiqlash kodini</Text> bu yerga kiriting:
+              {i18n.language === "ru"
+                ? <>Введите полученный <Text span fw={600}>5-значный код</Text> из бота:</>
+                : i18n.language === "uzc"
+                ? <>Бот сизга юборган <Text span fw={600}>5 хонали тасдиқлаш кодини</Text> киритинг:</>
+                : <>Bot sizga yuborgan <Text span fw={600}>5 xonali tasdiqlash kodini</Text> bu yerga kiriting:</>}
             </Text>
             <TextInput
               placeholder="Masalan: 12345"
@@ -401,7 +429,17 @@ const TelegramLoginButton = ({ mode = "login", compact = false }: TelegramLoginB
               onClick={() => handleTokenSubmit()}
               radius="md"
             >
-              Tizimga kirish
+              {mode === "register"
+                ? (i18n.language === "ru"
+                  ? "Зарегистрироваться"
+                  : i18n.language === "uzc"
+                  ? "Рўйхатдан ўтиш"
+                  : "Ro'yxatdan o'tish")
+                : (i18n.language === "ru"
+                  ? "Войти в систему"
+                  : i18n.language === "uzc"
+                  ? "Тизимга кириш"
+                  : "Tizimga kirish")}
             </Button>
           </Stack>
         </Stack>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { Button } from "@mantine/core";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import api from "../../api/api";
 import { getErrorMessage } from "../../types/errors";
 import { showToast } from "../../utils/notificationUtils";
+import OAuthBrowserModal, { type InstalledBrowser } from "./OAuthBrowserModal";
 
 interface GoogleLoginButtonProps {
   mode?: "login" | "register";
@@ -22,12 +23,14 @@ const GoogleIcon = () => (
   </svg>
 );
 
-const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButtonProps) => {
+export const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButtonProps) => {
   const { t, i18n } = useTranslation();
   const { login: authLogin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
+  const [browserModalOpen, setBrowserModalOpen] = useState(false);
+
   const locationState = location.state as { from?: string | { pathname: string; search?: string } } | undefined;
   let from = "/me";
   if (typeof locationState?.from === "string") {
@@ -35,6 +38,50 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
   } else if (locationState?.from?.pathname) {
     from = locationState.from.pathname + (locationState.from.search || "");
   }
+
+  const isTauri =
+    typeof window !== "undefined" &&
+    Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+
+  // Listen for desktop OAuth success events emitted by Tauri
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let unlistenFn: (() => void) | null = null;
+    let mounted = true;
+
+    const setupListener = async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        const unlisten = await listen<any>("desktop-auth-success", (event) => {
+          if (!mounted) return;
+          const payload = event.payload;
+          if (payload?.accessToken) {
+            authLogin(payload);
+            navigate(from, { replace: true });
+            showToast({
+              id: "auth-google-success",
+              dedupeKey: "auth-google-success",
+              title: t("auth.google.successTitle", { defaultValue: "Muvaffaqiyat" }),
+              message: t("auth.google.successMessage", { defaultValue: "Google orqali tizimga kirdingiz!" }),
+              color: "green",
+              withBorder: true,
+            });
+          }
+        });
+        unlistenFn = unlisten;
+      } catch {
+        // ignore
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      mounted = false;
+      if (unlistenFn) unlistenFn();
+    };
+  }, [isTauri, authLogin, navigate, from, t]);
 
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -57,8 +104,8 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
           showToast({
             id: "auth-google-success",
             dedupeKey: "auth-google-success",
-            title: t("auth.google.successTitle"),
-            message: t("auth.google.successMessage"),
+            title: t("auth.google.successTitle", { defaultValue: "Muvaffaqiyat" }),
+            message: t("auth.google.successMessage", { defaultValue: "Google orqali tizimga kirdingiz!" }),
             color: "green",
             withBorder: true,
           });
@@ -68,8 +115,8 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
           id: "auth-google-error",
           dedupeKey: "auth-google-error",
           color: "red",
-          title: t("common.error"),
-          message: getErrorMessage(err, t("auth.google.errorMessage")),
+          title: t("common.error", { defaultValue: "Xatolik" }),
+          message: getErrorMessage(err, t("auth.google.errorMessage", { defaultValue: "Google orqali kirishda xatolik yuz berdi" })),
         });
       } finally {
         setLoading(false);
@@ -80,57 +127,118 @@ const GoogleLoginButton = ({ mode = "login", compact = false }: GoogleLoginButto
         id: "auth-google-failed",
         dedupeKey: "auth-google-failed",
         color: "red",
-        title: t("common.error"),
-        message: t("auth.google.errorMessage"),
+        title: t("common.error", { defaultValue: "Xatolik" }),
+        message: t("auth.google.errorMessage", { defaultValue: "Google orqali kirishda xatolik yuz berdi" }),
       });
     },
   });
 
-  const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
-
   const handleClick = async () => {
     if (loading) return;
+
     if (isTauri) {
-      setLoading(true);
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("open_oauth_window", { provider: "google" });
-      } catch (err: unknown) {
-        showToast({
-          id: "auth-google-window-error",
-          dedupeKey: "auth-google-window-error",
-          color: "red",
-          title: t("common.error"),
-          message: getErrorMessage(err, t("auth.google.errorMessage")),
-        });
-      } finally {
-        setLoading(false);
-      }
+      setBrowserModalOpen(true);
     } else {
       googleLogin();
     }
   };
 
+  const handleSelectBrowser = async (browser: InstalledBrowser) => {
+    setBrowserModalOpen(false);
+    setLoading(true);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const oauthUrl = "https://pravaonline.uz/auth/login?oauth=google";
+      await invoke("launch_browser_url", {
+        browserPath: browser.path ? browser.path : null,
+        url: oauthUrl,
+      });
+
+      showToast({
+        id: "auth-browser-opened",
+        title: browser.name,
+        message:
+          i18n.language === "ru"
+            ? "Браузер открыт для авторизации. После входа вы вернетесь в приложение."
+            : i18n.language === "uzc"
+            ? "Браузер очилди. Google орқали кирганингиздан сўнг иловага автоматик қайтасиз."
+            : "Brauzer ochildi. Google orqali kirganingizdan so'ng ilovaga avtomatik qaytasiz.",
+        color: "blue",
+        autoClose: 6000,
+      });
+    } catch (err: unknown) {
+      showToast({
+        id: "auth-browser-launch-error",
+        color: "red",
+        title: t("common.error", { defaultValue: "Xatolik" }),
+        message: getErrorMessage(err, "Brauzerni ishga tushirib bo'lmadi"),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenInternalWindow = async () => {
+    setBrowserModalOpen(false);
+    setLoading(true);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_oauth_window", { provider: "google" });
+    } catch (err: unknown) {
+      showToast({
+        id: "auth-internal-window-error",
+        color: "red",
+        title: t("common.error", { defaultValue: "Xatolik" }),
+        message: getErrorMessage(err, t("auth.google.errorMessage", { defaultValue: "Ichki oynada ochishda xatolik" })),
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const buttonText = compact
+    ? "Google"
+    : mode === "login"
+    ? t("auth.google.loginButton", { defaultValue: "Google bilan kirish" })
+    : t("auth.google.registerButton", { defaultValue: "Google bilan ro'yxatdan o'tish" });
+
   return (
-    <Button
-      leftSection={<GoogleIcon />}
-      variant="default"
-      size={compact ? "sm" : "md"}
-      h={compact ? 40 : 44}
-      fullWidth
-      radius="md"
-      loading={loading}
-      onClick={handleClick}
-      styles={{
-        root: { fontWeight: 600, fontSize: compact ? 13 : undefined },
-      }}
-    >
-      {compact
-        ? "Google"
-        : mode === "login"
-        ? t("auth.google.loginButton")
-        : t("auth.google.registerButton")}
-    </Button>
+    <>
+      <Button
+        leftSection={<GoogleIcon />}
+        variant="default"
+        size={compact ? "sm" : "md"}
+        h={compact ? 40 : 46}
+        fullWidth
+        radius="md"
+        loading={loading}
+        onClick={handleClick}
+        styles={{
+          root: {
+            fontWeight: 600,
+            fontSize: compact ? 13 : "14px",
+            border: "1px solid var(--border)",
+            backgroundColor: "var(--surface)",
+            transition: "all 0.16s ease",
+            "&:hover": {
+              backgroundColor: "var(--surface-muted)",
+            },
+          },
+        }}
+      >
+        {buttonText}
+      </Button>
+
+      {isTauri && (
+        <OAuthBrowserModal
+          opened={browserModalOpen}
+          onClose={() => setBrowserModalOpen(false)}
+          onSelectBrowser={handleSelectBrowser}
+          onOpenInternalWindow={handleOpenInternalWindow}
+          loading={loading}
+        />
+      )}
+    </>
   );
 };
 

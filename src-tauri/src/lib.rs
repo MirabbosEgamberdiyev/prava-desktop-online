@@ -175,6 +175,259 @@ async fn open_oauth_window(app: tauri::AppHandle, provider: Option<String>) -> R
     Ok(())
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct InstalledBrowser {
+    pub id: String,
+    pub name: String,
+    pub icon: String,
+    pub path: String,
+    pub is_default: bool,
+}
+
+#[tauri::command]
+fn get_installed_browsers() -> Vec<InstalledBrowser> {
+    let mut browsers = Vec::new();
+
+    #[cfg(target_os = "windows")]
+    {
+        let local_appdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        let appdata = std::env::var("APPDATA").unwrap_or_default();
+
+        let candidates = [
+            (
+                "chrome",
+                "Google Chrome",
+                "chrome",
+                vec![
+                    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe".to_string(),
+                    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe".to_string(),
+                    format!("{}\\Google\\Chrome\\Application\\chrome.exe", local_appdata),
+                ],
+            ),
+            (
+                "edge",
+                "Microsoft Edge",
+                "edge",
+                vec![
+                    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe".to_string(),
+                    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe".to_string(),
+                ],
+            ),
+            (
+                "firefox",
+                "Mozilla Firefox",
+                "firefox",
+                vec![
+                    "C:\\Program Files\\Mozilla Firefox\\firefox.exe".to_string(),
+                    "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe".to_string(),
+                ],
+            ),
+            (
+                "brave",
+                "Brave Browser",
+                "brave",
+                vec![
+                    "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe".to_string(),
+                    format!("{}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe", local_appdata),
+                ],
+            ),
+            (
+                "opera",
+                "Opera",
+                "opera",
+                vec![
+                    format!("{}\\Programs\\Opera\\launcher.exe", local_appdata),
+                    format!("{}\\Opera Software\\Opera Stable\\launcher.exe", appdata),
+                    "C:\\Program Files\\Opera\\launcher.exe".to_string(),
+                ],
+            ),
+        ];
+
+        let mut default_assigned = false;
+
+        for (id, name, icon, paths) in candidates {
+            for path in paths {
+                if !path.is_empty() && std::path::Path::new(&path).exists() {
+                    let is_default = if !default_assigned && (id == "chrome" || id == "edge") {
+                        default_assigned = true;
+                        true
+                    } else {
+                        false
+                    };
+
+                    browsers.push(InstalledBrowser {
+                        id: id.to_string(),
+                        name: name.to_string(),
+                        icon: icon.to_string(),
+                        path,
+                        is_default,
+                    });
+                    break;
+                }
+            }
+        }
+
+        if !default_assigned && !browsers.is_empty() {
+            browsers[0].is_default = true;
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let mac_candidates = [
+            ("chrome", "Google Chrome", "chrome", "/Applications/Google Chrome.app"),
+            ("safari", "Safari", "safari", "/Applications/Safari.app"),
+            ("edge", "Microsoft Edge", "edge", "/Applications/Microsoft Edge.app"),
+            ("firefox", "Mozilla Firefox", "firefox", "/Applications/Firefox.app"),
+            ("brave", "Brave Browser", "brave", "/Applications/Brave Browser.app"),
+        ];
+        for (id, name, icon, path) in mac_candidates {
+            if std::path::Path::new(path).exists() {
+                browsers.push(InstalledBrowser {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    icon: icon.to_string(),
+                    path: path.to_string(),
+                    is_default: id == "chrome" || id == "safari",
+                });
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let linux_candidates = [
+            ("chrome", "Google Chrome", "chrome", "/usr/bin/google-chrome"),
+            ("firefox", "Mozilla Firefox", "firefox", "/usr/bin/firefox"),
+            ("brave", "Brave Browser", "brave", "/usr/bin/brave-browser"),
+            ("edge", "Microsoft Edge", "edge", "/usr/bin/microsoft-edge"),
+        ];
+        for (id, name, icon, path) in linux_candidates {
+            if std::path::Path::new(path).exists() {
+                browsers.push(InstalledBrowser {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    icon: icon.to_string(),
+                    path: path.to_string(),
+                    is_default: id == "chrome" || id == "firefox",
+                });
+            }
+        }
+    }
+
+    browsers
+}
+
+fn is_safe_auth_url(url: &str) -> bool {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return false;
+    }
+    if url.contains('\0') || url.contains('\r') || url.contains('\n') || url.contains('\"') || url.contains('\'') {
+        return false;
+    }
+    url.starts_with("https://pravaonline.uz")
+        || url.starts_with("http://localhost")
+        || url.starts_with("https://accounts.google.com")
+        || url.starts_with("https://t.me")
+        || url.starts_with("https://telegram.me")
+}
+
+fn is_safe_browser_binary(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    let allowed_endings = [
+        "chrome.exe",
+        "msedge.exe",
+        "firefox.exe",
+        "brave.exe",
+        "launcher.exe",
+        "opera.exe",
+        "google chrome.app",
+        "safari.app",
+        "microsoft edge.app",
+        "firefox.app",
+        "brave browser.app",
+        "/google-chrome",
+        "/firefox",
+        "/brave-browser",
+        "/microsoft-edge",
+        "/opera",
+    ];
+    let path_obj = std::path::Path::new(path);
+    if !path_obj.exists() {
+        return false;
+    }
+    for ending in allowed_endings {
+        if lower.ends_with(ending) {
+            return true;
+        }
+    }
+    false
+}
+
+#[tauri::command]
+fn launch_browser_url(browser_path: Option<String>, url: String) -> Result<(), String> {
+    if !is_safe_auth_url(&url) {
+        return Err("Ruxsat berilmagan yoki xavfli URL manzil".to_string());
+    }
+
+    if let Some(path) = browser_path {
+        if !path.is_empty() && is_safe_browser_binary(&path) {
+            #[cfg(target_os = "windows")]
+            {
+                std::process::Command::new(&path)
+                    .arg(&url)
+                    .spawn()
+                    .map_err(|e| format!("Failed to spawn browser: {}", e))?;
+                return Ok(());
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                std::process::Command::new("open")
+                    .arg("-a")
+                    .arg(&path)
+                    .arg(&url)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch browser: {}", e))?;
+                return Ok(());
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                std::process::Command::new(&path)
+                    .arg(&url)
+                    .spawn()
+                    .map_err(|e| format!("Failed to spawn browser: {}", e))?;
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open URL via system handler: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -212,6 +465,8 @@ pub fn run() {
             activate_license,
             check_license,
             open_oauth_window,
+            get_installed_browsers,
+            launch_browser_url,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri app ishga tushmadi");

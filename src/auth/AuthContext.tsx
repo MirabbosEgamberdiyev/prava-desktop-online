@@ -222,32 +222,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   }, [syncAuthState, navigate, t, transitionTo]);
 
   const saveAuthData = (authData: AuthData) => {
-    const { accessToken, refreshToken, user: userData, expiresIn } = authData;
+    const { accessToken, refreshToken, user: userData, expiresIn, rememberMe } = authData;
 
     // expiresIn millisekundda kelsa kun hisobiga o'tkazamiz, kelmasa 1 kun
     const expiryDays = expiresIn ? expiresIn / (1000 * 60 * 60 * 24) : 1;
-
     const isSecure = window.location.protocol === "https:";
 
-    Cookies.set(ACCESS_TOKEN_KEY, accessToken, {
-      expires: expiryDays,
+    const tokenCookieOpts: Cookies.CookieAttributes = {
       secure: isSecure,
       sameSite: isSecure ? "strict" : "lax",
-    });
-
-    if (refreshToken) {
-      Cookies.set(REFRESH_TOKEN_KEY, refreshToken, {
-        expires: 30, // Refresh token uchun 30 kun
-        secure: isSecure,
-        sameSite: isSecure ? "strict" : "lax",
-      });
+    };
+    if (rememberMe !== false) {
+      tokenCookieOpts.expires = expiryDays;
     }
 
-    Cookies.set(USER_DATA_KEY, JSON.stringify(userData), {
-      expires: expiryDays,
-      secure: isSecure,
-      sameSite: isSecure ? "strict" : "lax",
-    });
+    Cookies.set(ACCESS_TOKEN_KEY, accessToken, tokenCookieOpts);
+
+    if (refreshToken) {
+      const refreshOpts: Cookies.CookieAttributes = {
+        secure: isSecure,
+        sameSite: isSecure ? "strict" : "lax",
+      };
+      if (rememberMe !== false) {
+        refreshOpts.expires = 30; // Refresh token uchun 30 kun
+      }
+      Cookies.set(REFRESH_TOKEN_KEY, refreshToken, refreshOpts);
+    }
+
+    Cookies.set(USER_DATA_KEY, JSON.stringify(userData), tokenCookieOpts);
 
     try {
       AccountManager.saveAccount(userData, accessToken, refreshToken);

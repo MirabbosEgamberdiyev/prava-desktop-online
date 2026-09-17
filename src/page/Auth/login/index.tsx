@@ -3,13 +3,9 @@ import {
   Anchor,
   Box,
   Button,
-  Center,
   Checkbox,
-  Container,
   Divider,
   Group,
-  Image,
-  Paper,
   PasswordInput,
   Stack,
   Text,
@@ -28,12 +24,10 @@ import {
   IconArrowLeft,
   IconBrandTelegram,
   IconDeviceMobile,
-  IconKey,
   IconLock,
   IconMail,
   IconQrcode,
   IconUser,
-  IconUserPlus,
 } from "@tabler/icons-react";
 import GoogleLoginButton from "../../../components/auth/GoogleLoginButton";
 import TelegramLoginButton from "../../../components/auth/TelegramLoginButton";
@@ -58,7 +52,15 @@ const Login_Page = () => {
   const [loginMethod, setLoginMethod] = useState<"password" | "qr" | "telegram">(
     currentTab === "qr" ? "qr" : currentTab === "telegram" ? "telegram" : "password"
   );
+  const [rememberMe, setRememberMe] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("prava_remember_me") !== "false";
+    } catch {
+      return true;
+    }
+  });
   const isCapsLock = useCapsLock();
+  const lang = i18n.language;
 
   useEffect(() => {
     if (currentTab === "qr") {
@@ -70,13 +72,18 @@ const Login_Page = () => {
     }
   }, [currentTab]);
 
-  // Redirect destination after login (from ProtectedRoute state or default /me)
   const from =
     (location.state as { from?: { pathname: string } })?.from?.pathname || "/me";
 
   const form = useForm({
     initialValues: {
-      identifier: "",
+      identifier: (() => {
+        try {
+          return localStorage.getItem("prava_saved_identifier") || "";
+        } catch {
+          return "";
+        }
+      })(),
       password: "",
     },
     validate: {
@@ -89,7 +96,6 @@ const Login_Page = () => {
     },
   });
 
-  // Agar foydalanuvchi allaqachon tizimga kirgan bo'lsa — redirect
   if (isAuthenticated) {
     return <Navigate to={from} replace />;
   }
@@ -99,7 +105,6 @@ const Login_Page = () => {
     setLoading(true);
     setErrorMessage(null);
 
-    // Normalize identifier: if it's phone-like (digits, +), clean to backend format, else trimmed email
     let cleanIdentifier = values.identifier.trim();
     const digitsOnly = cleanIdentifier.replace(/\D/g, "");
     if (digitsOnly.length >= 9 && !cleanIdentifier.includes("@")) {
@@ -118,26 +123,42 @@ const Login_Page = () => {
           i18n.changeLanguage(userLang);
         }
 
-        login(response.data.data);
+        if (rememberMe) {
+          try {
+            localStorage.setItem("prava_remember_me", "true");
+            localStorage.setItem("prava_saved_identifier", cleanIdentifier);
+          } catch {
+            // ignore
+          }
+        } else {
+          try {
+            localStorage.setItem("prava_remember_me", "false");
+            localStorage.removeItem("prava_saved_identifier");
+          } catch {
+            // ignore
+          }
+        }
+
+        login({ ...response.data.data, rememberMe });
         navigate(from, { replace: true });
 
         showToast({
           id: "auth-login-success",
           dedupeKey: "auth-login-success",
-          title: t("auth.not_title"),
-          message: t("auth.not_massage"),
+          title: t("auth.not_title", { defaultValue: "Tizimga kirish" }),
+          message: t("auth.not_massage", { defaultValue: "Xush kelibsiz!" }),
           color: "teal",
           withBorder: true,
         });
       }
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, t("auth.loginError"));
+      const msg = getErrorMessage(err, t("auth.loginError", { defaultValue: "Login yoki parol xato!" }));
       setErrorMessage(msg);
       showToast({
         id: "auth-login-error",
         dedupeKey: "auth-login-error",
         color: "red",
-        title: t("auth.errorTitle"),
+        title: t("auth.errorTitle", { defaultValue: "Xatolik" }),
         message: msg,
         withBorder: true,
       });
@@ -146,280 +167,252 @@ const Login_Page = () => {
     }
   };
 
-  // Determine dynamic icon for identifier
   const getIdentifierIcon = () => {
     const val = form.values.identifier.trim();
-    if (val.includes("@")) return <IconMail size={18} />;
-    if (/^\+?\d+$/.test(val)) return <IconDeviceMobile size={18} />;
-    return <IconUser size={18} />;
+    if (val.includes("@")) return <IconMail size={18} color="#0284c7" />;
+    if (/^\+?\d+$/.test(val)) return <IconDeviceMobile size={18} color="#0284c7" />;
+    return <IconUser size={18} color="#64748b" />;
   };
 
   return (
-    <Box className="auth-page-container">
-      <Container size={480} maw={480} p={{ base: "xs", sm: 0 }} className="auth-page-inner">
-        <SEO
-          title="Kirish - Prava Online platformasiga kirish"
-          description="Prava Online platformasiga kiring va haydovchilik guvohnomasi imtihoniga tayyorlanishni davom eting. Google yoki Telegram orqali tez kirish."
-          keywords="prava online kirish, login, haydovchilik guvohnomasi, вход prava online"
-          canonical="/auth/login"
-        />
+    <Box style={{ width: "100%", maxWidth: 440, margin: "0 auto" }}>
+      <SEO
+        title="Kirish - Prava Online platformasiga kirish"
+        description="Prava Online platformasiga kiring va haydovchilik guvohnomasi imtihoniga tayyorlanishni davom eting. Google yoki Telegram orqali tez kirish."
+        keywords="prava online kirish, login, haydovchilik guvohnomasi, вход prava online"
+        canonical="/auth/login"
+      />
 
-        {/* Header section with brand mark */}
-        <Stack gap={4} align="center" mb={{ base: 10, sm: 14 }}>
-          <Center
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: "var(--radius-sm, 10px)",
-              border: "1px solid var(--border)",
-              background: "var(--surface)",
-              boxShadow: "var(--card-shadow-sm)",
-            }}
-          >
-            <Image
-              src="/favicon.svg"
-              fallbackSrc="/logo.svg"
-              alt="Prava Online Logo"
-              w={22}
-              h={22}
-              fit="contain"
-            />
-          </Center>
-
-          <Title order={2} ta="center" size="1.35rem" fw={800} style={{ letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-            {t("auth.welcome")}
-          </Title>
-
-          <Text size="xs" c="dimmed" ta="center" maw={360} style={{ lineHeight: 1.4 }}>
-            {t("auth.loginSubtitle")}
-          </Text>
-
-          <Group gap={6} justify="center">
-            <Text size="xs" c="dimmed">
-              {t("auth.noAccount")}
-            </Text>
-            <Anchor component={Link} to="/auth/register" size="xs" fw={700} c="brand">
-              {t("auth.register")}
-            </Anchor>
-          </Group>
-        </Stack>
-
-        {/* Top Segmented Navigation: [ Tizimga kirish | Ro'yxatdan o'tish | QR orqali kirish ] */}
-        <Group justify="center" gap={8} mb={16} wrap="nowrap">
-          <Button
-            size="xs"
-            radius="md"
-            variant={loginMethod === "password" ? "filled" : "light"}
-            leftSection={<IconKey size={14} />}
-            onClick={() => setLoginMethod("password")}
-          >
-            {i18n.language === "ru" ? "Вход" : i18n.language === "uzc" ? "Тизимга кириш" : "Tizimga kirish"}
-          </Button>
-
-          <Button
-            size="xs"
-            radius="md"
-            variant="light"
-            leftSection={<IconUserPlus size={14} />}
-            onClick={() => navigate("/auth/register")}
-          >
-            {i18n.language === "ru" ? "Регистрация" : i18n.language === "uzc" ? "Рўйхатдан ўтиш" : "Ro'yxatdan o'tish"}
-          </Button>
-
-          <Button
-            size="xs"
-            radius="md"
-            variant={loginMethod === "qr" ? "filled" : "light"}
-            leftSection={<IconQrcode size={14} />}
-            onClick={() => setLoginMethod("qr")}
-          >
-            {i18n.language === "ru" ? "QR-код" : i18n.language === "uzc" ? "QR орқали кириш" : "QR orqali kirish"}
-          </Button>
-        </Group>
-
-        <Paper
-          withBorder
-          shadow="sm"
-          p={{ base: 18, sm: 24 }}
-          radius="lg"
-          style={{
-            background: "var(--surface)",
-            borderColor: "var(--border)",
-            boxShadow: "var(--card-shadow-md)",
-          }}
+      {/* Header section */}
+      <Stack gap={6} align="center" mb={20} ta="center">
+        <Title
+          order={2}
+          size="1.5rem"
+          fw={800}
+          style={{ letterSpacing: "-0.02em", color: "var(--text)" }}
         >
-          {loginMethod === "telegram" || currentTab === "telegram" ? (
-            <Stack align="center" gap={16} py={16} style={{ textAlign: "center" }}>
-              <Button
-                variant="subtle"
-                size="xs"
-                leftSection={<IconArrowLeft size={16} />}
-                onClick={() => setLoginMethod("password")}
-                style={{ alignSelf: "flex-start" }}
-              >
-                {i18n.language === "ru" ? "Назад" : i18n.language === "uzc" ? "Киришга қайтиш" : "Kirishga qaytish"}
-              </Button>
-              <Title order={2} fw={800} fz={22} style={{ letterSpacing: "-0.02em" }}>
-                {i18n.language === "ru" ? "Вход через Telegram" : i18n.language === "uzc" ? "Telegram орқали кириш" : "Telegram orqali kirish"}
-              </Title>
-              <Text c="dimmed" fz={13.5} maw={340}>
-                {i18n.language === "ru"
-                  ? "Войдите в систему в один клик через официального Telegram бота"
-                  : i18n.language === "uzc"
-                  ? "Расмий Telegram ботимиз орқали бир босишда тизимга киринг"
-                  : "Rasmiy Telegram botimiz orqali bir bosishda tizimga kiring"}
-              </Text>
-              <Box mt={12} w="100%" maw={320}>
-                <TelegramLoginButton mode="login" />
-              </Box>
-            </Stack>
-          ) : (loginMethod === "qr" || currentTab === "qr") ? (
-            <QrLoginCard
-              onSwitchToPassword={() => setLoginMethod("password")}
-              onCancel={() => setLoginMethod("password")}
-            />
-          ) : (
-            <>
-              {errorMessage && (
-                <Alert
-                  icon={<IconAlertCircle size={18} />}
-                  color="red"
-                  variant="light"
-                  radius="md"
-                  mb="md"
-                  withCloseButton
-                  onClose={() => setErrorMessage(null)}
-                  role="alert"
-                >
-                  {errorMessage}
-                </Alert>
-              )}
+          {loginMethod === "qr"
+            ? lang === "ru"
+              ? "Вход по QR-коду"
+              : lang === "uzc"
+              ? "QR-код орқали кириш"
+              : "QR-kod orqali kirish"
+            : loginMethod === "telegram"
+            ? lang === "ru"
+              ? "Вход через Telegram"
+              : lang === "uzc"
+              ? "Telegram орқали кириш"
+              : "Telegram orqali kirish"
+            : t("auth.welcome", { defaultValue: "Xush kelibsiz!" })}
+        </Title>
 
-              <form
-                onSubmit={form.onSubmit(handleSubmit)}
-                onChange={() => errorMessage && setErrorMessage(null)}
-                noValidate
-              >
-                <Stack gap={14}>
-                  <TextInput
-                    label={t("auth.identifier")}
-                    placeholder={t("auth.identifierPlaceholder")}
-                    required
-                    size="sm"
-                    radius="md"
-                    autoComplete="username"
-                    leftSection={getIdentifierIcon()}
-                    styles={{
-                      input: { height: 46, fontSize: "14.5px" },
-                      label: { fontSize: "13px", fontWeight: 600, marginBottom: 4 },
-                    }}
-                    aria-required="true"
-                    aria-invalid={!!form.errors.identifier}
-                    {...form.getInputProps("identifier")}
-                  />
+        <Text size="sm" c="dimmed" maw={360}>
+          {loginMethod === "qr"
+            ? lang === "ru"
+              ? "Отсканируйте код через мобильное приложение Prava"
+              : lang === "uzc"
+              ? "Prava мобил иловаси орқали кодни сканерланг"
+              : "Prava mobil ilovasi orqali kodni skanerlang"
+            : loginMethod === "telegram"
+            ? lang === "ru"
+              ? "Официальный бот @pravaonlineuzbot поможет войти в один клик"
+              : lang === "uzc"
+              ? "Расмий @pravaonlineuzbot ботимиз орқали бир босишда киринг"
+              : "Rasmiy @pravaonlineuzbot botimiz orqali bir bosishda kiring"
+            : t("auth.loginSubtitle", {
+                defaultValue: "Platformaga kirish uchun profilingiz ma'lumotlarini kiriting",
+              })}
+        </Text>
+      </Stack>
 
-                  <Box>
-                    <PasswordInput
-                      label={t("auth.password")}
-                      placeholder={t("auth.passwordPlaceholder")}
-                      required
-                      size="sm"
-                      radius="md"
-                      autoComplete="current-password"
-                      leftSection={<IconLock size={18} />}
-                      styles={{
-                        input: { height: 46, fontSize: "14.5px" },
-                        label: { fontSize: "13px", fontWeight: 600, marginBottom: 4 },
-                      }}
-                      aria-required="true"
-                      aria-invalid={!!form.errors.password}
-                      onFocus={() => setPasswordFocused(true)}
-                      onBlur={() => setPasswordFocused(false)}
-                      {...form.getInputProps("password")}
-                    />
-                    <CapsLockWarning active={isCapsLock && passwordFocused} />
-                  </Box>
+      {/* Switch between views */}
+      {loginMethod === "telegram" || currentTab === "telegram" ? (
+        <Stack align="center" gap={16} py={8}>
+          <Button
+            variant="subtle"
+            size="xs"
+            leftSection={<IconArrowLeft size={16} />}
+            onClick={() => setLoginMethod("password")}
+            style={{ alignSelf: "flex-start" }}
+          >
+            {lang === "ru" ? "Назад" : lang === "uzc" ? "Киришга қайтиш" : "Kirishga qaytish"}
+          </Button>
 
-                  <Group justify="space-between" mt={-4}>
-                    <Checkbox
-                      label={t("auth.rememberMe", { defaultValue: "Eslab qolish" })}
-                      size="xs"
-                      defaultChecked
-                    />
-                    <Anchor
-                      component={Link}
-                      to="/auth/forgot-password"
-                      size="xs"
-                      c="dimmed"
-                      fw={600}
-                    >
-                      {t("auth.forgotPassword")}
-                    </Anchor>
-                  </Group>
-
-                  <Button
-                    size="md"
-                    fullWidth
-                    radius="md"
-                    type="submit"
-                    loading={loading}
-                    h={48}
-                    style={{
-                      fontSize: "15px",
-                      fontWeight: 700,
-                      boxShadow: "0 4px 14px rgba(25, 113, 194, 0.25)",
-                    }}
-                  >
-                    {t("auth.login")} →
-                  </Button>
-
-                  <Divider
-                    label={t("auth.orContinueWith")}
-                    labelPosition="center"
-                    my={2}
-                  />
-
-                  <Stack gap={8}>
-                    <GoogleLoginButton mode="login" />
-
-                    <Button
-                      variant="default"
-                      fullWidth
-                      radius="md"
-                      h={42}
-                      leftSection={<IconBrandTelegram size={18} color="#0088CC" />}
-                      onClick={() => setLoginMethod("telegram")}
-                      styles={{
-                        inner: { justifyContent: "center" },
-                        label: { fontWeight: 600, fontSize: "13.5px" },
-                      }}
-                    >
-                      {i18n.language === "ru" ? "Войти через Telegram" : i18n.language === "uzc" ? "Telegram орқали кириш" : "Telegram orqali kirish"}
-                    </Button>
-
-                    <Button
-                      variant="default"
-                      fullWidth
-                      radius="md"
-                      h={42}
-                      leftSection={<IconQrcode size={18} color="#0284c7" />}
-                      onClick={() => setLoginMethod("qr")}
-                      styles={{
-                        inner: { justifyContent: "center" },
-                        label: { fontWeight: 600, fontSize: "13.5px" },
-                      }}
-                    >
-                      {i18n.language === "ru" ? "Войти по QR-коду" : i18n.language === "uzc" ? "QR-код орқали кириш" : "QR-kod orqali kirish"}
-                    </Button>
-                  </Stack>
-                </Stack>
-              </form>
-            </>
+          <Box w="100%" mt={4}>
+            <TelegramLoginButton mode="login" />
+          </Box>
+        </Stack>
+      ) : loginMethod === "qr" || currentTab === "qr" ? (
+        <QrLoginCard
+          onSwitchToPassword={() => setLoginMethod("password")}
+          onCancel={() => setLoginMethod("password")}
+        />
+      ) : (
+        /* Password Login Form */
+        <Box>
+          {errorMessage && (
+            <Alert
+              icon={<IconAlertCircle size={18} />}
+              color="red"
+              variant="light"
+              radius="md"
+              mb="md"
+              withCloseButton
+              onClose={() => setErrorMessage(null)}
+              role="alert"
+            >
+              {errorMessage}
+            </Alert>
           )}
 
-          <AuthSecurityBadge compact />
-        </Paper>
-      </Container>
+          <form
+            onSubmit={form.onSubmit(handleSubmit)}
+            onChange={() => errorMessage && setErrorMessage(null)}
+            noValidate
+          >
+            <Stack gap={14}>
+              <TextInput
+                label={t("auth.identifier", { defaultValue: "Email yoki Telefon raqam" })}
+                placeholder={t("auth.identifierPlaceholder", {
+                  defaultValue: "+998 90 123 45 67 yoki email@example.com",
+                })}
+                required
+                size="sm"
+                radius="md"
+                autoComplete="username"
+                leftSection={getIdentifierIcon()}
+                styles={{
+                  input: { height: 46, fontSize: "14.5px" },
+                  label: { fontSize: "13px", fontWeight: 600, marginBottom: 4 },
+                }}
+                aria-required="true"
+                aria-invalid={!!form.errors.identifier}
+                {...form.getInputProps("identifier")}
+              />
+
+              <Box>
+                <PasswordInput
+                  label={t("auth.password", { defaultValue: "Parol" })}
+                  placeholder={t("auth.passwordPlaceholder", { defaultValue: "Parolingizni kiriting" })}
+                  required
+                  size="sm"
+                  radius="md"
+                  autoComplete="current-password"
+                  leftSection={<IconLock size={18} color="#64748b" />}
+                  styles={{
+                    input: { height: 46, fontSize: "14.5px" },
+                    label: { fontSize: "13px", fontWeight: 600, marginBottom: 4 },
+                  }}
+                  aria-required="true"
+                  aria-invalid={!!form.errors.password}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  {...form.getInputProps("password")}
+                />
+                <CapsLockWarning active={isCapsLock && passwordFocused} />
+              </Box>
+
+              <Group justify="space-between" mt={-2}>
+                <Checkbox
+                  label={t("auth.rememberMe", { defaultValue: "Eslab qolish" })}
+                  size="xs"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.currentTarget.checked)}
+                />
+                <Anchor
+                  component={Link}
+                  to="/auth/forgot-password"
+                  size="xs"
+                  c="blue"
+                  fw={600}
+                >
+                  {t("auth.forgotPassword", { defaultValue: "Parolni unutdingizmi?" })}
+                </Anchor>
+              </Group>
+
+              <Button
+                size="md"
+                fullWidth
+                radius="md"
+                type="submit"
+                loading={loading}
+                h={48}
+                color="blue"
+                style={{
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  boxShadow: "0 4px 14px rgba(2, 132, 199, 0.25)",
+                  transition: "all 0.16s ease",
+                }}
+              >
+                {t("auth.login", { defaultValue: "Tizimga kirish" })} →
+              </Button>
+
+              <Divider
+                label={t("auth.orContinueWith", { defaultValue: "yoki" })}
+                labelPosition="center"
+                my={4}
+              />
+
+              <Stack gap={8}>
+                <GoogleLoginButton mode="login" />
+
+                <Button
+                  variant="default"
+                  fullWidth
+                  radius="md"
+                  h={46}
+                  leftSection={<IconBrandTelegram size={19} color="#0088CC" />}
+                  onClick={() => setLoginMethod("telegram")}
+                  styles={{
+                    inner: { justifyContent: "center" },
+                    label: { fontWeight: 600, fontSize: "14px" },
+                  }}
+                >
+                  {lang === "ru"
+                    ? "Войти через Telegram"
+                    : lang === "uzc"
+                    ? "Telegram орқали кириш"
+                    : "Telegram orqali kirish"}
+                </Button>
+
+                <Button
+                  variant="default"
+                  fullWidth
+                  radius="md"
+                  h={46}
+                  leftSection={<IconQrcode size={19} color="#0284c7" />}
+                  onClick={() => setLoginMethod("qr")}
+                  styles={{
+                    inner: { justifyContent: "center" },
+                    label: { fontWeight: 600, fontSize: "14px" },
+                  }}
+                >
+                  {lang === "ru"
+                    ? "Войти по QR-коду"
+                    : lang === "uzc"
+                    ? "QR-код орқали кириш"
+                    : "QR-kod orqali kirish"}
+                </Button>
+              </Stack>
+            </Stack>
+          </form>
+        </Box>
+      )}
+
+      {/* Footer Nav */}
+      <Group justify="center" gap={6} mt={20}>
+        <Text size="xs" c="dimmed">
+          {t("auth.noAccount", { defaultValue: "Akkauntingiz yo'qmi?" })}
+        </Text>
+        <Anchor component={Link} to="/auth/register" size="xs" fw={700} c="blue">
+          {t("auth.register", { defaultValue: "Ro'yxatdan o'tish" })}
+        </Anchor>
+      </Group>
+
+      <Box mt={14}>
+        <AuthSecurityBadge compact />
+      </Box>
     </Box>
   );
 };

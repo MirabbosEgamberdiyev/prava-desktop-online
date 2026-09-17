@@ -15,6 +15,7 @@ export interface AuthData {
   refreshToken?: string;
   user: User;
   expiresIn?: number;
+  rememberMe?: boolean;
 }
 
 export interface UserResponse {
