@@ -722,27 +722,92 @@ export default function Exam_Page() {
 
       {/* Early finish confirmation modal */}
       {confirmFinishOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-700 text-center">
-            <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-4">
-              <IconAlertTriangle size={28} />
+        <div
+          className="modal-overlay"
+          onClick={() => setConfirmFinishOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.65)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            zIndex: 99999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "420px",
+              width: "100%",
+              background: "var(--card-bg, #ffffff)",
+              borderRadius: "18px",
+              padding: "26px 24px",
+              border: "1.5px solid var(--border)",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                width: "56px",
+                height: "56px",
+                borderRadius: "50%",
+                background: "rgba(224, 49, 49, 0.12)",
+                color: "#e03131",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+              }}
+            >
+              <IconAlertTriangle size={30} stroke={2} />
             </div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-              {t("activeTest.confirmFinishTitle", "Testni muddatidan oldin yakunlaysizmi?")}
+            <h3
+              style={{
+                margin: "0 0 8px 0",
+                fontSize: "18px",
+                fontWeight: 800,
+                color: "var(--text, #111827)",
+              }}
+            >
+              {t("activeTest.confirmFinishTitle", "Testni yakunlaysizmi?")}
             </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+            <p
+              style={{
+                margin: "0 0 22px 0",
+                fontSize: "13.5px",
+                color: "var(--text-muted, #64748b)",
+                lineHeight: 1.5,
+              }}
+            >
               {t(
                 "activeTest.confirmFinishDesc",
-                "Hali barcha savollarga javob bermadingiz. Belgilanmagan savollar xato deb hisoblanadi."
+                "Belgilanmagan savollar xato deb hisoblanadi. Rostdan ham testni yakunlamoqchimisiz?"
               )}
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div style={{ display: "flex", gap: "12px" }}>
               <button
                 type="button"
                 onClick={() => setConfirmFinishOpen(false)}
-                className="py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                style={{
+                  flex: 1,
+                  minHeight: "44px",
+                  borderRadius: "12px",
+                  border: "1.5px solid var(--border)",
+                  background: "var(--surface, transparent)",
+                  color: "var(--text, #334155)",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
               >
-                {t("activeTest.continueTest", "Davom etish")}
+                {t("activeTest.cancel", "Davom etish")}
               </button>
               <button
                 type="button"
@@ -750,9 +815,21 @@ export default function Exam_Page() {
                   setConfirmFinishOpen(false);
                   triggerFinish(false);
                 }}
-                className="py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md shadow-red-600/20 transition-all"
+                style={{
+                  flex: 1,
+                  minHeight: "44px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: "#e03131",
+                  color: "#ffffff",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(224, 49, 49, 0.3)",
+                  transition: "all 0.15s ease",
+                }}
               >
-                {t("activeTest.confirmFinish", "Yakunlash")}
+                {t("activeTest.confirm", "Yakunlash")}
               </button>
             </div>
           </div>

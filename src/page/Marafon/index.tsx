@@ -879,7 +879,7 @@ export default function Marafon_Page() {
               inset: 0,
               backgroundColor: "rgba(0,0,0,0.6)",
               backdropFilter: "blur(4px)",
-              zIndex: 9999,
+              zIndex: 99999,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
