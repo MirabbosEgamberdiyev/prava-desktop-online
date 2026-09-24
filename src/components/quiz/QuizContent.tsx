@@ -742,7 +742,14 @@ export function QuizContent({
           {/* Image - right side */}
           <Grid.Col span={{ base: 12, md: 6 }} order={{ base: 1, md: 2 }}>
             <ImagePlaceholder
-              src={getImageUrl(currentQuestion?.imageUrl)}
+              src={
+                getImageUrl(currentQuestion?.imageUrl) ||
+                getImageUrl(
+                  (currentQuestion?.id ?? 0) % 2 === 0
+                    ? "/api/v1/files/defaults/default_malibu.webp"
+                    : "/api/v1/files/defaults/default_tahoe.webp"
+                )
+              }
               onClick={() => setImageModalOpened(true)}
             />
           </Grid.Col>
@@ -750,7 +757,7 @@ export function QuizContent({
       </Container>
 
       {/* Image zoom modal */}
-      {currentQuestion?.imageUrl && (
+      {imageModalOpened && (
         <Modal
           opened={imageModalOpened}
           onClose={() => setImageModalOpened(false)}
@@ -759,7 +766,17 @@ export function QuizContent({
           withCloseButton
           padding={0}
         >
-          <Image src={getImageUrl(currentQuestion.imageUrl)} fit="contain" />
+          <Image
+            src={
+              getImageUrl(currentQuestion?.imageUrl) ||
+              getImageUrl(
+                (currentQuestion?.id ?? 0) % 2 === 0
+                  ? "/api/v1/files/defaults/default_malibu.webp"
+                  : "/api/v1/files/defaults/default_tahoe.webp"
+              )
+            }
+            fit="contain"
+          />
         </Modal>
       )}
 
