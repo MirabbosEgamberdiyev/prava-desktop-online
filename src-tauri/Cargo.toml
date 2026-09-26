@@ -12,13 +12,18 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+default = []
+devtools = ["tauri/devtools"]
+
 [dependencies]
-tauri = { version = "2", features = ["devtools"] }
+# P1-D2: DevTools release build'da o'chirilgan. Debug build'da Tauri DevTools'ni
+# avtomatik yoqadi; release'da kerak bo'lsa: cargo build --release --features devtools
+tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
-aes-gcm = "0.10"
 sha2 = "0.10"
 hex = "0.4"
 base64 = "0.22"

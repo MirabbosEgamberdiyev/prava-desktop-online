@@ -48,6 +48,13 @@ if errorlevel 1 (
 )
 
 echo.
+if "%PRAVA_LICENSE_PUBKEY%"=="" (
+    echo [XATO] PRAVA_LICENSE_PUBKEY o'rnatilmagan - litsenziya aktivatsiyasi ishlamaydi.
+    echo        node scripts/gen-license-keypair.mjs bilan kalit yarating va: set PRAVA_LICENSE_PUBKEY=^<64 hex^>
+    pause
+    exit /b 1
+)
+
 echo Tauri build boshlanmoqda...
 call npx tauri build
 if errorlevel 1 (

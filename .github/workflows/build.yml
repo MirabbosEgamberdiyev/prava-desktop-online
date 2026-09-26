@@ -75,6 +75,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Litsenziya tekshiruv public key (64 hex) — repo Settings → Secrets → PRAVA_LICENSE_PUBKEY
+          PRAVA_LICENSE_PUBKEY: ${{ secrets.PRAVA_LICENSE_PUBKEY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Prava Online ${{ github.ref_name }}"

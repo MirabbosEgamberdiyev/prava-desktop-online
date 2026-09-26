@@ -18,20 +18,24 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
 use crate::license::LicenseStatus;
 
-/// Backend Ed25519LicenseService PRIVATE seed'idan olingan PUBLIC key (32 bayt).
+/// Litsenziya imzosini tekshiruvchi PUBLIC key (32 bayt, 64 belgili hex).
 ///
-/// ⚠️ MUHIM: bu yerda faqat PUBLIC key turadi. Ilgari bu faylda private seed
-/// bor edi — u bilan istalgan odam binary'dan kalitni ajratib olib, o'zicha
-/// cheksiz muddatli aktivatsiya kodi yasay olardi. Imzo yaratish faqat
-/// backend'da (private seed backend'da qoladi), desktop esa faqat tekshiradi.
-const PUBLIC_KEY: [u8; 32] = [
-    0xfd, 0xd1, 0xa2, 0xd2, 0xca, 0x27, 0xcc, 0x19, 0xe8, 0xe5, 0x5c, 0x01, 0xb2, 0x16, 0x81, 0x0c,
-    0x00, 0x3c, 0x3b, 0x14, 0x44, 0x84, 0xf8, 0xd8, 0x5f, 0xd3, 0x15, 0xd6, 0x1b, 0x61, 0xb7, 0x3e,
-];
+/// SECURITY: kalit endi kodda emas — build vaqtida `PRAVA_LICENSE_PUBKEY` env
+/// o'zgaruvchisidan olinadi. Avvalgi kalit juftining private seed'i git tarixiga
+/// tushib qolgan edi (komprometatsiya). Yangi juftni `scripts/gen-license-keypair.mjs`
+/// bilan yarating: seed → backend `LICENSE_ED25519_SEED`, public hex → shu o'zgaruvchi.
+/// O'zgaruvchi berilmagan build'da aktivatsiya ishlamaydi (xavfsiz default).
+const PUBLIC_KEY_HEX: Option<&str> = option_env!("PRAVA_LICENSE_PUBKEY");
 
 fn verifying_key() -> Result<VerifyingKey> {
-    VerifyingKey::from_bytes(&PUBLIC_KEY)
-        .map_err(|e| anyhow!("Ichki xato: public key yaroqsiz: {}", e))
+    let hex_str = PUBLIC_KEY_HEX
+        .ok_or_else(|| anyhow!("Litsenziya tekshiruv kaliti build'ga kiritilmagan (PRAVA_LICENSE_PUBKEY)"))?;
+    let bytes = hex::decode(hex_str.trim())
+        .map_err(|e| anyhow!("Ichki xato: public key hex yaroqsiz: {}", e))?;
+    let arr: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| anyhow!("Ichki xato: public key 32 bayt bo'lishi kerak"))?;
+    VerifyingKey::from_bytes(&arr).map_err(|e| anyhow!("Ichki xato: public key yaroqsiz: {}", e))
 }
 
 fn epoch() -> DateTime<Utc> {

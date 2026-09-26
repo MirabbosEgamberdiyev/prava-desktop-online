@@ -12,7 +12,8 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' https://accounts.google.com https://telegram.org https://oauth.telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https: http:; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost ws://localhost:1421 http://localhost:8080 http://164.68.100.190:8080 https://pravaonline.uz https://accounts.google.com https://oauth.telegram.org; frame-src https://accounts.google.com https://oauth.telegram.org https://telegram.org; object-src 'none'; base-uri 'self'; form-action 'self'"
+      "csp": "default-src 'self'; script-src 'self' https://accounts.google.com https://telegram.org https://oauth.telegram.org; style-src 'self' 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost https://pravaonline.uz https://accounts.google.com https://oauth.telegram.org; frame-src https://accounts.google.com https://oauth.telegram.org https://telegram.org; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "devCsp": "default-src 'self'; script-src 'self' https://accounts.google.com https://telegram.org https://oauth.telegram.org; style-src 'self' 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost ws://localhost:1421 http://localhost:1421 http://localhost:8080 https://pravaonline.uz https://accounts.google.com https://oauth.telegram.org; frame-src https://accounts.google.com https://oauth.telegram.org https://telegram.org; object-src 'none'; base-uri 'self'; form-action 'self'"
     }
   },
   "bundle": {
@@ -32,9 +33,12 @@
     "longDescription": "Prava Online — o'zbekistonlik haydovchilik imtihoniga tayyorlanish uchun eng qulay ilova. Bilet, mavzu va marafon rejimlarida mashq qiling.",
     "windows": {
       "nsis": {
-        "installMode": "perMachine",
-        "languages": ["English", "Russian", "Turkish"],
-        "displayLanguageSelector": false
+        "installMode": "currentUser",
+        "languages": ["Uzbek", "Russian", "English"],
+        "customLanguageFiles": {
+          "Uzbek": "nsis/languages/Uzbek.nsh"
+        },
+        "displayLanguageSelector": true
       },
       "wix": {}
     },

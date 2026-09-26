@@ -15,17 +15,16 @@ fn get_machine_id_cmd() -> String {
     license::get_machine_id()
 }
 
-/// Activation code yoki licenseni tekshiradi.
+/// Aktivatsiya kodini tekshiradi — faqat Ed25519 imzoli format qabul qilinadi.
 ///
-/// - Agar kalit ichida `.` belgisi bo'lsa → Ed25519 (backend chiqargan format).
-/// - Aks holda → eski AES-GCM license formatiga fallback.
+/// SECURITY: eski AES-GCM formati olib tashlandi — uning simmetrik kaliti binary ichida
+/// edi va istalgan kompyuter uchun litsenziya yasashga imkon berardi.
 fn verify_any(key: &str) -> anyhow::Result<license::LicenseStatus> {
-    if activation::is_activation_code(key) {
-        let mid = license::get_machine_id();
-        activation::verify_activation_code(key, &mid)
-    } else {
-        license::verify_license(key)
+    if !activation::is_activation_code(key) {
+        anyhow::bail!("Eski formatdagi litsenziya endi qo'llab-quvvatlanmaydi. Yangi aktivatsiya kodini oling.");
     }
+    let mid = license::get_machine_id();
+    activation::verify_activation_code(key, &mid)
 }
 
 #[tauri::command]
@@ -69,6 +68,9 @@ async fn open_oauth_window(app: tauri::AppHandle, provider: Option<String>) -> R
 
     let init_script = r#"
         (function() {
+            // Web ilova shu oynada refresh token'ni JS cookie'da saqlasin (HttpOnly emas) —
+            // desktop uni o'qib o'z sessiyasiga o'tkazadi. Oddiy brauzerda web HttpOnly rejimda ishlaydi.
+            window.__PRAVA_DESKTOP_AUTH__ = true;
             function getCookie(name) {
                 const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
                 return match ? decodeURIComponent(match[1]) : null;
@@ -130,9 +132,7 @@ async fn open_oauth_window(app: tauri::AppHandle, provider: Option<String>) -> R
         .resizable(true)
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
         .initialization_script(init_script)
-        .on_new_window(|_url, _features| {
-            tauri::webview::NewWindowResponse::Allow
-        })
+        .on_new_window(|url, _features| handle_new_window(url.as_str()))
         .on_navigation(move |nav_url| {
             if nav_url.as_str().contains("__desktop_oauth_done") {
                 if emitted_clone.swap(true, std::sync::atomic::Ordering::SeqCst) {
@@ -318,18 +318,163 @@ fn get_installed_browsers() -> Vec<InstalledBrowser> {
     browsers
 }
 
+/// Tashqi brauzerda ochish uchun ruxsat etilgan HTTPS hostlar (aniq moslik).
+const SAFE_AUTH_HOSTS: &[&str] = &[
+    "pravaonline.uz",
+    "www.pravaonline.uz",
+    "web.pravaonline.uz",
+    "accounts.google.com",
+    "t.me",
+    "telegram.me",
+];
+
+/// P1-D1: avval `starts_with("https://pravaonline.uz")` ishlatilardi —
+/// `https://pravaonline.uz.evil.com` yoki `https://pravaonline.uz@evil.com`
+/// ham o'tib ketardi. Endi URL to'liq parse qilinadi va scheme + host
+/// aniq solishtiriladi.
 fn is_safe_auth_url(url: &str) -> bool {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
+    // Buyruq qatori argumenti sifatida uzatiladi — boshqaruv/qo'shtirnoq belgilar taqiqlanadi
+    if url.contains('\0') || url.contains('\r') || url.contains('\n') || url.contains('"') || url.contains('\'') {
         return false;
     }
-    if url.contains('\0') || url.contains('\r') || url.contains('\n') || url.contains('\"') || url.contains('\'') {
+    let parsed = match tauri::Url::parse(url) {
+        Ok(u) => u,
+        Err(_) => return false,
+    };
+    // Login ma'lumotli URL'lar (user:pass@host) rad etiladi
+    if !parsed.username().is_empty() || parsed.password().is_some() {
         return false;
     }
-    url.starts_with("https://pravaonline.uz")
-        || url.starts_with("http://localhost")
-        || url.starts_with("https://accounts.google.com")
-        || url.starts_with("https://t.me")
-        || url.starts_with("https://telegram.me")
+    let host = match parsed.host_str() {
+        Some(h) => h.to_ascii_lowercase(),
+        None => return false,
+    };
+    match parsed.scheme() {
+        "https" => parsed.port().is_none() && SAFE_AUTH_HOSTS.contains(&host.as_str()),
+        // Mahalliy dev server faqat debug build'da
+        "http" => cfg!(debug_assertions) && (host == "localhost" || host == "127.0.0.1"),
+        _ => false,
+    }
+}
+
+/// OAuth popup'lari (Telegram widget) ochadigan qo'shimcha host — faqat ilova ichidagi
+/// yangi oyna uchun (launch_browser_url ro'yxatini kengaytirmaydi).
+const EXTRA_POPUP_HOSTS: &[&str] = &["oauth.telegram.org"];
+
+#[derive(Debug, PartialEq, Eq)]
+enum NewWindowAction {
+    /// Ilova ichida yangi WebView oynasi (faqat ruxsat etilgan auth hostlar).
+    AllowInApp,
+    /// Tizim brauzerida ochiladi, ilova ichida oyna yaratilmaydi.
+    OpenExternal,
+    /// Umuman ochilmaydi (javascript:, file:, data:, about:blank, ...).
+    Deny,
+}
+
+/// window.open / target=_blank uchun qaror: allow-list'dagi auth URL'lar ilova ichida,
+/// boshqa http(s) URL'lar tashqi brauzerda, qolganlari rad etiladi.
+fn new_window_action(url: &str) -> NewWindowAction {
+    if is_safe_auth_url(url) {
+        return NewWindowAction::AllowInApp;
+    }
+    let parsed = match tauri::Url::parse(url) {
+        Ok(u) => u,
+        Err(_) => return NewWindowAction::Deny,
+    };
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return NewWindowAction::Deny;
+    }
+    match parsed.scheme() {
+        "https" => {
+            let host = parsed.host_str().unwrap_or("").to_ascii_lowercase();
+            if parsed.port().is_none() && EXTRA_POPUP_HOSTS.contains(&host.as_str()) {
+                NewWindowAction::AllowInApp
+            } else {
+                NewWindowAction::OpenExternal
+            }
+        }
+        "http" => NewWindowAction::OpenExternal,
+        _ => NewWindowAction::Deny,
+    }
+}
+
+fn handle_new_window<R: tauri::Runtime>(url: &str) -> tauri::webview::NewWindowResponse<R> {
+    match new_window_action(url) {
+        NewWindowAction::AllowInApp => tauri::webview::NewWindowResponse::Allow,
+        NewWindowAction::OpenExternal => {
+            let _ = tauri_plugin_opener::open_url(url, None::<&str>);
+            tauri::webview::NewWindowResponse::Deny
+        }
+        NewWindowAction::Deny => tauri::webview::NewWindowResponse::Deny,
+    }
+}
+
+#[cfg(test)]
+mod new_window_tests {
+    use super::{new_window_action, NewWindowAction};
+
+    #[test]
+    fn auth_urls_stay_in_app() {
+        assert_eq!(new_window_action("https://accounts.google.com/o/oauth2/v2/auth?x=1"), NewWindowAction::AllowInApp);
+        assert_eq!(new_window_action("https://pravaonline.uz/auth/login"), NewWindowAction::AllowInApp);
+        assert_eq!(new_window_action("https://oauth.telegram.org/auth?bot_id=1"), NewWindowAction::AllowInApp);
+    }
+
+    #[test]
+    fn other_web_urls_open_externally() {
+        assert_eq!(new_window_action("https://tirikchilik.uz/pravaonline"), NewWindowAction::OpenExternal);
+        assert_eq!(new_window_action("https://pravaonline.uz.evil.com/"), NewWindowAction::OpenExternal);
+        assert_eq!(new_window_action("http://example.com/"), NewWindowAction::OpenExternal);
+    }
+
+    #[test]
+    fn dangerous_urls_are_denied() {
+        assert_eq!(new_window_action("javascript:alert(1)"), NewWindowAction::Deny);
+        assert_eq!(new_window_action("file:///C:/Windows/System32/calc.exe"), NewWindowAction::Deny);
+        assert_eq!(new_window_action("about:blank"), NewWindowAction::Deny);
+        assert_eq!(new_window_action("https://user:pw@evil.com/"), NewWindowAction::Deny);
+        assert_eq!(new_window_action("not a url"), NewWindowAction::Deny);
+    }
+}
+
+#[cfg(test)]
+mod safe_auth_url_tests {
+    use super::is_safe_auth_url;
+
+    #[test]
+    fn allows_exact_hosts() {
+        assert!(is_safe_auth_url("https://pravaonline.uz/auth/login?oauth=google"));
+        assert!(is_safe_auth_url("https://web.pravaonline.uz/auth/login"));
+        assert!(is_safe_auth_url("https://www.pravaonline.uz/"));
+        assert!(is_safe_auth_url("https://accounts.google.com/o/oauth2/v2/auth?x=1"));
+        assert!(is_safe_auth_url("https://t.me/pravaonlineuzbot"));
+    }
+
+    #[test]
+    fn rejects_lookalike_hosts() {
+        assert!(!is_safe_auth_url("https://pravaonline.uz.evil.com"));
+        assert!(!is_safe_auth_url("https://pravaonline.uz.evil.com/auth/login"));
+        assert!(!is_safe_auth_url("https://pravaonline.uz@evil.com/"));
+        assert!(!is_safe_auth_url("https://evilpravaonline.uz/"));
+        assert!(!is_safe_auth_url("https://accounts.google.com.evil.com/"));
+        assert!(!is_safe_auth_url("https://t.me.evil.com/"));
+    }
+
+    #[test]
+    fn rejects_bad_schemes_and_chars() {
+        assert!(!is_safe_auth_url("http://pravaonline.uz/"));
+        assert!(!is_safe_auth_url("file:///C:/Windows/System32/calc.exe"));
+        assert!(!is_safe_auth_url("javascript:alert(1)"));
+        assert!(!is_safe_auth_url("https://pravaonline.uz/\" --foo"));
+        assert!(!is_safe_auth_url("https://pravaonline.uz:8443/"));
+        assert!(!is_safe_auth_url("not a url"));
+    }
+
+    #[test]
+    fn localhost_only_in_debug() {
+        assert_eq!(is_safe_auth_url("http://localhost:1421/"), cfg!(debug_assertions));
+        assert!(!is_safe_auth_url("http://localhost.evil.com/"));
+    }
 }
 
 fn is_safe_browser_binary(path: &str) -> bool {
@@ -445,17 +590,17 @@ pub fn run() {
                 license_key: Mutex::new(None),
             });
 
+            // Main window is built here (tauri.conf.json "windows" is intentionally empty):
+            // default 1280x800, desktop minimum 1024x680.
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
                 .title("Prava Online - Haydovchilik imtihoniga tayyorlanish")
                 .inner_size(1280.0, 800.0)
-                .min_inner_size(1024.0, 700.0)
+                .min_inner_size(1024.0, 680.0)
                 .resizable(true)
                 .fullscreen(false)
                 .center()
                 .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
-                .on_new_window(|_url, _features| {
-                    tauri::webview::NewWindowResponse::Allow
-                })
+                .on_new_window(|url, _features| handle_new_window(url.as_str()))
                 .build()?;
 
             Ok(())
