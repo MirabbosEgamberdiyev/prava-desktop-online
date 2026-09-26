@@ -31,18 +31,16 @@
 
 /* ── Hardware-accelerated fluid page transition (Zero-flicker SPA) ── */
 .page-transition-wrapper {
-  animation: pageFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
-  will-change: opacity, transform;
+  animation: pageFadeIn 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Opacity only: no transform on text (a sub-pixel translate blurs glyphs on high-DPI). */
 @keyframes pageFadeIn {
   from {
     opacity: 0.75;
-    transform: translateY(2px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -6330,11 +6328,12 @@ body:has(.app) {
 
 /* ==========================================================================
    SETTINGS → APPEARANCE (TypographyContext)
-   Text size: native WebView zoom under Tauri (data-native-zoom); root font-size
+   UI scale (90/100/110/125%): native WebView zoom under Tauri (data-native-zoom); root font-size
    fallback in a plain browser (web parity). Bold text: web parity rules.
    ========================================================================== */
-html[data-text-size="small"]:not([data-native-zoom]) { font-size: 92%; }
-html[data-text-size="large"]:not([data-native-zoom]) { font-size: 112%; }
+html[data-ui-scale="90"]:not([data-native-zoom]) { font-size: 90%; }
+html[data-ui-scale="110"]:not([data-native-zoom]) { font-size: 110%; }
+html[data-ui-scale="125"]:not([data-native-zoom]) { font-size: 125%; }
 
 [data-bold-text="true"] body,
 [data-bold-text="true"] p,

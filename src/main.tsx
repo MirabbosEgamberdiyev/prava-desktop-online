@@ -42,7 +42,8 @@ if (import.meta.env.DEV) {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <GoogleOAuthProvider clientId={ENV.GOOGLE_CLIENT_ID}>
-      <MantineProvider theme={theme} defaultColorScheme="dark">
+      {/* Birinchi ishga tushishda OS mavzusi (saqlangan tanlov bo'lsa Mantine uni o'zi o'qiydi) — yorug' mavzuda qorong'i miltillash bo'lmaydi */}
+      <MantineProvider theme={theme} defaultColorScheme="auto">
         <SWRConfig
           value={{
             fetcher: (url: string) => api.get(url).then((res) => res.data),

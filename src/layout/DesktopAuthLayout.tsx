@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
-  AppShell,
   Box,
   Container,
   Group,
@@ -121,14 +120,14 @@ export const DesktopAuthLayout = () => {
       : "100% amaldagi savollar";
 
   return (
-    <AppShell
-      header={{ height: 54 }}
-      padding={0}
-      style={{ height: "100%", minHeight: "100%", background: "var(--bg)" }}
-    >
+    // Plain flex column (no Mantine AppShell: its fixed-position header would sit under the
+    // frameless window titlebar). Scrolls inside the main area only.
+    <div style={{ height: "100%", minHeight: 0, display: "flex", flexDirection: "column", background: "var(--bg)" }}>
       {/* Top Header Titlebar */}
-      <AppShell.Header
+      <header
         style={{
+          flex: "0 0 44px",
+          height: 44,
           borderBottom: "1px solid var(--border)",
           background: "var(--card-bg)",
         }}
@@ -172,9 +171,9 @@ export const DesktopAuthLayout = () => {
             </Group>
           </Group>
         </Container>
-      </AppShell.Header>
+      </header>
 
-      <AppShell.Main
+      <main
         style={{
           display: "flex",
           flexDirection: "column",
@@ -353,7 +352,7 @@ export const DesktopAuthLayout = () => {
             )}
           </Suspense>
         </div>
-      </AppShell.Main>
+      </main>
 
       {/* Responsive Styles for DesktopAuthLayout */}
       <style>{`
@@ -396,7 +395,7 @@ export const DesktopAuthLayout = () => {
           }
         }
       `}</style>
-    </AppShell>
+    </div>
   );
 };
 

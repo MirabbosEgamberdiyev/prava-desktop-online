@@ -297,8 +297,8 @@ export function QuizContent({
         }
       }
 
-      // 5. Select Option: 1-5 and F1-F5
-      // (unified desktop mapping: 1-5 / A-E / F1-F5, layout-independent)
+      // 5. Select Option: 1-5 / Numpad 1-5
+      // (unified desktop mapping: digits only — letters are reserved for commands)
       const action = resolveExamShortcut(e);
       if (action?.type === "select") {
         e.preventDefault();

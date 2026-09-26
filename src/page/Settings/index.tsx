@@ -11,7 +11,6 @@ import {
   SimpleGrid,
   Container,
   Button,
-  Kbd,
   SegmentedControl,
   Alert,
 } from "@mantine/core";
@@ -21,7 +20,6 @@ import {
   IconDevices,
   IconDeviceMobile,
   IconDeviceDesktop,
-  IconArrowLeft,
   IconSettings,
   IconKeyboard,
   IconRefresh,
@@ -34,7 +32,7 @@ import {
   IconTypography,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import useSWR, { mutate } from "swr";
 import { useAuth } from "../../auth/AuthContext";
 import { AccountManager, type StoredAccount } from "../../auth/accountManager";
@@ -47,6 +45,12 @@ import { ProfileInfoCard } from "../../features/me/components/ProfileInfoCard";
 import { ChangePasswordForm } from "../../features/me/components/ChangePasswordForm";
 import SEO from "../../components/common/SEO";
 import { SimpleTypographyControl } from "../../components/common/SimpleTypographyControl";
+import KeyboardShortcutsPanel from "./KeyboardShortcutsPanel";
+import SoundSettingsPanel from "./SoundSettingsPanel";
+
+const SETTINGS_TABS = ["profile", "security", "devices", "appearance", "keyboard", "desktop"] as const;
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+const asTab = (v: string | null): SettingsTab => (SETTINGS_TABS as readonly string[]).includes(v ?? "") ? (v as SettingsTab) : "profile";
 
 interface DeviceInfo {
   activeDevices?: number;
@@ -62,10 +66,14 @@ interface DeviceInfo {
 
 const Settings_Page = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get("tab") || "profile";
+  // Controlled so ?tab= links (status bar, Ctrl+,) also switch tabs while already on /settings.
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<SettingsTab>(() => asTab(tabParam));
+  useEffect(() => {
+    if (tabParam) setTab(asTab(tabParam));
+  }, [tabParam]);
 
   const { data: deviceResponse, isLoading: devicesLoading } = useSWR<{
     data: DeviceInfo;
@@ -204,52 +212,46 @@ const Settings_Page = () => {
       />
       <div className="review-screen">
         <header className="review-header">
-          <button
-            className="review-back-btn"
-            onClick={() => navigate("/me")}
-            type="button"
-          >
-            <IconArrowLeft size={18} stroke={2} />
-            {t("common.back", "Orqaga")}
-          </button>
           <div className="review-header-title">
             <IconSettings size={20} stroke={2} color="var(--mantine-color-blue-5)" />
             <span>{t("settings.title", "Sozlamalar va Profil")}</span>
           </div>
         </header>
-        <main style={{ flex: 1, overflowY: "auto", padding: "0 16px 32px" }}>
-          <Container size="md" pt="xs">
-            <Tabs defaultValue={initialTab}>
-              <div
-                style={{
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 20,
-                  background: "var(--bg)",
-                  paddingTop: "10px",
-                  paddingBottom: "12px",
-                  borderBottom: "1px solid var(--border)",
-                  marginBottom: "20px",
-                }}
-              >
-                <Tabs.List>
-                  <Tabs.Tab value="profile" leftSection={<IconUser size={16} />}>
-                    {t("settings.profile", "Profil")}
-                  </Tabs.Tab>
-                  <Tabs.Tab value="security" leftSection={<IconLock size={16} />}>
-                    {t("settings.security", "Xavfsizlik")}
-                  </Tabs.Tab>
-                  <Tabs.Tab value="devices" leftSection={<IconDevices size={16} />}>
-                    {t("settings.devices", "Qurilmalar")}
-                  </Tabs.Tab>
-                  <Tabs.Tab value="appearance" leftSection={<IconTypography size={16} />}>
-                    {t("settings.appearance", "Ko'rinish")}
-                  </Tabs.Tab>
-                  <Tabs.Tab value="desktop" leftSection={<IconDeviceDesktop size={16} />}>
-                    Desktop & Boshqaruv
-                  </Tabs.Tab>
-                </Tabs.List>
-              </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 32px" }}>
+          <Container size="lg" pt="md">
+            {/* Windows-style settings: vertical category list on the left, content on the right. */}
+            <Tabs
+              value={tab}
+              onChange={(v) => setTab(asTab(v))}
+              orientation="vertical"
+              variant="pills"
+              keepMounted={false}
+              styles={{
+                list: { minWidth: 220, position: "sticky", top: 0, alignSelf: "flex-start", gap: 2 },
+                tab: { justifyContent: "flex-start", height: 34 },
+                panel: { paddingLeft: 24, minWidth: 0 },
+              }}
+            >
+              <Tabs.List>
+                <Tabs.Tab value="profile" leftSection={<IconUser size={16} />}>
+                  {t("settings.profile", "Profil")}
+                </Tabs.Tab>
+                <Tabs.Tab value="security" leftSection={<IconLock size={16} />}>
+                  {t("settings.security", "Xavfsizlik")}
+                </Tabs.Tab>
+                <Tabs.Tab value="devices" leftSection={<IconDevices size={16} />}>
+                  {t("settings.devices", "Qurilmalar")}
+                </Tabs.Tab>
+                <Tabs.Tab value="appearance" leftSection={<IconTypography size={16} />}>
+                  {t("desktopShell.settings.tabAppearance", "Ko'rinish")}
+                </Tabs.Tab>
+                <Tabs.Tab value="keyboard" leftSection={<IconKeyboard size={16} />}>
+                  {t("desktopShell.settings.tabKeyboard", "Klaviatura")}
+                </Tabs.Tab>
+                <Tabs.Tab value="desktop" leftSection={<IconDeviceDesktop size={16} />}>
+                  {t("desktopShell.settings.tabDesktop", "Tarmoq va sinxronlash")}
+                </Tabs.Tab>
+              </Tabs.List>
 
               <Tabs.Panel value="profile">
                 <Stack gap="lg">
@@ -347,84 +349,17 @@ const Settings_Page = () => {
               <Tabs.Panel value="appearance">
                 <Stack gap="lg">
                   <SimpleTypographyControl />
+                  <SoundSettingsPanel />
                 </Stack>
+              </Tabs.Panel>
+
+              <Tabs.Panel value="keyboard">
+                <KeyboardShortcutsPanel />
               </Tabs.Panel>
 
               {/* ── DESKTOP TAB ── */}
               <Tabs.Panel value="desktop">
                 <Stack gap="lg">
-                  {/* 1. Klaviatura qisqartmalari */}
-                  <Paper p="lg" radius="md" withBorder shadow="sm">
-                    <Group gap="xs" mb="sm">
-                      <IconKeyboard size={20} color="var(--mantine-color-blue-5)" />
-                      <Text fw={600} fz="md">
-                        Tezkor klaviatura tugmalari (Keyboard Shortcuts)
-                      </Text>
-                    </Group>
-                    <Text size="sm" c="dimmed" mb="md">
-                      Imtihon va bilet yechish paytida sichqonchasiz, to'liq klaviatura yordamida ishlashingiz mumkin:
-                    </Text>
-
-                    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                      <Paper p="sm" withBorder radius="sm">
-                        <Group justify="space-between">
-                          <Text size="sm">Variant tanlash:</Text>
-                          <Group gap={4}>
-                            <Kbd>1</Kbd>–<Kbd>5</Kbd> yoki <Kbd>F1</Kbd>–<Kbd>F5</Kbd>
-                          </Group>
-                        </Group>
-                      </Paper>
-
-                      <Paper p="sm" withBorder radius="sm">
-                        <Group justify="space-between">
-                          <Text size="sm">Oldingi / Keyingi savol:</Text>
-                          <Group gap={4}>
-                            <Kbd>←</Kbd> <Kbd>→</Kbd>
-                          </Group>
-                        </Group>
-                      </Paper>
-
-                      <Paper p="sm" withBorder radius="sm">
-                        <Group justify="space-between">
-                          <Text size="sm">Keyingisiga o‘tish:</Text>
-                          <Kbd>Space</Kbd>
-                        </Group>
-                      </Paper>
-
-                      <Paper p="sm" withBorder radius="sm">
-                        <Group justify="space-between">
-                          <Text size="sm">Imtihonni yakunlash:</Text>
-                          <Kbd>Enter</Kbd>
-                        </Group>
-                      </Paper>
-
-                      <Paper p="sm" withBorder radius="sm">
-                        <Group justify="space-between">
-                          <Text size="sm">Modal / Rasmni yopish:</Text>
-                          <Kbd>Esc</Kbd>
-                        </Group>
-                      </Paper>
-
-                      <Paper p="sm" withBorder radius="sm">
-                        <Group justify="space-between">
-                          <Text size="sm">{t("search.shortcutLabel", "Global qidiruv")}:</Text>
-                          <Group gap={4}>
-                            <Kbd>Ctrl</Kbd>+<Kbd>K</Kbd>
-                          </Group>
-                        </Group>
-                      </Paper>
-
-                      <Paper p="sm" withBorder radius="sm">
-                        <Group justify="space-between">
-                          <Text size="sm">{t("search.pageSearchLabel", "Sahifa ichida qidirish")}:</Text>
-                          <Group gap={4}>
-                            <Kbd>Ctrl</Kbd>+<Kbd>F</Kbd> / <Kbd>/</Kbd>
-                          </Group>
-                        </Group>
-                      </Paper>
-                    </SimpleGrid>
-                  </Paper>
-
                   {/* 2. Tarmoq Ish Rejimi (Network Mode) */}
                   <Paper p="lg" radius="md" withBorder shadow="sm">
                     <Group justify="space-between" mb="xs">
@@ -671,7 +606,7 @@ const Settings_Page = () => {
               </Tabs.Panel>
             </Tabs>
           </Container>
-        </main>
+        </div>
       </div>
     </>
   );

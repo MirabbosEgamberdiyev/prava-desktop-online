@@ -3,10 +3,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useTranslation } from "react-i18next";
-import ColorMode from "../../components/other/ColorMode";
-import LanguagePicker from "../../components/language/LanguagePicker";
-import UserMenuButton from "../../components/nav/UserMenuButton";
-import NetworkModeSelector from "../../components/common/NetworkModeSelector";
 import SEO from "../../components/common/SEO";
 import { getFullStats, getWrongAnswers, getTopics, localizeTopic, getSavedQuestions } from "../../services/desktopAdapter";
 import storageService from "../../services/storageService";
@@ -25,7 +21,6 @@ import {
   IconArrowRight,
   IconCheck,
   IconSparkles,
-  IconSearch,
 } from "@tabler/icons-react";
 
 import { useLanguage } from "../../context/LanguageContext";
@@ -35,11 +30,9 @@ import type { DbTicket } from "../../database/schema";
 import { pickResumableSession, type ResumableSession } from "../../features/Dashboard/resumeSession";
 import { selectNextBestAction } from "../../features/Dashboard/nextBestAction";
 import { LEARN_SECTIONS } from "../../features/Curriculum/learnSections";
-import { openGlobalSearch } from "../../features/Search/GlobalSearchHost";
 import NextBestActionCard from "../../components/dashboard/NextBestActionCard";
 import ResumeExamCard from "../../components/dashboard/ResumeExamCard";
 import SmartRecommendationSection from "../../components/dashboard/SmartRecommendationSection";
-import NotificationCenter from "../../components/dashboard/NotificationCenter";
 
 const EXAM_OPTIONS = [20, 40, 50, 60, 80, 100];
 
@@ -298,48 +291,10 @@ export default function User_Page() {
       />
 
       <div className="home-screen">
-        {/* ================= 1. HEADER ================= */}
-        <header className="home-header">
-          <div className="home-header-inner">
-            {/* Brand Logo */}
-            <div
-              className="home-header-logo"
-              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
-              onClick={() => navigate("/me")}
-            >
-              <img
-                src="/logo.png"
-                width={34}
-                height={34}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/logo.svg";
-                }}
-                alt="Prava"
-              />
-              <span className="home-header-brand">
-                PRAVA<span className="brand-accent">ONLINE</span>
-              </span>
-            </div>
-
-            {/* Right Zone Controls: Mode & Sync, Theme, Language, User Profile */}
-            <div className="home-header-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <button type="button" className="dash-search-btn" onClick={openGlobalSearch} aria-label={t("search.shortcutLabel", "Global qidiruv")} aria-keyshortcuts="Control+K">
-                <IconSearch size={15} />
-                <span>{t("search.buttonLabel", "Qidirish...")}</span>
-                <kbd>Ctrl K</kbd>
-              </button>
-              <NetworkModeSelector />
-              <ColorMode />
-              <LanguagePicker />
-              <div className="navbar-divider" aria-hidden="true" />
-              <NotificationCenter />
-              <UserMenuButton />
-            </div>
-          </div>
-        </header>
-
+        {/* Window chrome (brand, search, notifications, account, language, theme) lives in the
+            desktop shell: src/shell/TitleBar.tsx + StatusBar.tsx. */}
         {/* ================= MAIN CONTENT ================= */}
-        <main className="home-content">
+        <div className="home-content">
           <div className="home-inner">
             {/* 1. Greeting Section */}
             <div className="home-welcome">
@@ -633,16 +588,8 @@ export default function User_Page() {
               </div>
             </section>
 
-            {/* ================= 6. FOOTER ================= */}
-            <footer className="home-footer" style={{ marginTop: 40, borderTop: "1px solid var(--border)", padding: "20px 0" }}>
-              <div className="home-footer-inner" style={{ textAlign: "center" }}>
-                <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
-                  © {new Date().getFullYear()} PravaOnline. {t("dashboard.allRightsReserved", "Barcha huquqlar himoyalangan")}
-                </p>
-              </div>
-            </footer>
           </div>
-        </main>
+        </div>
 
         {/* Exam Count Picker Modal */}
         {showExamPicker && (

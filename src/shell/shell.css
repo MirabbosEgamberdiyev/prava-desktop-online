@@ -1,0 +1,489 @@
+/* ==========================================================================
+   DESKTOP SHELL (Windows 11 / Fluent): titlebar · sidebar · content · status bar
+   Only shell chrome uses the Windows system UI font; page content keeps the brand font.
+   Brand colour comes from design tokens (--primary); only neutral chrome layers are added.
+   ========================================================================== */
+
+:root,
+[data-theme="light"] {
+  --shell-font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --shell-titlebar-h: 32px;
+  --shell-statusbar-h: 26px;
+  --shell-sidebar-w: 232px;
+  --shell-sidebar-w-collapsed: 48px;
+  /* Layered surfaces: chrome (Mica-like base) → content layer (--bg) → cards (--card-bg). */
+  --shell-chrome: #eef1f5;
+  --shell-chrome-text: #1b1f24;
+  --shell-chrome-muted: #5b6573;
+  --shell-divider: rgba(15, 23, 42, 0.09);
+  --shell-hover: rgba(15, 23, 42, 0.055);
+  --shell-pressed: rgba(15, 23, 42, 0.09);
+  --shell-selected: rgba(15, 23, 42, 0.07);
+  --shell-caption-close: #c42b1c;
+  --shell-focus: var(--primary);
+}
+
+[data-theme="dark"] {
+  --shell-chrome: #070c16;
+  --shell-chrome-text: #e6ebf2;
+  --shell-chrome-muted: #9aa6b6;
+  --shell-divider: rgba(255, 255, 255, 0.08);
+  --shell-hover: rgba(255, 255, 255, 0.06);
+  --shell-pressed: rgba(255, 255, 255, 0.1);
+  --shell-selected: rgba(255, 255, 255, 0.075);
+}
+
+.shell-titlebar,
+.shell-titlebar *,
+.shell-sidebar,
+.shell-sidebar *,
+.shell-statusbar,
+.shell-statusbar * {
+  font-family: var(--shell-font);
+}
+
+/* ── Frame ── */
+.shell-frame {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--shell-chrome);
+  color: var(--shell-chrome-text);
+}
+
+.shell-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ── Titlebar ── */
+.shell-titlebar {
+  position: relative;
+  z-index: 1100;
+  flex: 0 0 var(--shell-titlebar-h);
+  height: var(--shell-titlebar-h);
+  display: flex;
+  align-items: center;
+  background: var(--shell-chrome);
+  color: var(--shell-chrome-text);
+  user-select: none;
+  -webkit-user-select: none;
+  font-size: 12px;
+}
+
+.shell-titlebar-drag {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  cursor: default;
+}
+
+.shell-titlebar-spacer {
+  padding-left: 0;
+}
+
+.shell-titlebar-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.shell-titlebar-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.shell-titlebar-sep,
+.shell-titlebar-section {
+  color: var(--shell-chrome-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-titlebar-search {
+  flex: 0 1 360px;
+  min-width: 180px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--shell-divider);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--shell-chrome-muted);
+  font-size: 12px;
+  cursor: text;
+}
+.shell-titlebar-search span {
+  flex: 1;
+  text-align: left;
+}
+.shell-titlebar-search:hover {
+  border-color: var(--primary);
+}
+.shell-titlebar-search kbd,
+.shell-nav-label kbd {
+  font-family: var(--shell-font);
+  font-size: 10.5px;
+  line-height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--shell-divider);
+  background: var(--shell-chrome);
+  color: var(--shell-chrome-muted);
+}
+
+.shell-titlebar-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  height: 100%;
+}
+.shell-titlebar-tools .header-control-btn,
+.shell-titlebar-tools .dash-icon-btn {
+  height: 26px;
+  min-height: 26px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+  transform: none;
+}
+.shell-titlebar-tools .dash-icon-btn {
+  width: 28px;
+}
+.shell-titlebar-tools .header-control-btn:hover,
+.shell-titlebar-tools .dash-icon-btn:hover {
+  background: var(--shell-hover);
+  border-color: transparent;
+  transform: none;
+}
+.shell-titlebar-tools .mantine-Avatar-root {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+}
+
+.shell-caption-buttons {
+  display: flex;
+  height: 100%;
+  flex: 0 0 auto;
+}
+.shell-caption-btn {
+  width: 46px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--shell-chrome-text);
+  cursor: default;
+}
+.shell-caption-btn:hover {
+  background: var(--shell-hover);
+}
+.shell-caption-btn:active {
+  background: var(--shell-pressed);
+}
+.shell-caption-close:hover {
+  background: var(--shell-caption-close);
+  color: #fff;
+}
+.shell-caption-close:active {
+  background: #b22a1d;
+  color: #fff;
+}
+
+/* ── Layout (sidebar + content layer) ── */
+.shell-layout {
+  flex-direction: row !important;
+  background: var(--shell-chrome);
+}
+
+.shell-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  border-top: 1px solid var(--shell-divider);
+  border-left: 1px solid var(--shell-divider);
+  border-top-left-radius: 8px;
+}
+.shell-layout.is-focus .shell-main {
+  border-left: 0;
+  border-top-left-radius: 0;
+}
+
+.shell-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.shell-sidebar {
+  flex: 0 0 var(--shell-sidebar-w);
+  width: var(--shell-sidebar-w);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 6px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--shell-chrome);
+  scrollbar-width: thin;
+}
+.shell-sidebar.is-collapsed {
+  flex-basis: var(--shell-sidebar-w-collapsed);
+  width: var(--shell-sidebar-w-collapsed);
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.shell-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shell-nav-item {
+  position: relative;
+  height: 34px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shell-chrome-text);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  cursor: default;
+  white-space: nowrap;
+}
+.shell-sidebar.is-collapsed .shell-nav-item {
+  justify-content: center;
+  padding: 0;
+}
+.shell-nav-item svg {
+  flex: 0 0 auto;
+  color: var(--shell-chrome-muted);
+}
+.shell-nav-item:hover {
+  background: var(--shell-hover);
+}
+.shell-nav-item:active {
+  background: var(--shell-pressed);
+}
+.shell-nav-item.is-active {
+  background: var(--shell-selected);
+  font-weight: 600;
+}
+.shell-nav-item.is-active svg {
+  color: var(--primary);
+}
+/* Fluent selection pill */
+.shell-nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+
+.shell-nav-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-nav-toggle {
+  color: var(--shell-chrome-muted);
+}
+
+/* ── Status bar ── */
+.shell-statusbar {
+  flex: 0 0 var(--shell-statusbar-h);
+  height: var(--shell-statusbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 6px;
+  background: var(--shell-chrome);
+  border-top: 1px solid var(--shell-divider);
+  color: var(--shell-chrome-muted);
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.shell-status-left,
+.shell-status-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.shell-status-left {
+  flex: 1 1 0;
+}
+.shell-status-right {
+  flex: 1 1 0;
+  justify-content: flex-end;
+}
+.shell-status-center {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.shell-status-item {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  min-width: 0;
+}
+.shell-status-item.is-button {
+  cursor: default;
+}
+.shell-status-item.is-button:not(:disabled):hover {
+  background: var(--shell-hover);
+  color: var(--shell-chrome-text);
+}
+.shell-status-item.is-button:disabled {
+  opacity: 1;
+}
+.shell-status-item.is-warn {
+  color: var(--warning);
+}
+.shell-status-item.is-muted {
+  opacity: 0.75;
+}
+
+.shell-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shell-status-name {
+  max-width: 220px;
+  color: var(--shell-chrome-text);
+}
+.shell-status-text.is-strong {
+  color: var(--shell-chrome-text);
+  font-weight: 600;
+}
+.shell-status-text.is-danger {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.shell-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.shell-status-dot.is-ok {
+  background: var(--success);
+}
+.shell-status-dot.is-warn {
+  background: var(--warning);
+}
+
+.shell-status-exam {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.shell-status-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--shell-divider);
+}
+
+.shell-status-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+}
+.shell-status-timer.is-critical {
+  background: var(--danger);
+  color: #fff;
+}
+
+.shell-spin {
+  animation: shell-spin 1s linear infinite;
+}
+@keyframes shell-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Focus rings (keyboard only) ── */
+.shell-nav-item:focus-visible,
+.shell-status-item:focus-visible,
+.shell-titlebar-search:focus-visible,
+.shell-caption-btn:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-spin {
+    animation: none;
+  }
+}

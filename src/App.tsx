@@ -13,6 +13,7 @@ import { networkHeartbeat } from "./sync/networkHeartbeat";
 import { syncEngine } from "./sync/syncEngine";
 import GlobalSearchHost from "./features/Search/GlobalSearchHost";
 import { TypographyProvider } from "./context/TypographyContext";
+import DesktopFrame from "./shell/DesktopFrame";
 
 /**
  * Background sync starts only once the UI is up (not at module import), so the first
@@ -110,9 +111,12 @@ function AppInner() {
             <GoogleOneTap />
             <ScrollManager />
             <GlobalSearchHost />
-            <ErrorBoundary resetKey={location.pathname}>
-              <AppRoutes />
-            </ErrorBoundary>
+            {/* Frameless window chrome: titlebar + status bar + global hotkeys (src/shell). */}
+            <DesktopFrame>
+              <ErrorBoundary resetKey={location.pathname}>
+                <AppRoutes />
+              </ErrorBoundary>
+            </DesktopFrame>
           </LanguageProvider>
         </AuthProvider>
       </TypographyProvider>

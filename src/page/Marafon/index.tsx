@@ -1,6 +1,6 @@
 import { resolveUserScopeId } from "@/utils/userScope";
 import { getExamRules, durationSecondsFor, isExamPassed } from "@/services/examRules";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -13,9 +13,6 @@ import {
   toggleSavedQuestion,
   getSavedQuestions,
   recordQuestionAttempt,
-  localizeQ,
-  localizeOpt,
-  localizeExp,
   localizeTopic,
   parseOptions,
   getActiveMarathonSessionId,
@@ -24,12 +21,10 @@ import {
 import { isFakeLocalSessionId } from "../../services/offlineExamRecord";
 import ColorMode from "../../components/other/ColorMode";
 import LanguagePicker from "../../components/language/LanguagePicker";
-import ImageZoomModal, { ZoomableImage } from "../../components/common/ImageZoomModal";
-import ExamTimerDisplay, { remainingSecondsUntil } from "../../components/quiz/ExamTimerDisplay";
-import ShortcutHint from "../../components/quiz/ShortcutHint";
-import { useExamShortcuts } from "../../hooks/useExamShortcuts";
-import { offlineMediaManager } from "../../services/offlineMediaManager";
-import { getImageUrl } from "../../utils/imageUtils";
+import { remainingSecondsUntil } from "../../components/quiz/ExamTimerDisplay";
+import { ExamDesktopView, useDebouncedSave, countResults } from "../../features/ExamDesktop";
+import { playSfx } from "../../services/sound";
+import "../../styles/exam-desktop.css";
 import GamificationResult from "../../components/quiz/GamificationResult";
 import QuizReviewModal from "../../components/quiz/QuizReviewModal";
 import TestSetupCard from "../../components/quiz/TestSetupCard";
@@ -37,19 +32,7 @@ import { dbClient } from "../../database";
 import { generateUUID } from "../../sync/outboxQueue";
 import { showToast } from "../../utils/notificationUtils";
 import SEO from "../../components/common/SEO";
-import {
-  IconChevronLeft,
-  IconChevronRight,
-  IconCheck,
-  IconX,
-  IconSteeringWheel,
-  IconBulb,
-  IconBookmark,
-  IconBookmarkFilled,
-  IconAlertTriangle,
-  IconArrowLeft,
-  IconDownload,
-} from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowLeft, IconDownload, IconFlame } from "@tabler/icons-react";
 import OfflinePreparationModal from "../../components/offline/OfflinePreparationModal";
 
 type Phase = "setup" | "loading" | "exam" | "result";
@@ -87,17 +70,13 @@ export default function Marafon_Page() {
   /** Absolute deadline (epoch ms): count × marathon.secondsPerQuestion, persisted for crash recovery. */
   const [deadline, setDeadline] = useState<number>(0);
   const [isTimeUp, setIsTimeUp] = useState(false);
-  const [showExp, setShowExp] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
-  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [confirmFinishOpen, setConfirmFinishOpen] = useState(false);
   const [showOfflineModal, setShowOfflineModal] = useState(false);
 
   const autoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
-  const activeQnumRef = useRef<HTMLButtonElement | null>(null);
   answersRef.current = answers;
   const questionsRef = useRef(questions);
   questionsRef.current = questions;
@@ -142,41 +121,47 @@ export default function Marafon_Page() {
       .catch(() => {});
   }, [userId]);
 
-  useEffect(() => {
-    setShowExp(false);
-  }, [current]);
-
-  useEffect(() => {
-    activeQnumRef.current?.scrollIntoView({
-      block: "nearest",
-      inline: "center",
-      behavior: "smooth",
-    });
-  }, [current]);
-
-  // Predictive image prefetching (before any early return — rules of hooks)
-  useEffect(() => {
-    if (!questions || questions.length === 0) return;
-    const nextQs = questions.slice(current + 1, current + 4);
-    const prevQs = questions.slice(Math.max(0, current - 2), current);
-    [...nextQs, ...prevQs].forEach((item) => {
-      if (item.image_path) {
-        const url = getImageUrl(item.image_path);
-        if (url) {
-          const img = new Image();
-          img.src = url;
-        }
-        offlineMediaManager.cacheImage(item.image_path).catch(() => {});
-      }
-    });
-  }, [current, questions]);
-
   const localSessionIdRef = useRef<string>(generateUUID());
+  const questionsJsonRef = useRef<string>("[]");
+  const currentRef = useRef(current);
+  currentRef.current = current;
+
+  /**
+   * Debounced (~500 ms) crash-recovery progress write (keeps the ORIGINAL started_at / deadline).
+   * The (large) questions JSON is serialized once per session, not on every answer.
+   */
+  const progressSaver = useDebouncedSave((snap: { answers: Record<number, Answer>; index: number }) => {
+    const qs = questionsRef.current;
+    const { correct: correctSoFar } = countResults(snap.answers);
+    dbClient
+      .saveExamSession({
+        local_id: localSessionIdRef.current,
+        server_id: serverSessionIdRef.current,
+        exam_type: "MARATHON",
+        target_id: selTopicRef.current,
+        status: "IN_PROGRESS",
+        total_questions: qs.length,
+        correct_answers: correctSoFar,
+        score: qs.length > 0 ? Math.round((correctSoFar / qs.length) * 100) : 0,
+        duration_seconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
+        time_remaining_seconds: remainingSecondsUntil(deadlineRef.current),
+        deadline_at: deadlineRef.current,
+        started_at: startTimeRef.current,
+        completed_at: null,
+        answers_json: JSON.stringify(snap.answers),
+        questions_json: questionsJsonRef.current,
+        current_index: snap.index,
+        synced: 0,
+      })
+      .catch(() => {});
+  });
 
   const triggerFinish = useCallback(
     (timeUp = false) => {
       if (finishedRef.current) return;
       finishedRef.current = true;
+      progressSaver.cancel();
+      playSfx("finish");
       if (autoRef.current) {
         clearTimeout(autoRef.current);
         autoRef.current = null;
@@ -190,7 +175,6 @@ export default function Marafon_Page() {
       const total = qs.length;
       const score = total > 0 ? Math.round((correct / total) * 100) : 0;
       setIsTimeUp(timeUp);
-      setConfirmFinishOpen(false);
       setPhase("result");
 
       // Mark session completed in local database
@@ -224,35 +208,8 @@ export default function Marafon_Page() {
         completedAt: now,
       }).catch(() => {});
     },
-    [userId]
+    [userId, progressSaver]
   );
-
-  const persistProgress = (newAns: Record<number, Answer>, idx: number) => {
-    const qs = questionsRef.current;
-    const correctSoFar = Object.values(newAns).filter((a) => a.selected === a.correct).length;
-    const scoreSoFar = qs.length > 0 ? Math.round((correctSoFar / qs.length) * 100) : 0;
-    dbClient
-      .saveExamSession({
-        local_id: localSessionIdRef.current,
-        server_id: serverSessionIdRef.current,
-        exam_type: "MARATHON",
-        target_id: selTopicRef.current,
-        status: "IN_PROGRESS",
-        total_questions: qs.length,
-        correct_answers: correctSoFar,
-        score: scoreSoFar,
-        duration_seconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
-        time_remaining_seconds: remainingSecondsUntil(deadlineRef.current),
-        deadline_at: deadlineRef.current,
-        started_at: startTimeRef.current,
-        completed_at: null,
-        answers_json: JSON.stringify(newAns),
-        questions_json: JSON.stringify(qs),
-        current_index: idx,
-        synced: 0,
-      })
-      .catch(() => {});
-  };
 
   const startExam = useCallback(
     async (forceFresh = false) => {
@@ -281,6 +238,7 @@ export default function Marafon_Page() {
                 active.server_id != null && !isFakeLocalSessionId(active.server_id) ? active.server_id : null;
               setQuestions(restoredQs);
               questionsRef.current = restoredQs;
+              questionsJsonRef.current = active.questions_json;
               setAnswers(restoredAns);
               answersRef.current = restoredAns;
               setCurrent(active.current_index || 0);
@@ -345,6 +303,7 @@ export default function Marafon_Page() {
         serverSessionIdRef.current = getActiveMarathonSessionId();
         setQuestions(qs);
         questionsRef.current = qs;
+        questionsJsonRef.current = JSON.stringify(qs);
         startTimeRef.current = startedAt;
         setDeadline(newDeadline);
         deadlineRef.current = newDeadline;
@@ -365,7 +324,7 @@ export default function Marafon_Page() {
           started_at: startedAt,
           completed_at: null,
           answers_json: "{}",
-          questions_json: JSON.stringify(qs),
+          questions_json: questionsJsonRef.current,
           current_index: 0,
           synced: 0,
         });
@@ -393,99 +352,62 @@ export default function Marafon_Page() {
     };
   }, []);
 
-  const handleSelect = (optIdx: number) => {
-    if (phase !== "exam" || answers[current] !== undefined) return;
-    const q = questions[current];
-    if (!q) return;
-    const opts = parseOptions(q.options_json);
-    if (optIdx >= opts.length) return;
-    if (autoRef.current) {
-      clearTimeout(autoRef.current);
-      autoRef.current = null;
-    }
+  const handleSelect = useCallback(
+    (optIdx: number) => {
+      if (phase !== "exam" || finishedRef.current) return;
+      const idx = currentRef.current;
+      if (answersRef.current[idx] !== undefined) return;
+      const q = questionsRef.current[idx];
+      if (!q) return;
+      const opts = parseOptions(q.options_json);
+      if (optIdx >= opts.length) return;
 
-    const isCorrect = optIdx === q.correct_option;
-    if (!isCorrect) addWrongAnswer(userId, q).catch(() => {});
-    recordQuestionAttempt(userId, q.id, isCorrect, "marathon").catch(() => {});
+      const isCorrect = optIdx === q.correct_option;
+      if (!isCorrect) addWrongAnswer(userId, q).catch(() => {});
+      recordQuestionAttempt(userId, q.id, isCorrect, "marathon").catch(() => {});
 
-    const newAns = {
-      ...answers,
-      [current]: { selected: optIdx, correct: q.correct_option },
-    };
-    setAnswers(newAns);
-    answersRef.current = newAns;
-
-    // Persist real-time marathon progress (keeps the ORIGINAL started_at / deadline)
-    persistProgress(newAns, current);
-
-    if (current < questions.length - 1) {
-      autoRef.current = setTimeout(() => setCurrent((c) => c + 1), 800);
-    }
-  };
-
-  const handleToggleExp = () => {
-    const willOpen = !showExp;
-    setShowExp(willOpen);
-    if (willOpen) {
-      if (autoRef.current) {
-        clearTimeout(autoRef.current);
-        autoRef.current = null;
-      }
-    } else if (current < questions.length - 1) {
-      autoRef.current = setTimeout(() => setCurrent((c) => c + 1), 500);
-    }
-  };
-
-  const handleToggleSave = (q: OfflineQuestion) => {
-    if (autoRef.current) {
-      clearTimeout(autoRef.current);
-      autoRef.current = null;
-    }
-    toggleSavedQuestion(userId, q);
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(q.id)) next.delete(q.id);
-      else next.add(q.id);
-      return next;
-    });
-  };
-
-  const handleFinishClick = useCallback(() => {
-    const answeredCount = Object.keys(answers).length;
-    if (answeredCount < questions.length) {
-      setConfirmFinishOpen(true);
-    } else {
-      triggerFinish(false);
-    }
-  }, [answers, questions.length, triggerFinish]);
-
-  // Unified desktop keyboard shortcuts (1–5 / A–E, ←/→, Enter, Esc, Shift+B)
-  useExamShortcuts(phase === "exam", {
-    onSelect: (idx) => {
-      if (!confirmFinishOpen && !zoomSrc) handleSelect(idx);
+      const newAns = {
+        ...answersRef.current,
+        [idx]: { selected: optIdx, correct: q.correct_option },
+      };
+      setAnswers(newAns);
+      answersRef.current = newAns;
+      progressSaver.schedule({ answers: newAns, index: idx });
     },
-    onPrev: () => setCurrent((c) => Math.max(0, c - 1)),
-    onNext: () => setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1)),
-    onSpace: () => {
-      if (answers[current] !== undefined) setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
+    [phase, userId, progressSaver]
+  );
+
+  const handleToggleSave = useCallback(
+    (q: OfflineQuestion) => {
+      toggleSavedQuestion(userId, q);
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(q.id)) next.delete(q.id);
+        else next.add(q.id);
+        return next;
+      });
     },
-    onConfirm: () => {
-      if (confirmFinishOpen) {
-        setConfirmFinishOpen(false);
-        triggerFinish(false);
-      } else {
-        handleFinishClick();
-      }
+    [userId]
+  );
+
+  const handleGoto = useCallback(
+    (i: number) => {
+      setCurrent(i);
+      progressSaver.schedule({ answers: answersRef.current, index: i });
     },
-    onEscape: () => {
-      if (zoomSrc) setZoomSrc(null);
-      else if (confirmFinishOpen) setConfirmFinishOpen(false);
-    },
-    onBookmark: () => {
-      const q = questions[current];
-      if (q) handleToggleSave(q);
-    },
-  });
+    [progressSaver]
+  );
+  const handleFinish = useCallback(() => triggerFinish(false), [triggerFinish]);
+  const handleTimeUp = useCallback(() => triggerFinish(true), [triggerFinish]);
+  const activeTopic = selTopic != null ? topics.find((tp) => tp.id === selTopic) ?? null : null;
+  const activeTopicName = activeTopic ? localizeTopic(activeTopic) : "";
+  const runLabel = useMemo(
+    () =>
+      activeTopicName
+        ? t("examDesktop.modeTopic", "Mavzu: {{name}}", { name: activeTopicName })
+        : t("examDesktop.modeMarathon", "Marafon"),
+    [t, activeTopicName]
+  );
 
   // ─── SETUP ───
   if (phase === "setup") {
@@ -532,6 +454,12 @@ export default function Marafon_Page() {
               localizeTopic={localizeTopic}
             />
           </main>
+          <div style={{ display: "flex", justifyContent: "center", padding: "0 12px 24px" }}>
+            <button type="button" className="xd-btn" onClick={() => navigate("/survival")}>
+              <IconFlame size={16} aria-hidden="true" />
+              {t("examDesktop.survivalCta", "Xatogacha marafon — birinchi xatogacha davom eting")}
+            </button>
+          </div>
         </div>
       </>
     );
@@ -684,342 +612,25 @@ export default function Marafon_Page() {
   }
 
   // ─── EXAM ───
-  const q = questions[current];
-  const options = parseOptions(q.options_json);
-  const answered = answers[current];
-  const explanation = answered !== undefined ? localizeExp(q) : null;
-  const correct = Object.values(answers).filter((a) => a.selected === a.correct).length;
-  const wrong = Object.values(answers).length - correct;
-
   return (
     <>
-      <SEO
-        title="Marafon davom etmoqda"
-        description="Prava Online marafon testi"
-        canonical="/marafon"
+      <SEO title="Marafon davom etmoqda" description="Prava Online marafon testi" canonical="/marafon" />
+      <ExamDesktopView
+        mode={activeTopic ? "topic" : "marathon"}
+        label={runLabel}
+        questions={questions}
+        current={current}
+        answers={answers}
+        onSelect={handleSelect}
+        onGoto={handleGoto}
+        onFinish={handleFinish}
+        deadline={deadline > 0 ? deadline : null}
+        onTimeUp={handleTimeUp}
+        showExplanation
+        autoAdvance="correct"
+        bookmarkedIds={savedIds}
+        onToggleBookmark={handleToggleSave}
       />
-      <div className="exam-screen">
-        {/* ── Top bar ── */}
-        <div className="exam-topbar">
-          <div className="exam-topbar-left">
-            <button
-              className="exam-finish-btn"
-              onClick={handleFinishClick}
-              type="button"
-            >
-              {t("activeTest.finishTest", "Yakunlash")} <IconX size={15} />
-            </button>
-            {deadline > 0 && <ExamTimerDisplay deadline={deadline} onTimeUp={() => triggerFinish(true)} />}
-          </div>
-
-          <div className="exam-topbar-center">
-            <span className="exam-counter">
-              {current + 1} / {questions.length}
-            </span>
-          </div>
-
-          <div className="exam-topbar-right">
-            <span className="exam-score-chip green">
-              <IconCheck size={13} /> {correct}
-            </span>
-            <span className="exam-score-chip red">
-              <IconX size={13} /> {wrong}
-            </span>
-            <ColorMode />
-            <LanguagePicker />
-          </div>
-        </div>
-
-        {/* ── Question text ── */}
-        <div className="exam-question-header">
-          <p className="exam-question-text">{localizeQ(q)}</p>
-          <button
-            className={`exam-bookmark-btn${savedIds.has(q.id) ? " saved" : ""}`}
-            onClick={() => handleToggleSave(q)}
-            title={
-              savedIds.has(q.id)
-                ? t("saved.remove", "Saqlangandan o'chirish")
-                : t("common.save", "Saqlash")
-            }
-            type="button"
-          >
-            {savedIds.has(q.id) ? (
-              <IconBookmarkFilled size={18} />
-            ) : (
-              <IconBookmark size={18} />
-            )}
-          </button>
-        </div>
-
-        {/* ── Two-column body ── */}
-        <div className="exam-two-col">
-          {/* Left: options + explanation */}
-          <div className="exam-col-options">
-            {options.map((opt, idx) => {
-              let cls = "exam-option";
-              if (answered) {
-                if (idx === q.correct_option) cls += " correct";
-                else if (idx === answered.selected) cls += " wrong";
-              }
-              return (
-                <button
-                  key={idx}
-                  className={cls}
-                  onClick={() => handleSelect(idx)}
-                  disabled={!!answered}
-                  type="button"
-                >
-                  <span className="exam-option-key" title={`${idx + 1} / ${String.fromCharCode(65 + idx)}`}>{idx + 1}</span>
-                  <span className="exam-option-text">{localizeOpt(opt)}</span>
-                  {answered && idx === q.correct_option && (
-                    <IconCheck size={15} className="opt-icon correct" />
-                  )}
-                  {answered &&
-                    idx === answered.selected &&
-                    idx !== q.correct_option && (
-                      <IconX size={15} className="opt-icon wrong" />
-                    )}
-                </button>
-              );
-            })}
-
-            {/* Explanation toggle */}
-            {explanation && (
-              <div className="quiz-explanation-wrap" style={{ marginTop: 10 }}>
-                <button
-                  className="quiz-explanation-toggle"
-                  onClick={handleToggleExp}
-                  type="button"
-                >
-                  <IconBulb size={15} />
-                  {showExp
-                    ? t("marathon.hideExplanation", "Izohni yashirish")
-                    : t("marathon.showExplanation", "Izohni ko'rish")}
-                </button>
-                {showExp && (
-                  <div className="quiz-explanation-text">{explanation}</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Right: image or placeholder */}
-          <div className="exam-col-image">
-            {q.image_path ? (
-              <ZoomableImage
-                path={q.image_path}
-                className="exam-question-img"
-                onOpen={(src) => setZoomSrc(src)}
-              />
-            ) : (
-              <div className="exam-img-placeholder">
-                <IconSteeringWheel size={52} stroke={1} color="var(--border)" />
-                <span className="exam-placeholder-text">pravaonline.uz</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Zoom modal */}
-        {zoomSrc && <ImageZoomModal src={zoomSrc} onClose={() => setZoomSrc(null)} />}
-
-        {/* ── Bottom: question numbers + nav ── */}
-        <div className="exam-bottom">
-          <div className="exam-bottom-row">
-            <button
-              className="exam-nav-btn"
-              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-              disabled={current === 0}
-              type="button"
-            >
-              <IconChevronLeft size={17} /> {t("exam.prev", "Oldingi")}
-            </button>
-
-            <div className="exam-qnums-wrap">
-              <div className="exam-qnums scrollable">
-                {(() => {
-                  const total = questions.length;
-                  const windowSize = 60;
-                  let startIdx = 0;
-                  let endIdx = total;
-                  if (total > windowSize) {
-                    startIdx = Math.max(0, current - Math.floor(windowSize / 2));
-                    endIdx = Math.min(total, startIdx + windowSize);
-                    if (endIdx - startIdx < windowSize) {
-                      startIdx = Math.max(0, endIdx - windowSize);
-                    }
-                  }
-                  const visibleIndices: number[] = [];
-                  for (let i = startIdx; i < endIdx; i++) {
-                    visibleIndices.push(i);
-                  }
-                  return (
-                    <>
-                      {startIdx > 0 && (
-                        <button
-                          className="exam-qnum"
-                          onClick={() => setCurrent(0)}
-                          type="button"
-                          title="1-savol"
-                        >
-                          1..
-                        </button>
-                      )}
-                      {visibleIndices.map((i) => {
-                        const a = answers[i];
-                        let cls = "exam-qnum";
-                        if (i === current) cls += " active";
-                        else if (a) cls += a.selected === a.correct ? " correct" : " wrong";
-                        return (
-                          <button
-                            key={i}
-                            ref={i === current ? activeQnumRef : undefined}
-                            className={cls}
-                            onClick={() => setCurrent(i)}
-                            type="button"
-                          >
-                            {i + 1}
-                          </button>
-                        );
-                      })}
-                      {endIdx < total && (
-                        <button
-                          className="exam-qnum"
-                          onClick={() => setCurrent(total - 1)}
-                          type="button"
-                          title={`${total}-savol`}
-                        >
-                          ..{total}
-                        </button>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-
-            {current === questions.length - 1 ? (
-              <button
-                className="exam-nav-btn primary"
-                onClick={() => {
-                  const answeredCount = Object.keys(answers).length;
-                  if (answeredCount < questions.length) {
-                    setConfirmFinishOpen(true);
-                  } else {
-                    triggerFinish(false);
-                  }
-                }}
-                type="button"
-              >
-                {t("activeTest.finishTest", "Yakunlash")} <IconCheck size={17} />
-              </button>
-            ) : (
-              <button
-                className="exam-nav-btn primary"
-                onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
-                type="button"
-              >
-                {t("exam.next", "Keyingi")} <IconChevronRight size={17} />
-              </button>
-            )}
-          </div>
-          <ShortcutHint />
-        </div>
-
-        {/* Confirmation Modal before early finish */}
-        {confirmFinishOpen && (
-          <div
-            className="modal-overlay"
-            onClick={() => setConfirmFinishOpen(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              backdropFilter: "blur(4px)",
-              zIndex: 99999,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "16px",
-            }}
-          >
-            <div
-              className="modal-card"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                maxWidth: "420px",
-                width: "100%",
-                background: "var(--card-bg, var(--surface, #fff))",
-                borderRadius: "18px",
-                padding: "24px",
-                border: "1.5px solid var(--border)",
-                textAlign: "center",
-              }}
-            >
-              <div
-                style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "50%",
-                  background: "rgba(224, 49, 49, 0.12)",
-                  color: "#e03131",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 16px",
-                }}
-              >
-                <IconAlertTriangle size={28} stroke={2} />
-              </div>
-              <h3 style={{ margin: "0 0 8px 0", fontSize: "18px", fontWeight: 800, color: "var(--text)" }}>
-                {t("activeTest.confirmFinishTitle", "Testni yakunlaysizmi?")}
-              </h3>
-              <p style={{ margin: "0 0 20px 0", fontSize: "13.5px", color: "var(--text-muted)", lineHeight: 1.45 }}>
-                {t("activeTest.confirmFinishDesc", "Belgilanmagan savollar xato deb hisoblanadi. Rostdan ham testni yakunlamoqchimisiz?")}
-              </p>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  type="button"
-                  onClick={() => setConfirmFinishOpen(false)}
-                  style={{
-                    flex: 1,
-                    minHeight: "42px",
-                    borderRadius: "10px",
-                    border: "1.5px solid var(--border)",
-                    background: "var(--surface)",
-                    color: "var(--text)",
-                    fontSize: "13.5px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  {t("activeTest.cancel", "Davom etish")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirmFinishOpen(false);
-                    triggerFinish(false);
-                  }}
-                  style={{
-                    flex: 1,
-                    minHeight: "42px",
-                    borderRadius: "10px",
-                    border: "none",
-                    background: "#e03131",
-                    color: "#fff",
-                    fontSize: "13.5px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  {t("activeTest.confirm", "Yakunlash")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </>
   );
 }

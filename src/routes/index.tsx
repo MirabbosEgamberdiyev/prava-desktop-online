@@ -21,6 +21,7 @@ const PackageExamPage = lazy(() => import("../page/Packages/ExamPage"));
 const Tickets_Page = lazy(() => import("../page/Ticket"));
 const TicketExamPage = lazy(() => import("../page/Ticket/ExamPage"));
 const Marafon_Page = lazy(() => import("../page/Marafon"));
+const Survival_Page = lazy(() => import("../page/Survival"));
 const Exam_Page = lazy(() => import("../page/Exam"));
 const ExamResult_Page = lazy(() => import("../page/ExamResult"));
 const History_Page = lazy(() => import("../page/History"));
@@ -105,6 +106,7 @@ function AppRoutes() {
             <Route path="/topics" element={<Topics_Page />} />
             <Route path="/topics/:topicCode" element={<TopicDetail_Page />} />
             <Route path="/marafon" element={<Marafon_Page />} />
+            <Route path="/survival" element={<Survival_Page />} />
             <Route path="/exam" element={<Exam_Page />} />
             <Route path="/exam/result/:sessionId" element={<ExamResult_Page />} />
             <Route path="/wrong-answers" element={<WrongAnswers_Page />} />

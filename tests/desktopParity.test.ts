@@ -82,14 +82,13 @@ describe("unified exam keyboard shortcuts", () => {
   const k = (key: string, code = "", mods: Partial<Record<"shiftKey" | "ctrlKey" | "metaKey" | "altKey", boolean>> = {}) =>
     resolveExamShortcut({ key, code, ...mods });
 
-  it("1–5, A–E (layout-independent), F1–F5 and numpad select options", () => {
+  it("digits 1–5 and numpad select options; letters no longer select", () => {
     expect(k("1", "Digit1")).toEqual({ type: "select", index: 0 });
     expect(k("5", "Digit5")).toEqual({ type: "select", index: 4 });
-    expect(k("a", "KeyA")).toEqual({ type: "select", index: 0 });
-    expect(k("ф", "KeyA")).toEqual({ type: "select", index: 0 }); // Cyrillic layout
-    expect(k("e", "KeyE")).toEqual({ type: "select", index: 4 });
-    expect(k("F3", "F3")).toEqual({ type: "select", index: 2 });
     expect(k("2", "Numpad2")).toEqual({ type: "select", index: 1 });
+    expect(k("a", "KeyA")).toBeNull();
+    expect(k("e", "KeyE")).toBeNull();
+    expect(k("F3", "F3")).toBeNull();
     expect(k("6", "Digit6")).toBeNull();
     expect(k("f", "KeyF")).toBeNull();
   });
@@ -102,7 +101,7 @@ describe("unified exam keyboard shortcuts", () => {
     expect(k(" ", "Space")).toEqual({ type: "space" });
     expect(k("B", "KeyB", { shiftKey: true })).toEqual({ type: "bookmark" });
     expect(k("b", "KeyB", { ctrlKey: true })).toEqual({ type: "bookmark" });
-    expect(k("b", "KeyB")).toEqual({ type: "select", index: 1 }); // plain B = option B
+    expect(k("b", "KeyB")).toEqual({ type: "bookmark" }); // plain B = bookmark (letters are commands)
   });
 
   it("leaves browser/OS combos alone", () => {

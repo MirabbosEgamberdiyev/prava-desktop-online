@@ -1,5 +1,5 @@
 import { resolveUserScopeId } from "@/utils/userScope";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -10,34 +10,23 @@ import {
   addWrongAnswer,
   saveExamResult,
   recordQuestionAttempt,
-  localizeQ,
-  localizeOpt,
-  localizeExp,
   parseOptions,
   reportExamResult,
+  toggleSavedQuestion,
+  getSavedQuestions,
 } from "../../services/desktopAdapter";
 import { isExamPassed } from "../../services/examRules";
-import { useExamShortcuts } from "../../hooks/useExamShortcuts";
-import ShortcutHint from "../../components/quiz/ShortcutHint";
 import { dbClient } from "../../database/dbClient";
 import { generateUUID } from "../../sync/outboxQueue";
 import { showToast } from "../../utils/notificationUtils";
-import ColorMode from "../../components/other/ColorMode";
-import LanguagePicker from "../../components/language/LanguagePicker";
-import ImageZoomModal, { ZoomableImage } from "../../components/common/ImageZoomModal";
 import SEO from "../../components/common/SEO";
 import GamificationResult from "../../components/quiz/GamificationResult";
 import QuizReviewModal from "../../components/quiz/QuizReviewModal";
-import {
-  IconChevronLeft,
-  IconChevronRight,
-  IconCheck,
-  IconX,
-  IconArrowLeft,
-  IconSteeringWheel,
-  IconAlertTriangle,
-  IconBulb,
-} from "@tabler/icons-react";
+import { remainingSecondsUntil } from "../../components/quiz/ExamTimerDisplay";
+import { ExamDesktopView, useDebouncedSave, countResults } from "../../features/ExamDesktop";
+import { playSfx } from "../../services/sound";
+import "../../styles/exam-desktop.css";
+import { IconCheck, IconArrowLeft } from "@tabler/icons-react";
 
 type Phase = "loading" | "exam" | "result";
 
@@ -46,6 +35,7 @@ interface Answer {
   correct: number;
 }
 
+/** Smart review: wrong answers are repeated until answered correctly (a correct answer removes them). */
 export default function WrongExam_Page() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -56,21 +46,26 @@ export default function WrongExam_Page() {
   const [questions, setQuestions] = useState<OfflineQuestion[]>([]);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, Answer>>({});
-  const [timeLeft, setTimeLeft] = useState(0);
+  /** Absolute deadline (epoch ms) — 1 min per question; the countdown renders in isolation. */
+  const [deadline, setDeadline] = useState<number>(0);
+  const [isTimeUp, setIsTimeUp] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [savedScore, setSavedScore] = useState(0);
-  const [showExp, setShowExp] = useState(false);
-  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
-  const [fixedCount, setFixedCount] = useState(0);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [confirmFinishOpen, setConfirmFinishOpen] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
   const localSessionIdRef = useRef<string>(generateUUID());
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(Date.now());
-  const autoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
   answersRef.current = answers;
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+  const deadlineRef = useRef(deadline);
+  deadlineRef.current = deadline;
+  const currentRef = useRef(current);
+  currentRef.current = current;
+  const questionsJsonRef = useRef<string>("[]");
+  const finishedRef = useRef(false);
 
   const onBack = () => navigate("/wrong-answers");
 
@@ -85,6 +80,38 @@ export default function WrongExam_Page() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [phase]);
 
+  useEffect(() => {
+    getSavedQuestions(userId)
+      .then((entries) => setSavedIds(new Set(entries.map((e) => e.question.id))))
+      .catch(() => {});
+  }, [userId]);
+
+  /** Debounced (~500 ms) crash-recovery progress write. */
+  const progressSaver = useDebouncedSave((snap: { answers: Record<number, Answer>; index: number }) => {
+    const qs = questionsRef.current;
+    const { correct: correctSoFar } = countResults(snap.answers);
+    dbClient
+      .saveExamSession({
+        local_id: localSessionIdRef.current,
+        server_id: null,
+        exam_type: "WRONG_EXAM",
+        status: "IN_PROGRESS",
+        total_questions: qs.length,
+        correct_answers: correctSoFar,
+        score: qs.length > 0 ? Math.round((correctSoFar / qs.length) * 100) : 0,
+        duration_seconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
+        time_remaining_seconds: remainingSecondsUntil(deadlineRef.current),
+        deadline_at: deadlineRef.current,
+        started_at: startTimeRef.current,
+        completed_at: null,
+        answers_json: JSON.stringify(snap.answers),
+        questions_json: questionsJsonRef.current,
+        current_index: snap.index,
+        synced: 0,
+      })
+      .catch(() => {});
+  });
+
   const loadQuestions = useCallback(
     async (forceFresh = false) => {
       setPhase("loading");
@@ -92,23 +119,22 @@ export default function WrongExam_Page() {
       answersRef.current = {};
       setCurrent(0);
       setErrorMsg(null);
-      setFixedCount(0);
+      setIsTimeUp(false);
+      finishedRef.current = false;
 
       // Crash recovery: check for existing active wrong answers practice session
       if (!forceFresh) {
         try {
           const active = await dbClient.getActiveExamSession("WRONG_EXAM");
-          if (
-            active &&
-            active.questions_json &&
-            Date.now() - active.started_at < 24 * 60 * 60 * 1000
-          ) {
+          if (active && active.questions_json && Date.now() - active.started_at < 24 * 60 * 60 * 1000) {
             const restoredQs: OfflineQuestion[] = JSON.parse(active.questions_json);
             const restoredAns: Record<number, Answer> = JSON.parse(active.answers_json || "{}");
 
             if (restoredQs.length > 0) {
               localSessionIdRef.current = active.local_id;
               setQuestions(restoredQs);
+              questionsRef.current = restoredQs;
+              questionsJsonRef.current = active.questions_json;
               setAnswers(restoredAns);
               answersRef.current = restoredAns;
               setCurrent(active.current_index || 0);
@@ -116,9 +142,11 @@ export default function WrongExam_Page() {
                 active.time_remaining_seconds && active.time_remaining_seconds > 0
                   ? active.time_remaining_seconds
                   : restoredQs.length * 60;
-              setTimeLeft(remaining);
-              setPhase("exam");
+              const restoredDeadline = active.deadline_at ?? Date.now() + remaining * 1000;
+              setDeadline(restoredDeadline);
+              deadlineRef.current = restoredDeadline;
               startTimeRef.current = active.started_at || Date.now();
+              setPhase("exam");
 
               showToast({
                 id: "wrong-exam-restored",
@@ -139,44 +167,49 @@ export default function WrongExam_Page() {
       }
 
       localSessionIdRef.current = generateUUID();
-      getWrongAnswers(userId)
-        .then((entries) => {
-          const qs = entries.map((e) => e.question);
-          if (qs.length === 0) {
-            setErrorMsg(t("wrongAnswers.emptySub", "Xatolar mavjud emas"));
-            setPhase("result");
-            return;
-          }
-          setQuestions(qs);
-          const initialTime = qs.length * 60;
-          setTimeLeft(initialTime);
-          setPhase("exam");
-          startTimeRef.current = Date.now();
-
-          dbClient
-            .saveExamSession({
-              local_id: localSessionIdRef.current,
-              server_id: null,
-              exam_type: "WRONG_EXAM",
-              status: "IN_PROGRESS",
-              total_questions: qs.length,
-              correct_answers: 0,
-              score: 0,
-              duration_seconds: 0,
-              time_remaining_seconds: initialTime,
-              started_at: Date.now(),
-              completed_at: null,
-              answers_json: "{}",
-              questions_json: JSON.stringify(qs),
-              current_index: 0,
-              synced: 0,
-            })
-            .catch(() => {});
-        })
-        .catch((e) => {
-          setErrorMsg(String(e));
+      try {
+        const entries = await getWrongAnswers(userId);
+        const qs = entries.map((e) => e.question);
+        if (qs.length === 0) {
+          setErrorMsg(t("wrongAnswers.emptySub", "Xatolar mavjud emas"));
           setPhase("result");
-        });
+          return;
+        }
+        const startedAt = Date.now();
+        const initialTime = qs.length * 60;
+        const newDeadline = startedAt + initialTime * 1000;
+        setQuestions(qs);
+        questionsRef.current = qs;
+        questionsJsonRef.current = JSON.stringify(qs);
+        setDeadline(newDeadline);
+        deadlineRef.current = newDeadline;
+        startTimeRef.current = startedAt;
+        setPhase("exam");
+
+        dbClient
+          .saveExamSession({
+            local_id: localSessionIdRef.current,
+            server_id: null,
+            exam_type: "WRONG_EXAM",
+            status: "IN_PROGRESS",
+            total_questions: qs.length,
+            correct_answers: 0,
+            score: 0,
+            duration_seconds: 0,
+            time_remaining_seconds: initialTime,
+            deadline_at: newDeadline,
+            started_at: startedAt,
+            completed_at: null,
+            answers_json: "{}",
+            questions_json: questionsJsonRef.current,
+            current_index: 0,
+            synced: 0,
+          })
+          .catch(() => {});
+      } catch (e) {
+        setErrorMsg(String(e));
+        setPhase("result");
+      }
     },
     [userId, t]
   );
@@ -185,219 +218,123 @@ export default function WrongExam_Page() {
     loadQuestions();
   }, [loadQuestions]);
 
-  useEffect(() => {
-    setShowExp(false);
-  }, [current]);
+  const triggerFinish = useCallback(
+    (timeUp = false) => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      progressSaver.cancel();
+      playSfx("finish");
+      const curAnswers = answersRef.current;
+      const qs = questionsRef.current;
+      const now = Date.now();
+      const duration = Math.floor((now - startTimeRef.current) / 1000);
+      const { correct } = countResults(curAnswers);
+      const total = qs.length;
+      const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+      setSavedScore(score);
+      setIsTimeUp(timeUp);
+      setPhase("result");
 
-  const handleToggleExp = () => {
-    const willOpen = !showExp;
-    setShowExp(willOpen);
-    if (willOpen) {
-      if (autoRef.current) {
-        clearTimeout(autoRef.current);
-        autoRef.current = null;
-      }
-    } else if (current < questions.length - 1) {
-      autoRef.current = setTimeout(() => setCurrent((c) => c + 1), 500);
-    }
-  };
+      dbClient
+        .completeExamSession(localSessionIdRef.current, {
+          status: "COMPLETED",
+          correct_answers: correct,
+          score,
+          duration_seconds: duration,
+          completed_at: now,
+        })
+        .catch(() => {});
 
-  const triggerFinish = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (autoRef.current) {
-      clearTimeout(autoRef.current);
-      autoRef.current = null;
-    }
-    const curAnswers = answersRef.current;
-    const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
-    const correct = Object.values(curAnswers).filter((a) => a.selected === a.correct).length;
-    const total = questions.length;
-    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-    setSavedScore(score);
-    setPhase("result");
-
-    dbClient
-      .completeExamSession(localSessionIdRef.current, {
-        status: "COMPLETED",
-        correct_answers: correct,
+      saveExamResult({
+        userId,
         score,
-        duration_seconds: duration,
-        completed_at: Date.now(),
-      })
-      .catch(() => {});
+        totalQuestions: total,
+        correctAnswers: correct,
+        durationSeconds: duration,
+        examType: "wrong_practice",
+      }).catch(() => {});
 
-    saveExamResult({
-      userId,
-      score,
-      totalQuestions: total,
-      correctAnswers: correct,
-      durationSeconds: duration,
-      examType: "wrong_practice",
-    }).catch(() => {});
+      // Locally graded → /api/v2/exams/record-offline (all questions, unanswered = null)
+      reportExamResult({
+        serverSessionId: null,
+        localSessionId: localSessionIdRef.current,
+        examType: "wrong",
+        targetId: null,
+        questions: qs,
+        answers: curAnswers,
+        durationSeconds: duration,
+        completedAt: now,
+      }).catch(() => {});
+    },
+    [userId, progressSaver]
+  );
 
-    // Locally graded → /api/v2/exams/record-offline (all questions, unanswered = null)
-    reportExamResult({
-      serverSessionId: null,
-      localSessionId: localSessionIdRef.current,
-      examType: "wrong",
-      targetId: null,
-      questions,
-      answers: curAnswers,
-      durationSeconds: duration,
-      completedAt: Date.now(),
-    }).catch(() => {});
-  }, [questions, userId]);
+  const handleSelect = useCallback(
+    (optIdx: number) => {
+      if (phase !== "exam" || finishedRef.current) return;
+      const idx = currentRef.current;
+      if (answersRef.current[idx] !== undefined) return;
+      const q = questionsRef.current[idx];
+      if (!q) return;
+      const opts = parseOptions(q.options_json);
+      if (optIdx >= opts.length) return;
+      const isCorrect = optIdx === q.correct_option;
+      if (isCorrect) {
+        // Answered correctly → leaves the review list.
+        removeWrongAnswer(userId, q.id).catch(() => {});
+      } else {
+        addWrongAnswer(userId, q).catch(() => {});
+      }
+      recordQuestionAttempt(userId, q.id, isCorrect, "wrong_practice").catch(() => {});
 
-  useEffect(() => {
-    if (phase !== "exam") return;
-    let elapsed = 0;
-    timerRef.current = setInterval(() => {
-      elapsed += 1;
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          triggerFinish();
-          return 0;
-        }
-        const next = prev - 1;
-        if (elapsed % 5 === 0 && questions.length > 0) {
-          const curAns = answersRef.current;
-          const curCorrect = Object.values(curAns).filter((a) => a.selected === a.correct).length;
-          const curScore = Math.round((curCorrect / questions.length) * 100);
-          dbClient
-            .saveExamSession({
-              local_id: localSessionIdRef.current,
-              server_id: null,
-              exam_type: "WRONG_EXAM",
-              status: "IN_PROGRESS",
-              total_questions: questions.length,
-              correct_answers: curCorrect,
-              score: curScore,
-              duration_seconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
-              time_remaining_seconds: next,
-              started_at: startTimeRef.current,
-              completed_at: null,
-              answers_json: JSON.stringify(curAns),
-              questions_json: JSON.stringify(questions),
-              current_index: current,
-              synced: 0,
-            })
-            .catch(() => {});
-        }
+      const newAns: Record<number, Answer> = {
+        ...answersRef.current,
+        [idx]: { selected: optIdx, correct: q.correct_option },
+      };
+      setAnswers(newAns);
+      answersRef.current = newAns;
+      progressSaver.schedule({ answers: newAns, index: idx });
+    },
+    [phase, userId, progressSaver]
+  );
+
+  const handleToggleSave = useCallback(
+    (q: OfflineQuestion) => {
+      toggleSavedQuestion(userId, q);
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(q.id)) next.delete(q.id);
+        else next.add(q.id);
         return next;
       });
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [phase, questions, current, triggerFinish]);
-
-  useEffect(() => {
-    document.getElementById(`wrong-qnum-${current}`)?.scrollIntoView({
-      block: "nearest",
-      inline: "center",
-      behavior: "smooth",
-    });
-  }, [current]);
-
-  const handleFinishClick = useCallback(() => {
-    const answeredCount = Object.keys(answers).length;
-    if (answeredCount < questions.length) {
-      setConfirmFinishOpen(true);
-    } else {
-      triggerFinish();
-    }
-  }, [answers, questions.length, triggerFinish]);
-
-  const handleSelect = (optIdx: number) => {
-    if (answers[current] !== undefined) return;
-    const q = questions[current];
-    if (!q) return;
-    const opts = parseOptions(q.options_json);
-    if (optIdx >= opts.length) return;
-    if (autoRef.current) {
-      clearTimeout(autoRef.current);
-      autoRef.current = null;
-    }
-    const isCorrect = optIdx === q.correct_option;
-    if (isCorrect) {
-      removeWrongAnswer(userId, q.id).catch(() => {});
-      setFixedCount((c) => c + 1);
-    } else {
-      addWrongAnswer(userId, q).catch(() => {});
-    }
-    recordQuestionAttempt(userId, q.id, isCorrect, "wrong_practice").catch(() => {});
-
-    const newAns: Record<number, Answer> = {
-      ...answers,
-      [current]: { selected: optIdx, correct: q.correct_option },
-    };
-    setAnswers(newAns);
-    answersRef.current = newAns;
-
-    const correctSoFar = Object.values(newAns).filter((a) => a.selected === a.correct).length;
-    const scoreSoFar = questions.length > 0 ? Math.round((correctSoFar / questions.length) * 100) : 0;
-    const durationSoFar = Math.floor((Date.now() - startTimeRef.current) / 1000);
-
-    dbClient
-      .saveExamSession({
-        local_id: localSessionIdRef.current,
-        server_id: null,
-        exam_type: "WRONG_EXAM",
-        status: "IN_PROGRESS",
-        total_questions: questions.length,
-        correct_answers: correctSoFar,
-        score: scoreSoFar,
-        duration_seconds: durationSoFar,
-        time_remaining_seconds: timeLeft,
-        started_at: startTimeRef.current,
-        completed_at: null,
-        answers_json: JSON.stringify(newAns),
-        questions_json: JSON.stringify(questions),
-        current_index: current,
-        synced: 0,
-      })
-      .catch(() => {});
-
-    if (current < questions.length - 1) {
-      autoRef.current = setTimeout(() => setCurrent((c) => c + 1), 700);
-    }
-  };
-
-  // Unified desktop keyboard shortcuts (1–5 / A–E, ←/→, Enter, Esc)
-  useExamShortcuts(phase === "exam", {
-    onSelect: (idx) => {
-      if (!confirmFinishOpen && !zoomSrc) handleSelect(idx);
     },
-    onPrev: () => setCurrent((c) => Math.max(0, c - 1)),
-    onNext: () => setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1)),
-    onSpace: () => {
-      if (answers[current] === undefined) return;
-      if (current < questions.length - 1) setCurrent((c) => c + 1);
-      else handleFinishClick();
-    },
-    onConfirm: () => {
-      if (confirmFinishOpen) {
-        setConfirmFinishOpen(false);
-        triggerFinish();
-      } else {
-        handleFinishClick();
-      }
-    },
-    onEscape: () => {
-      if (zoomSrc) setZoomSrc(null);
-      else if (confirmFinishOpen) setConfirmFinishOpen(false);
-    },
-  });
+    [userId]
+  );
 
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  };
+  const handleGoto = useCallback(
+    (i: number) => {
+      setCurrent(i);
+      progressSaver.schedule({ answers: answersRef.current, index: i });
+    },
+    [progressSaver]
+  );
+  const handleFinish = useCallback(() => triggerFinish(false), [triggerFinish]);
+  const handleTimeUp = useCallback(() => triggerFinish(true), [triggerFinish]);
 
-  const timerIsRed = timeLeft <= 60;
-  const timerIsYellow = !timerIsRed && timeLeft <= 60 * 3;
+  const { correct: fixedCount } = useMemo(() => countResults(answers), [answers]);
+  const remainingToFix = Math.max(0, questions.length - fixedCount);
+  const reviewLabel = useMemo(() => t("examDesktop.modeWrong", "Xatolar ustida ishlash"), [t]);
+  const remainingChip = useMemo(
+    () => (
+      <span
+        className="xd-chip xd-chip--info"
+        title={t("examDesktop.reviewRemainingHint", "To'g'ri javob berilgan savollar ro'yxatdan chiqariladi")}
+      >
+        {t("examDesktop.reviewRemaining", "{{count}} qoldi", { count: remainingToFix })}
+      </span>
+    ),
+    [t, remainingToFix]
+  );
 
   // ─── LOADING ───
   if (phase === "loading") {
@@ -459,7 +396,7 @@ export default function WrongExam_Page() {
             badge={`${total} ${t("activeTest.questionsCount", "savol")}${
               fixedCount > 0 ? ` • ${fixedCount} ${t("wrongAnswers.fixedShort", "to'g'rilandi")}` : ""
             }`}
-            isTimeUp={timeLeft <= 0}
+            isTimeUp={isTimeUp}
             passed={isExamPassed({ mode: "wrong", total, correct, wrong, unanswered })}
             onRetry={() => loadQuestions(true)}
             onReviewMistakes={() => setReviewOpen(true)}
@@ -478,305 +415,26 @@ export default function WrongExam_Page() {
   }
 
   // ─── EXAM ───
-  const q = questions[current];
-  const options = parseOptions(q.options_json);
-  const answered = answers[current];
-  const explanation = answered !== undefined ? localizeExp(q) : null;
-  const correct = Object.values(answers).filter((a) => a.selected === a.correct).length;
-  const wrong = Object.values(answers).length - correct;
-
   return (
     <>
-      <SEO
-        title="Xatolar amaliyoti"
-        description="Prava Online xatolar ustida ishlash"
-        canonical="/wrong-exam"
+      <SEO title={t("wrongAnswers.title", "Xatolar ustida ishlash")} description="Xatolar ustida ishlash" canonical="/wrong-exam" />
+      <ExamDesktopView
+        mode="wrong"
+        label={reviewLabel}
+        questions={questions}
+        current={current}
+        answers={answers}
+        onSelect={handleSelect}
+        onGoto={handleGoto}
+        onFinish={handleFinish}
+        deadline={deadline > 0 ? deadline : null}
+        onTimeUp={handleTimeUp}
+        showExplanation
+        autoAdvance="correct"
+        bookmarkedIds={savedIds}
+        onToggleBookmark={handleToggleSave}
+        headerExtra={remainingChip}
       />
-      <div className="exam-screen">
-        {/* ── Top bar ── */}
-        <div className="exam-topbar">
-          <div className="exam-topbar-left">
-            <button
-              className="exam-finish-btn"
-              onClick={handleFinishClick}
-              type="button"
-            >
-              {t("exam.finish", "Yakunlash")} <IconX size={15} />
-            </button>
-            <span
-              className={`exam-timer${timerIsRed ? " red" : timerIsYellow ? " yellow" : ""}`}
-            >
-              {formatTime(timeLeft)}
-            </span>
-          </div>
-
-          <div className="exam-topbar-center">
-            <span className="exam-ticket-label">
-              <IconAlertTriangle size={14} /> {t("wrongAnswers.title", "Xatolar ustida ishlash")}
-            </span>
-            <span className="exam-counter">
-              {current + 1} / {questions.length}
-            </span>
-          </div>
-
-          <div className="exam-topbar-right">
-            <span className="exam-score-chip green">
-              <IconCheck size={13} /> {correct}
-            </span>
-            <span className="exam-score-chip red">
-              <IconX size={13} /> {wrong}
-            </span>
-            <ColorMode />
-            <LanguagePicker />
-          </div>
-        </div>
-
-        {/* ── Question text ── */}
-        <div className="exam-question-header">
-          <p className="exam-question-text">{localizeQ(q)}</p>
-        </div>
-
-        {/* ── Two-column body ── */}
-        <div className="exam-two-col">
-          {/* Left: options + explanation */}
-          <div className="exam-col-options">
-            {options.map((opt, idx) => {
-              let cls = "exam-option";
-              if (answered) {
-                if (idx === q.correct_option) cls += " correct";
-                else if (idx === answered.selected) cls += " wrong";
-              }
-              return (
-                <button
-                  key={idx}
-                  className={cls}
-                  onClick={() => handleSelect(idx)}
-                  disabled={!!answered}
-                  type="button"
-                >
-                  <span className="exam-option-key" title={`${idx + 1} / ${String.fromCharCode(65 + idx)}`}>{idx + 1}</span>
-                  <span className="exam-option-text">{localizeOpt(opt)}</span>
-                  {answered && idx === q.correct_option && (
-                    <IconCheck size={15} className="opt-icon correct" />
-                  )}
-                  {answered &&
-                    idx === answered.selected &&
-                    idx !== q.correct_option && (
-                      <IconX size={15} className="opt-icon wrong" />
-                    )}
-                </button>
-              );
-            })}
-
-            {explanation && (
-              <div className="quiz-explanation-wrap" style={{ marginTop: 10 }}>
-                <button
-                  className="quiz-explanation-toggle"
-                  onClick={handleToggleExp}
-                  type="button"
-                >
-                  <IconBulb size={15} />
-                  {showExp
-                    ? t("marathon.hideExplanation", "Izohni yashirish")
-                    : t("marathon.showExplanation", "Izohni ko'rish")}
-                </button>
-                {showExp && (
-                  <div className="quiz-explanation-text">{explanation}</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Right: image or placeholder */}
-          <div className="exam-col-image">
-            {q.image_path ? (
-              <ZoomableImage
-                path={q.image_path}
-                className="exam-question-img"
-                onOpen={(src) => setZoomSrc(src)}
-              />
-            ) : (
-              <div className="exam-img-placeholder">
-                <IconSteeringWheel size={52} stroke={1} color="var(--border)" />
-                <span className="exam-placeholder-text">pravaonline.uz</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {zoomSrc && <ImageZoomModal src={zoomSrc} onClose={() => setZoomSrc(null)} />}
-
-        {/* ── Bottom: question numbers + nav ── */}
-        <div className="exam-bottom">
-          <div className="exam-bottom-row">
-            <button
-              className="exam-nav-btn"
-              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-              disabled={current === 0}
-              type="button"
-            >
-              <IconChevronLeft size={17} /> {t("exam.prev", "Oldingi")}
-            </button>
-
-            <div className="exam-qnums-wrap">
-              <div className="exam-qnums scrollable">
-                {questions.map((_, i) => {
-                  const a = answers[i];
-                  let cls = "exam-qnum";
-                  if (i === current) cls += " active";
-                  else if (a) cls += a.selected === a.correct ? " correct" : " wrong";
-                  return (
-                    <button
-                      key={i}
-                      id={`wrong-qnum-${i}`}
-                      className={cls}
-                      onClick={() => setCurrent(i)}
-                      type="button"
-                    >
-                      {i + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {current === questions.length - 1 ? (
-              <button
-                className="exam-nav-btn primary"
-                onClick={handleFinishClick}
-                type="button"
-              >
-                {t("exam.finish", "Yakunlash")} <IconCheck size={17} />
-              </button>
-            ) : (
-              <button
-                className="exam-nav-btn primary"
-                onClick={() => setCurrent((c) => Math.min(questions.length - 1, c + 1))}
-                type="button"
-              >
-                {t("exam.next", "Keyingi")} <IconChevronRight size={17} />
-              </button>
-            )}
-          </div>
-          <ShortcutHint bookmark={false} />
-        </div>
-      </div>
-
-      {/* Early finish confirmation modal */}
-      {confirmFinishOpen && (
-        <div
-          className="modal-overlay"
-          onClick={() => setConfirmFinishOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.65)",
-            backdropFilter: "blur(6px)",
-            WebkitBackdropFilter: "blur(6px)",
-            zIndex: 99999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "16px",
-          }}
-        >
-          <div
-            className="modal-card"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: "420px",
-              width: "100%",
-              background: "var(--card-bg, #ffffff)",
-              borderRadius: "18px",
-              padding: "26px 24px",
-              border: "1.5px solid var(--border)",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
-              textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                width: "56px",
-                height: "56px",
-                borderRadius: "50%",
-                background: "rgba(224, 49, 49, 0.12)",
-                color: "#e03131",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 16px",
-              }}
-            >
-              <IconAlertTriangle size={30} stroke={2} />
-            </div>
-            <h3
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "18px",
-                fontWeight: 800,
-                color: "var(--text, #111827)",
-              }}
-            >
-              {t("activeTest.confirmFinishTitle", "Testni yakunlaysizmi?")}
-            </h3>
-            <p
-              style={{
-                margin: "0 0 22px 0",
-                fontSize: "13.5px",
-                color: "var(--text-muted, #64748b)",
-                lineHeight: 1.5,
-              }}
-            >
-              {t(
-                "activeTest.confirmFinishDesc",
-                "Belgilanmagan savollar xato deb hisoblanadi. Rostdan ham testni yakunlamoqchimisiz?"
-              )}
-            </p>
-            <div style={{ display: "flex", gap: "12px" }}>
-              <button
-                type="button"
-                onClick={() => setConfirmFinishOpen(false)}
-                style={{
-                  flex: 1,
-                  minHeight: "44px",
-                  borderRadius: "12px",
-                  border: "1.5px solid var(--border)",
-                  background: "var(--surface, transparent)",
-                  color: "var(--text, #334155)",
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                {t("activeTest.cancel", "Davom etish")}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmFinishOpen(false);
-                  triggerFinish();
-                }}
-                style={{
-                  flex: 1,
-                  minHeight: "44px",
-                  borderRadius: "12px",
-                  border: "none",
-                  background: "#e03131",
-                  color: "#ffffff",
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  boxShadow: "0 4px 12px rgba(224, 49, 49, 0.3)",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                {t("activeTest.confirm", "Yakunlash")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

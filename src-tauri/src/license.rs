@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use mac_address::get_mac_address;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sysinfo::System;
+use sysinfo::{CpuRefreshKind, RefreshKind, System};
 
 /// License holati
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,9 +23,10 @@ pub fn get_machine_id() -> String {
         hasher.update(mac.bytes());
     }
 
-    // CPU/System info
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    // CPU info. Faqat CPU ro'yxati (brend) kerak — `System::new_all()` + `refresh_all()`
+    // barcha jarayon/disk/tarmoqni skanerlab yuzlab ms olardi. Brend CPU ro'yxati
+    // yaratilganda o'qiladi, shuning uchun natija (machine id) o'zgarmaydi.
+    let sys = System::new_with_specifics(RefreshKind::nothing().with_cpu(CpuRefreshKind::nothing()));
 
     // Hostname
     if let Some(hostname) = System::host_name() {
@@ -38,9 +39,8 @@ pub fn get_machine_id() -> String {
     }
 
     // CPU brand
-    for cpu in sys.cpus() {
-        hasher.update(cpu.brand().as_bytes());
-        break; // Faqat birinchi CPU
+    if let Some(cpu) = sys.cpus().first() {
+        hasher.update(cpu.brand().as_bytes()); // Faqat birinchi CPU
     }
 
     let result = hasher.finalize();

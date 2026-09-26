@@ -1,4 +1,13 @@
 import { useState, useEffect, useRef, memo } from "react";
+import { playSfx } from "../../services/sound";
+
+/** Timer warning thresholds (seconds left): 5 min and 1 min. */
+export const TIMER_WARNINGS = [300, 60] as const;
+
+/** Thresholds crossed when remaining time moved from `prev` to `next` seconds. */
+export function crossedWarnings(prev: number, next: number, thresholds: readonly number[] = TIMER_WARNINGS): number[] {
+  return thresholds.filter((t) => prev > t && next <= t);
+}
 
 interface ExamTimerDisplayProps {
   /**
@@ -7,6 +16,8 @@ interface ExamTimerDisplayProps {
    */
   deadline: number;
   onTimeUp: () => void;
+  /** Play the warning sound at 5 min and 1 min left. */
+  warnings?: boolean;
 }
 
 export function remainingSecondsUntil(deadline: number, now: number = Date.now()): number {
@@ -27,18 +38,21 @@ export function formatClock(s: number): string {
  * Self-ticking countdown (re-renders only itself, not the exam page).
  * Calls `onTimeUp` exactly once when the deadline passes.
  */
-export const ExamTimerDisplay = memo(function ExamTimerDisplay({ deadline, onTimeUp }: ExamTimerDisplayProps) {
+export const ExamTimerDisplay = memo(function ExamTimerDisplay({ deadline, onTimeUp, warnings = false }: ExamTimerDisplayProps) {
   const [remaining, setRemaining] = useState(() => remainingSecondsUntil(deadline));
   const onTimeUpRef = useRef(onTimeUp);
   onTimeUpRef.current = onTimeUp;
 
   useEffect(() => {
     let fired = false;
+    let last = remainingSecondsUntil(deadline);
     let timer: ReturnType<typeof setInterval> | null = null;
 
     const tick = () => {
       const rem = remainingSecondsUntil(deadline);
       setRemaining(rem);
+      if (warnings && rem > 0 && crossedWarnings(last, rem).length > 0) playSfx("warning");
+      last = rem;
       if (rem <= 0 && !fired) {
         fired = true;
         if (timer) clearInterval(timer);
@@ -56,7 +70,7 @@ export const ExamTimerDisplay = memo(function ExamTimerDisplay({ deadline, onTim
       window.removeEventListener("focus", tick);
       window.removeEventListener("system-resumed-from-sleep", tick);
     };
-  }, [deadline]);
+  }, [deadline, warnings]);
 
   const timerIsRed = remaining <= 120; // 2 min
   const timerIsYellow = remaining > 120 && remaining <= 300; // 5 min

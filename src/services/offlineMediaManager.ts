@@ -6,6 +6,7 @@
 
 import { ENV } from "../config/env";
 import { networkModeManager } from "../sync/networkModeManager";
+import { installAutoMediaPreload } from "./offlineMediaManagerPreload";
 
 const MEDIA_CACHE_NAME = "prava_offline_media_v1";
 const API_BASE_URL = ENV.API_BASE_URL || "https://pravaonline.uz";
@@ -141,6 +142,59 @@ export const offlineMediaManager = {
   },
 
   /**
+   * Synchronous lookup of an already-resolved local object URL (no I/O).
+   * Lets the exam view render a cached image on the very first frame.
+   */
+  peekLocalImageUrl(imagePath: string | null | undefined): string | null {
+    const key = normalizeMediaPath(imagePath);
+    return key ? memoryBlobMap.get(key) ?? null : null;
+  },
+
+  /**
+   * Diagnostic: "missing" (not cached), "broken" (cached but empty / not an image) or "ok".
+   */
+  async inspectCachedImage(imagePath: string): Promise<"ok" | "missing" | "broken"> {
+    const key = normalizeMediaPath(imagePath);
+    if (!key) return "broken";
+    if (typeof caches === "undefined") return memoryBlobMap.has(key) ? "ok" : "missing";
+    try {
+      const cache = await caches.open(MEDIA_CACHE_NAME);
+      const res = await cache.match(key);
+      if (!res) return memoryBlobMap.has(key) ? "ok" : "missing";
+      const type = res.headers.get("Content-Type") || "";
+      if (type && !type.startsWith("image/") && !type.startsWith("application/octet-stream")) return "broken";
+      const blob = await res.blob();
+      return blob.size > 0 ? "ok" : "broken";
+    } catch {
+      return "missing";
+    }
+  },
+
+  /**
+   * Remove one cached entry (evicts broken images so they are downloaded again).
+   */
+  async evict(imagePath: string): Promise<void> {
+    const key = normalizeMediaPath(imagePath);
+    if (!key) return;
+    const url = memoryBlobMap.get(key);
+    if (url) {
+      memoryBlobMap.delete(key);
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    }
+    if (typeof caches === "undefined") return;
+    try {
+      const cache = await caches.open(MEDIA_CACHE_NAME);
+      await cache.delete(key);
+    } catch {
+      // ignore
+    }
+  },
+
+  /**
    * Get the total count of cached images
    */
   async getCachedCount(): Promise<number> {
@@ -168,3 +222,9 @@ export const offlineMediaManager = {
     }
   },
 };
+
+// Background full-media preload after the offline bundle sync (idle-time, throttled, resumable).
+// Skipped in unit tests so importing this manager stays side-effect free there.
+if (typeof window !== "undefined" && import.meta.env?.MODE !== "test") {
+  installAutoMediaPreload();
+}

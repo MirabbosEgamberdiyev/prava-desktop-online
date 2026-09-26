@@ -486,25 +486,6 @@ function setCachedData<T>(key: string, data: T): void {
   }
 }
 
-function generateDefaultTickets(): OfflineTicket[] {
-  const tickets: OfflineTicket[] = [];
-  for (let i = 1; i <= 60; i++) {
-    tickets.push({
-      id: i,
-      topic_id: null,
-      ticket_number: i,
-      name_uzl: `${i}-bilet`,
-      name_uzc: `${i}-билет`,
-      name_en: `Ticket #${i}`,
-      name_ru: `Билет #${i}`,
-      duration_minutes: 20,
-      passing_score: 90,
-      question_count: 20,
-      is_blocked: false,
-    });
-  }
-  return tickets;
-}
 
 export async function getTickets(): Promise<OfflineTicket[]> {
   // 1. LOCAL DATABASE FIRST
@@ -575,7 +556,9 @@ export async function getTickets(): Promise<OfflineTicket[]> {
     return cached;
   }
 
-  return generateDefaultTickets();
+  // Hech qaysi manbada bilet yo'q (birinchi ishga tushish + oflayn): soxta biletlar YASALMAYDI —
+  // sahifa bo'sh holatni ko'rsatadi, sinxronizatsiyadan keyin haqiqiy biletlar paydo bo'ladi.
+  return [];
 }
 
 /** Single ticket (official server id) — falls back to a synthetic ticket numbered like the id. */

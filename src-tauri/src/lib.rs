@@ -10,9 +10,21 @@ pub struct AppState {
     pub license_key: Mutex<Option<String>>,
 }
 
+/// Sekin/bloklovchi ishni (fayl tizimi, apparat so'rovi, jarayon ishga tushirish) Tokio
+/// blocking pool'ida bajaradi — IPC handler va UI (main) thread hech qachon bloklanmaydi.
+async fn run_blocking<T, F>(f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| format!("Background task failed: {e}"))?
+}
+
 #[tauri::command]
-fn get_machine_id_cmd() -> String {
-    license::get_machine_id()
+async fn get_machine_id_cmd() -> Result<String, String> {
+    run_blocking(|| Ok(license::get_machine_id())).await
 }
 
 /// Aktivatsiya kodini tekshiradi — faqat Ed25519 imzoli format qabul qilinadi.
@@ -28,21 +40,32 @@ fn verify_any(key: &str) -> anyhow::Result<license::LicenseStatus> {
 }
 
 #[tauri::command]
-fn activate_license(
+async fn activate_license(
     license_key: String,
-    state: tauri::State<AppState>,
+    state: tauri::State<'_, AppState>,
 ) -> Result<license::LicenseStatus, String> {
-    let status = verify_any(&license_key).map_err(|e| e.to_string())?;
-    license::save_license_file(&license_key, &state.app_data_dir).map_err(|e| e.to_string())?;
+    let dir = state.app_data_dir.clone();
+    let key = license_key.clone();
+    let status = run_blocking(move || {
+        let status = verify_any(&key).map_err(|e| e.to_string())?;
+        license::save_license_file(&key, &dir).map_err(|e| e.to_string())?;
+        Ok(status)
+    })
+    .await?;
     let mut lock = state.license_key.lock().unwrap_or_else(|e| e.into_inner());
     *lock = Some(license_key);
     Ok(status)
 }
 
 #[tauri::command]
-fn check_license(state: tauri::State<AppState>) -> Result<license::LicenseStatus, String> {
-    let key = license::load_license_file(&state.app_data_dir).map_err(|e| e.to_string())?;
-    let status = verify_any(&key).map_err(|e| e.to_string())?;
+async fn check_license(state: tauri::State<'_, AppState>) -> Result<license::LicenseStatus, String> {
+    let dir = state.app_data_dir.clone();
+    let (key, status) = run_blocking(move || {
+        let key = license::load_license_file(&dir).map_err(|e| e.to_string())?;
+        let status = verify_any(&key).map_err(|e| e.to_string())?;
+        Ok((key, status))
+    })
+    .await?;
     let mut lock = state.license_key.lock().unwrap_or_else(|e| e.into_inner());
     *lock = Some(key);
     Ok(status)
@@ -184,8 +207,13 @@ pub struct InstalledBrowser {
     pub is_default: bool,
 }
 
+/// Disk bo'yicha brauzer qidirish (bir nechta `Path::exists`) — blocking pool'da.
 #[tauri::command]
-fn get_installed_browsers() -> Vec<InstalledBrowser> {
+async fn get_installed_browsers() -> Result<Vec<InstalledBrowser>, String> {
+    run_blocking(|| Ok(detect_installed_browsers())).await
+}
+
+fn detect_installed_browsers() -> Vec<InstalledBrowser> {
     let mut browsers = Vec::new();
 
     #[cfg(target_os = "windows")]
@@ -510,7 +538,11 @@ fn is_safe_browser_binary(path: &str) -> bool {
 }
 
 #[tauri::command]
-fn launch_browser_url(browser_path: Option<String>, url: String) -> Result<(), String> {
+async fn launch_browser_url(browser_path: Option<String>, url: String) -> Result<(), String> {
+    run_blocking(move || launch_browser_url_blocking(browser_path, url)).await
+}
+
+fn launch_browser_url_blocking(browser_path: Option<String>, url: String) -> Result<(), String> {
     if !is_safe_auth_url(&url) {
         return Err("Ruxsat berilmagan yoki xavfli URL manzil".to_string());
     }
@@ -592,11 +624,22 @@ pub fn run() {
 
             // Main window is built here (tauri.conf.json "windows" is intentionally empty):
             // default 1280x800, desktop minimum 1024x680.
+            //
+            // Frameless: the React titlebar (src/shell/TitleBar.tsx) draws the caption, drag
+            // region (`data-tauri-drag-region`) and min/max/close buttons. `shadow(true)` keeps
+            // the Windows 11 drop shadow, 1px border and rounded corners on an undecorated
+            // window; resize borders are still handled natively by tao.
+            // Limitation: Windows 11 Snap Layouts flyout only appears when hovering a *native*
+            // maximize caption button (HTMAXBUTTON hit-test), so it is not shown for the custom
+            // button. Win+Z, Win+Arrow snapping and drag-to-edge snapping keep working.
+            // The OAuth "auth-window" (open_oauth_window) stays natively decorated.
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
                 .title("Prava Online - Haydovchilik imtihoniga tayyorlanish")
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(1024.0, 680.0)
                 .resizable(true)
+                .decorations(false)
+                .shadow(true)
                 .fullscreen(false)
                 .center()
                 .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")

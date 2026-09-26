@@ -1,10 +1,18 @@
 {
   "identifier": "main-capability",
-  "description": "Prava Online asosiy imkoniyatlari",
+  "description": "Prava Online asosiy imkoniyatlari (faqat asosiy oyna: frameless titlebar, F11, zoom)",
   "windows": ["main"],
   "permissions": [
     "core:default",
     "opener:default",
-    "core:webview:allow-set-webview-zoom"
+    "core:webview:allow-set-webview-zoom",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-is-maximized",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen"
   ]
 }

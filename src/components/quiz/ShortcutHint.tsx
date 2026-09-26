@@ -11,12 +11,12 @@ interface ShortcutHintProps {
 export const ShortcutHint = memo(function ShortcutHint({ bookmark = true }: ShortcutHintProps) {
   const { t } = useTranslation();
   const items: Array<[string, string]> = [
-    ["1–5 / A–E", t("shortcuts.answer", "javob")],
+    ["1–5", t("shortcuts.answer", "javob")],
     ["← →", t("shortcuts.navigate", "savollar")],
     ["Enter", t("shortcuts.confirm", "yakunlash / tasdiqlash")],
     ["Esc", t("shortcuts.close", "yopish")],
   ];
-  if (bookmark) items.push(["Shift+B", t("shortcuts.bookmark", "saqlash")]);
+  if (bookmark) items.push(["B", t("shortcuts.bookmark", "saqlash")]);
 
   return (
     <div className="exam-shortcut-hint" aria-label={t("shortcuts.title", "Klaviatura")}>

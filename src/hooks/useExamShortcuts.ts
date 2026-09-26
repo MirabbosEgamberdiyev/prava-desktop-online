@@ -1,14 +1,17 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Unified desktop keyboard shortcuts for EVERY exam type (real, ticket, marathon, wrong):
- *   1–5 / A–E (also F1–F5, numpad) → select option
- *   ← / →  (also PageUp / PageDown) → previous / next question
- *   Space                          → next question (after answering)
- *   Enter                          → confirm (finish / confirm dialog)
- *   Esc                            → close the topmost modal
- *   Shift+B or Ctrl/Cmd+B          → bookmark (plain B is option "B")
- * Letters/digits use `event.code`, so they work on Latin AND Cyrillic keyboard layouts.
+ * Unified desktop keyboard shortcuts for EVERY exam type (real, ticket, marathon, survival, wrong, topic):
+ *   1–5, Numpad 1–5   → select option (digits only — letters are reserved for commands)
+ *   Space             → next question
+ *   Enter             → confirm (pending selection / dialog), otherwise next
+ *   ← / →  (PgUp/PgDn) → previous / next question
+ *   Esc               → close zoom / modal (never exits the exam without a confirmation)
+ *   B or Ctrl+D       → bookmark (Shift+B / Ctrl+B also accepted)
+ *   Z                 → zoom image
+ *   T                 → read aloud
+ *   M                 → mute / unmute sound effects
+ * Letter keys use `event.code`, so they work on Latin AND Cyrillic keyboard layouts.
  */
 export type ExamShortcutAction =
   | { type: "select"; index: number }
@@ -17,7 +20,10 @@ export type ExamShortcutAction =
   | { type: "space" }
   | { type: "confirm" }
   | { type: "escape" }
-  | { type: "bookmark" };
+  | { type: "bookmark" }
+  | { type: "zoom" }
+  | { type: "speak" }
+  | { type: "mute" };
 
 export interface ShortcutKeyEvent {
   key: string;
@@ -28,10 +34,13 @@ export interface ShortcutKeyEvent {
   altKey?: boolean;
 }
 
-const LETTER_CODES = ["KeyA", "KeyB", "KeyC", "KeyD", "KeyE"];
 const DIGIT_CODES = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"];
 const NUMPAD_CODES = ["Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5"];
-const F_KEYS = ["F1", "F2", "F3", "F4", "F5"];
+
+function isLetter(e: ShortcutKeyEvent, code: string, latin: string): boolean {
+  if (e.code) return e.code === code;
+  return e.key === latin || e.key === latin.toUpperCase();
+}
 
 /** Pure key → action mapping (unit-tested). */
 export function resolveExamShortcut(e: ShortcutKeyEvent): ExamShortcutAction | null {
@@ -40,10 +49,9 @@ export function resolveExamShortcut(e: ShortcutKeyEvent): ExamShortcutAction | n
 
   if (e.altKey) return null;
 
-  // Bookmark: Shift+B or Ctrl/Cmd+B
-  if ((code === "KeyB" || e.key === "b" || e.key === "B") && (e.shiftKey || mod)) {
-    return { type: "bookmark" };
-  }
+  // Bookmark: B, Shift+B, Ctrl/Cmd+B, Ctrl/Cmd+D
+  if (isLetter(e, "KeyB", "b")) return { type: "bookmark" };
+  if (mod && isLetter(e, "KeyD", "d")) return { type: "bookmark" };
   if (mod) return null; // leave other Ctrl/Cmd combos (copy, reload…) to the webview
 
   if (e.key === "Escape") return { type: "escape" };
@@ -51,16 +59,16 @@ export function resolveExamShortcut(e: ShortcutKeyEvent): ExamShortcutAction | n
   if (e.key === "ArrowLeft" || e.key === "PageUp") return { type: "prev" };
   if (e.key === "ArrowRight" || e.key === "PageDown") return { type: "next" };
   if (e.key === " " || code === "Space") return { type: "space" };
-
-  const fIdx = F_KEYS.indexOf(e.key);
-  if (fIdx >= 0) return { type: "select", index: fIdx };
   if (e.shiftKey) return null;
+
+  if (isLetter(e, "KeyZ", "z")) return { type: "zoom" };
+  if (isLetter(e, "KeyT", "t")) return { type: "speak" };
+  if (isLetter(e, "KeyM", "m")) return { type: "mute" };
 
   let idx = DIGIT_CODES.indexOf(code);
   if (idx < 0) idx = NUMPAD_CODES.indexOf(code);
-  if (idx < 0) idx = LETTER_CODES.indexOf(code);
-  if (idx < 0 && /^[1-5]$/.test(e.key)) idx = Number(e.key) - 1;
-  if (idx < 0 && /^[a-eA-E]$/.test(e.key)) idx = e.key.toLowerCase().charCodeAt(0) - 97;
+  // Numpad with NumLock off reports navigation keys but keeps the Numpad code — handled above.
+  if (idx < 0 && !code && /^[1-5]$/.test(e.key)) idx = Number(e.key) - 1;
   if (idx >= 0) return { type: "select", index: idx };
   return null;
 }
@@ -73,13 +81,26 @@ export interface ExamShortcutHandlers {
   onConfirm?: () => void;
   onEscape?: () => void;
   onBookmark?: () => void;
+  onZoom?: () => void;
+  onSpeak?: () => void;
+  onMute?: () => void;
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
+export function isEditableTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
-  if (!el) return false;
+  if (!el || !el.tagName) return false;
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || !!el.isContentEditable;
+}
+
+function isKeyboardFocusedButton(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || el.tagName !== "BUTTON") return false;
+  try {
+    return el.matches(":focus-visible");
+  } catch {
+    return false;
+  }
 }
 
 /** Attach the unified exam shortcuts while `enabled` is true. Handlers may change every render. */
@@ -90,39 +111,48 @@ export function useExamShortcuts(enabled: boolean, handlers: ExamShortcutHandler
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (isEditableTarget(e.target)) return;
+      if (e.defaultPrevented || isEditableTarget(e.target)) return;
       const action = resolveExamShortcut(e);
       if (!action) return;
+      // Keyboard-focused button (Tab navigation): let Enter/Space activate it natively.
+      if ((action.type === "confirm" || action.type === "space") && isKeyboardFocusedButton(e.target)) return;
       const h = ref.current;
-      const run = (fn?: () => void) => {
+      const run = (fn?: () => void, allowRepeat = false) => {
         if (!fn) return;
         e.preventDefault();
+        if (e.repeat && !allowRepeat) return;
         fn();
       };
       switch (action.type) {
         case "select":
-          if (e.repeat) return;
           run(h.onSelect ? () => h.onSelect!(action.index) : undefined);
           break;
         case "prev":
-          run(h.onPrev);
+          run(h.onPrev, true);
           break;
         case "next":
-          run(h.onNext);
+          run(h.onNext, true);
           break;
         case "space":
           run(h.onSpace ?? h.onNext);
           break;
         case "confirm":
-          if (e.repeat) return;
           run(h.onConfirm);
           break;
         case "escape":
           run(h.onEscape);
           break;
         case "bookmark":
-          if (e.repeat) return;
           run(h.onBookmark);
+          break;
+        case "zoom":
+          run(h.onZoom);
+          break;
+        case "speak":
+          run(h.onSpeak);
+          break;
+        case "mute":
+          run(h.onMute);
           break;
       }
     };
