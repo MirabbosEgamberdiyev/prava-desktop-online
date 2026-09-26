@@ -2,12 +2,10 @@ import { Suspense } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   Box,
-  Container,
   Group,
   Stack,
   Text,
   UnstyledButton,
-  Badge,
 } from "@mantine/core";
 import {
   IconKey,
@@ -123,55 +121,20 @@ export const DesktopAuthLayout = () => {
     // Plain flex column (no Mantine AppShell: its fixed-position header would sit under the
     // frameless window titlebar). Scrolls inside the main area only.
     <div style={{ height: "100%", minHeight: 0, display: "flex", flexDirection: "column", background: "var(--bg)" }}>
-      {/* Top Header Titlebar */}
-      <header
+      {/* Login oldidan kerakli tezkor sozlamalar. Brend va nom titlebar'da — bu yerda takrorlanmaydi. */}
+      <div
         style={{
-          flex: "0 0 44px",
-          height: 44,
-          borderBottom: "1px solid var(--border)",
-          background: "var(--card-bg)",
+          flex: "0 0 auto",
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: 10,
+          padding: "8px 16px 0",
         }}
       >
-        <Container h="100%" fluid px="lg">
-          <Group h="100%" justify="space-between" wrap="nowrap">
-            {/* Left: Brand Logo + version */}
-            <Group
-              gap="xs"
-              style={{ cursor: "pointer" }}
-              onClick={() => navigate("/me")}
-            >
-              <img
-                src="/logo.png"
-                width={28}
-                height={28}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/favicon.svg";
-                }}
-                alt="Prava Online"
-              />
-              <Text
-                fw={800}
-                fz="sm"
-                style={{
-                  letterSpacing: "0.5px",
-                  color: "var(--text)",
-                }}
-              >
-                PRAVA<span style={{ color: "#0284c7" }}>ONLINE</span>
-              </Text>
-              <Badge size="xs" variant="light" color="blue" radius="sm">
-                v1.0.0
-              </Badge>
-            </Group>
-
-            {/* Right: Dark/Light + Language Switcher */}
-            <Group gap={10} wrap="nowrap">
-              <ColorMode />
-              <LanguagePicker />
-            </Group>
-          </Group>
-        </Container>
-      </header>
+        <ColorMode />
+        <LanguagePicker />
+      </div>
 
       <main
         style={{
