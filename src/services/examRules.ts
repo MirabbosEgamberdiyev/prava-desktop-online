@@ -29,7 +29,7 @@ const STORAGE_KEY = "prava_exam_rules_v1";
 
 export const DEFAULT_EXAM_RULES: ExamRules = Object.freeze({
   version: "default",
-  real: { questionCount: 20, secondsPerQuestion: 60, maxWrong: 2, unansweredCountsAsWrong: true },
+  real: { questionCount: 20, secondsPerQuestion: 60, maxWrong: 3, unansweredCountsAsWrong: true },
   ticket: { secondsPerQuestion: 60, passPercent: 90 },
   marathon: { secondsPerQuestion: 60, passPercent: 90 },
 }) as ExamRules;

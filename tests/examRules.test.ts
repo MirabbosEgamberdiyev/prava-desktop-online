@@ -24,14 +24,14 @@ describe("isExamPassed", () => {
   const R = DEFAULT_EXAM_RULES;
 
   it("real: passes when wrong + unanswered <= floor(maxWrong × count / questionCount)", () => {
-    expect(maxWrongFor(20, R)).toBe(2);
-    expect(isExamPassed({ mode: "real", total: 20, correct: 18, wrong: 2, unanswered: 0 }, R)).toBe(true);
-    expect(isExamPassed({ mode: "real", total: 20, correct: 18, wrong: 1, unanswered: 1 }, R)).toBe(true);
-    expect(isExamPassed({ mode: "real", total: 20, correct: 17, wrong: 3, unanswered: 0 }, R)).toBe(false);
-    expect(isExamPassed({ mode: "real", total: 20, correct: 17, wrong: 1, unanswered: 2 }, R)).toBe(false);
+    expect(maxWrongFor(20, R)).toBe(3);
+    expect(isExamPassed({ mode: "real", total: 20, correct: 17, wrong: 3, unanswered: 0 }, R)).toBe(true);
+    expect(isExamPassed({ mode: "real", total: 20, correct: 17, wrong: 2, unanswered: 1 }, R)).toBe(true);
+    expect(isExamPassed({ mode: "real", total: 20, correct: 16, wrong: 4, unanswered: 0 }, R)).toBe(false);
+    expect(isExamPassed({ mode: "real", total: 20, correct: 16, wrong: 1, unanswered: 3 }, R)).toBe(false);
     expect(isExamPassed({ mode: "real", total: 10, correct: 9, wrong: 1, unanswered: 0 }, R)).toBe(true);
     expect(isExamPassed({ mode: "real", total: 10, correct: 8, wrong: 2, unanswered: 0 }, R)).toBe(false);
-    expect(isExamPassed({ mode: "real", total: 15, correct: 13, wrong: 2, unanswered: 0 }, R)).toBe(false); // floor(1.5)=1
+    expect(isExamPassed({ mode: "real", total: 15, correct: 13, wrong: 2, unanswered: 0 }, R)).toBe(true);
   });
 
   it("real: unanswered ignored when unansweredCountsAsWrong=false", () => {
