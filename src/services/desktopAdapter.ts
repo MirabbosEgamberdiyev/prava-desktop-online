@@ -1,3 +1,5 @@
+import { GUEST_USER_KEY, statsCacheKey, type UserScopeId } from "@/utils/userScope";
+import { durationMinutesFor } from "./examRules";
 import i18n from "i18next";
 import type {
   OfflineQuestion,
@@ -21,8 +23,18 @@ import {
   ticketRepository,
   topicRepository,
 } from "../database";
-import { OutboxQueue, syncEngine, networkModeManager } from "../sync";
+import { OutboxQueue } from "../sync/outboxQueue";
+import { networkModeManager } from "../sync/networkModeManager";
 import { offlineDatasetManager } from "./offlineDatasetManager";
+import { buildTicketReadiness, legacyTickets, type ReadinessTicket } from "./ticketReadiness";
+import {
+  buildRecordOfflinePayload,
+  isFakeLocalSessionId,
+  isRecordablePayload,
+  RECORD_OFFLINE_URL,
+  type IndexedAnswers,
+  type OfflineExamType,
+} from "./offlineExamRecord";
 
 export function getLang(): AppLanguage {
   const l = i18n.resolvedLanguage || i18n.language;
@@ -197,6 +209,8 @@ export function offlineQuestionToDbQuestion(q: OfflineQuestion, ticketId?: numbe
 }
 
 // ── ACTIVE SESSION TRACKING ───────────────────────────────────────────────────
+// These hold REAL server session ids only (from a server start-visible call).
+// Locally sourced exams leave them null and are reported via record-offline.
 let activeExamSessionId: number | null = null;
 let activeTicketSessionId: number | null = null;
 let activeMarathonSessionId: number | null = null;
@@ -274,12 +288,63 @@ export async function submitExamSession(
     // ignore
   }
 
-  // Agar tarmoq mavjud bo'lsa, background sync ishga tushirish
-  if (navigator.onLine) {
-    syncEngine.triggerSync().catch(() => {});
+  return isOnlineSuccess;
+}
+
+export interface ReportExamResultParams {
+  /** Real server session id (only when the exam was started on the server). */
+  serverSessionId: number | null;
+  /** Stable local session id (exam_sessions.local_id) → clientSessionId. */
+  localSessionId: string;
+  examType: OfflineExamType;
+  targetId?: number | null;
+  questions: ReadonlyArray<{ id: number }>;
+  answers: IndexedAnswers;
+  durationSeconds: number;
+  completedAt?: number;
+}
+
+/**
+ * Report a finished exam to the server.
+ *  - real server session → /api/v2/exams/submit (unchanged);
+ *  - locally graded exam → /api/v2/exams/record-offline through the outbox (idempotent).
+ * Never throws; returns the transport used (or "skipped").
+ */
+export async function reportExamResult(
+  params: ReportExamResultParams
+): Promise<"submit" | "record-offline" | "skipped"> {
+  const { serverSessionId, questions, answers } = params;
+  if (!questions || questions.length === 0) return "skipped";
+
+  if (serverSessionId && !isFakeLocalSessionId(serverSessionId)) {
+    const list = questions.map((q, idx) => ({
+      questionId: q.id,
+      selectedOptionIndex: answers[idx]?.selected ?? null,
+    }));
+    await submitExamSession(serverSessionId, list).catch(() => false);
+    return "submit";
   }
 
-  return isOnlineSuccess;
+  const payload = buildRecordOfflinePayload({
+    clientSessionId: params.localSessionId,
+    examType: params.examType,
+    targetId: params.targetId ?? null,
+    durationSeconds: params.durationSeconds,
+    completedAt: params.completedAt ?? Date.now(),
+    questions,
+    answers,
+  });
+  if (!isRecordablePayload(payload)) {
+    console.info("[reportExamResult] Exam kept local-only (question count outside 1..200)");
+    return "skipped";
+  }
+  try {
+    await OutboxQueue.enqueue("RECORD_OFFLINE_EXAM", RECORD_OFFLINE_URL, "POST", payload);
+  } catch (e) {
+    console.error("OutboxQueue xatosi (record-offline):", e);
+    return "skipped";
+  }
+  return "record-offline";
 }
 
 // ── DATA FETCHING APIS (OFFLINE-FIRST) ────────────────────────────────────────
@@ -294,7 +359,7 @@ export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
       localDbQuestions = await questionRepository.getRandomQuestions(count);
     }
     if (localDbQuestions && localDbQuestions.length > 0) {
-      activeExamSessionId = Date.now();
+      activeExamSessionId = null; // graded locally → record-offline
       return localDbQuestions.map(dbQuestionToOfflineQuestion);
     }
   } catch (err) {
@@ -313,7 +378,7 @@ export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
         data: { sessionId?: number; questions: any[] };
       }>("/api/v2/exams/marathon/start-visible", {
         questionCount: count,
-        durationMinutes: count,
+        durationMinutes: durationMinutesFor("real", count),
       });
       if (res.data?.data?.sessionId) {
         activeExamSessionId = res.data.data.sessionId;
@@ -329,7 +394,7 @@ export async function getExamQuestions(count = 20): Promise<OfflineQuestion[]> {
           data: { sessionId?: number; questions: any[] };
         }>("/api/v2/exams/start-visible", {
           questionCount: count,
-          durationMinutes: count,
+          durationMinutes: durationMinutesFor("real", count),
         });
         if (res2.data?.data?.sessionId) {
           activeExamSessionId = res2.data.data.sessionId;
@@ -359,7 +424,7 @@ export async function getMarathonQuestions(topicId?: number, count = 100): Promi
       localDbQuestions = await questionRepository.getRandomQuestions(actualCount, topicId);
     }
     if (localDbQuestions && localDbQuestions.length > 0) {
-      activeMarathonSessionId = Date.now();
+      activeMarathonSessionId = null; // graded locally → record-offline
       return localDbQuestions.map(dbQuestionToOfflineQuestion);
     }
   } catch (err) {
@@ -378,7 +443,7 @@ export async function getMarathonQuestions(topicId?: number, count = 100): Promi
         data: { sessionId?: number; questions: any[] };
       }>("/api/v2/exams/marathon/start-visible", {
         questionCount: actualCount,
-        durationMinutes: actualCount,
+        durationMinutes: durationMinutesFor("marathon", actualCount),
         topicId,
       });
       if (res.data?.data?.sessionId) {
@@ -401,8 +466,8 @@ export async function getMarathonQuestions(topicId?: number, count = 100): Promi
 const OFFLINE_CACHE_KEYS = {
   TOPICS: "prava_cache_topics_v1",
   TICKETS: "prava_cache_tickets_v1",
-  STATS: "prava_cache_stats_v1",
 };
+
 
 function getCachedData<T>(key: string): T | null {
   try {
@@ -452,7 +517,7 @@ export async function getTickets(): Promise<OfflineTicket[]> {
     if (dbTickets && dbTickets.length > 0) {
       return dbTickets.map((t) => ({
         id: t.id,
-        topic_id: null,
+        topic_id: t.topic_id ?? null,
         ticket_number: t.ticket_number,
         name_uzl: t.name_uzl || `${t.ticket_number}-bilet`,
         name_uzc: t.name_uzc || `${t.ticket_number}-билет`,
@@ -460,7 +525,7 @@ export async function getTickets(): Promise<OfflineTicket[]> {
         name_ru: t.name_ru || `Билет #${t.ticket_number}`,
         duration_minutes: t.duration_minutes || 20,
         passing_score: t.passing_score || 90,
-        question_count: t.question_count || 20,
+        question_count: t.question_ids?.length || t.question_count || 20,
         is_blocked: false,
       }));
     }
@@ -513,6 +578,30 @@ export async function getTickets(): Promise<OfflineTicket[]> {
   return generateDefaultTickets();
 }
 
+/** Single ticket (official server id) — falls back to a synthetic ticket numbered like the id. */
+export async function getTicketInfo(ticketId: number): Promise<OfflineTicket> {
+  try {
+    const list = await getTickets();
+    const found = list.find((t) => t.id === ticketId);
+    if (found) return found;
+  } catch {
+    // ignore
+  }
+  return {
+    id: ticketId,
+    topic_id: null,
+    ticket_number: ticketId,
+    name_uzl: `${ticketId}-bilet`,
+    name_uzc: `${ticketId}-билет`,
+    name_en: `Ticket #${ticketId}`,
+    name_ru: `Билет #${ticketId}`,
+    duration_minutes: 20,
+    passing_score: 90,
+    question_count: 20,
+    is_blocked: false,
+  };
+}
+
 export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQuestion[]> {
   // 1. LOCAL DATABASE FIRST (Primary Runtime Source of Truth)
   try {
@@ -522,7 +611,7 @@ export async function getQuestionsByTicket(ticketId: number): Promise<OfflineQue
       localDbQuestions = await questionRepository.getQuestionsByTicket(ticketId);
     }
     if (localDbQuestions && localDbQuestions.length > 0) {
-      activeTicketSessionId = Date.now();
+      activeTicketSessionId = null; // graded locally → record-offline
       return localDbQuestions.map(dbQuestionToOfflineQuestion);
     }
   } catch (err) {
@@ -656,10 +745,8 @@ export async function getTopics(): Promise<OfflineTopic[]> {
 
 // ── STATS & STORAGE WRAPPERS ──────────────────────────────────────────────────
 
-export async function getFullStats(_userId?: number): Promise<FullStats> {
+export async function getFullStats(_userId?: UserScopeId): Promise<FullStats> {
   const storedTicketStats = storageService.getTicketStats();
-  const ticketStats: TicketReadinessStat[] = [];
-  const totalTickets = 60;
 
   // Try fetching live statistics from backend if online mode allowed
   let serverStats: any = null;
@@ -668,77 +755,30 @@ export async function getFullStats(_userId?: number): Promise<FullStats> {
       const res = await api.get("/api/v2/my-statistics");
       if (res.data?.data) {
         serverStats = res.data.data;
-        setCachedData(OFFLINE_CACHE_KEYS.STATS, serverStats);
+        setCachedData(statsCacheKey(), serverStats);
       }
     } catch {
       // Offline or unauthenticated fallback: load last cached statistics
-      serverStats = getCachedData<any>(OFFLINE_CACHE_KEYS.STATS);
+      serverStats = getCachedData<any>(statsCacheKey());
     }
   } else {
-    serverStats = getCachedData<any>(OFFLINE_CACHE_KEYS.STATS);
+    serverStats = getCachedData<any>(statsCacheKey());
   }
 
-  const serverTicketMap = new Map<number, any>();
-  if (serverStats?.ticketStats && Array.isArray(serverStats.ticketStats)) {
-    for (const item of serverStats.ticketStats) {
-      if (item.ticketNumber) {
-        serverTicketMap.set(item.ticketNumber, item);
-      }
-    }
+  // Rows come from the local tickets store (official ids + numbers): local stats are keyed by
+  // ticket id since offline bundle v2, server stats by ticket number (see ticketReadiness.ts).
+  let localTickets: ReadinessTicket[] = [];
+  try {
+    localTickets = await ticketRepository.getAllTickets();
+  } catch {
+    localTickets = [];
   }
-
-  for (let num = 1; num <= totalTickets; num++) {
-    const stat = storedTicketStats[num];
-    const serverTk = serverTicketMap.get(num);
-
-    const localTimesDone = stat?.timesDone || 0;
-    const serverTimesDone = Number(serverTk?.totalExams || 0);
-    const timesDone = Math.max(localTimesDone, serverTimesDone);
-
-    const localPassed = stat?.timesPassed || 0;
-    const serverPassed = Number(serverTk?.passedExams || 0);
-    const midGood = Math.max(localPassed, serverPassed);
-
-    const fastPerfect = stat?.fastPerfectCount || (serverTk?.bestScore === 100 ? 1 : 0);
-    const slowPoor = Math.max(0, timesDone - midGood);
-    const lastScore = stat?.lastScore ?? (serverTk?.bestScore ?? null);
-    const lastDuration = stat?.lastDuration ?? null;
-
-    let readiness: "ready" | "average" | "not_ready" | "untouched" = "untouched";
-    if (timesDone === 0) {
-      readiness = "untouched";
-    } else if (
-      midGood >= 1 ||
-      fastPerfect >= 1 ||
-      (lastScore != null && lastScore >= 90) ||
-      (serverTk?.bestScore != null && serverTk.bestScore >= 90)
-    ) {
-      readiness = "ready";
-    } else if (
-      (lastScore != null && lastScore >= 70) ||
-      (serverTk?.averageScore != null && serverTk.averageScore >= 70)
-    ) {
-      readiness = "average";
-    } else {
-      readiness = "not_ready";
-    }
-
-    ticketStats.push({
-      ticket_id: num,
-      ticket_number: num,
-      name_uzl: `${num}-bilet`,
-      name_uzc: `${num}-билет`,
-      name_en: `Ticket #${num}`,
-      name_ru: `Билет #${num}`,
-      times_done: timesDone,
-      fast_perfect_count: fastPerfect,
-      mid_good_count: midGood,
-      slow_poor_count: slowPoor,
-      last_score: lastScore,
-      last_duration: lastDuration,
-      readiness,
-    });
-  }
+  const ticketStats: TicketReadinessStat[] = buildTicketReadiness(
+    localTickets.length > 0 ? localTickets : legacyTickets(),
+    storedTicketStats,
+    Array.isArray(serverStats?.ticketStats) ? serverStats.ticketStats : null
+  );
+  const totalTickets = ticketStats.length;
 
   const ticketReady = ticketStats.filter((t) => t.readiness === "ready").length;
   const ticketAverage = ticketStats.filter((t) => t.readiness === "average").length;
@@ -793,7 +833,7 @@ export async function getFullStats(_userId?: number): Promise<FullStats> {
   };
 }
 
-export async function getQuestionStats(_userId?: number): Promise<QuestionStatDetail[]> {
+export async function getQuestionStats(_userId?: UserScopeId): Promise<QuestionStatDetail[]> {
   const attempts = storageService.getQuestionAttempts();
   const wrongAnswers = storageService.getWrongAnswers();
   const savedQuestions = storageService.getSavedQuestions();
@@ -832,7 +872,7 @@ export async function getQuestionStats(_userId?: number): Promise<QuestionStatDe
   return list;
 }
 
-export async function getExamHistory(userId?: number, _limit?: number): Promise<ExamResult[]> {
+export async function getExamHistory(userId?: UserScopeId, _limit?: number): Promise<ExamResult[]> {
   if (networkModeManager.isOnlineAllowed()) {
     try {
       const res = await api.get<{ data: any }>("/api/v2/exams/history?page=0&size=50");
@@ -840,7 +880,7 @@ export async function getExamHistory(userId?: number, _limit?: number): Promise<
       if (Array.isArray(serverExams) && serverExams.length > 0) {
         return serverExams.map((item: any) => ({
           id: item.sessionId || item.id,
-          user_id: userId ?? 1,
+          user_id: userId ?? GUEST_USER_KEY,
           score: item.score ?? Math.round(item.percentage ?? 0),
           total_questions: item.totalQuestions ?? 20,
           correct_answers: item.correctCount ?? item.correctAnswers ?? 0,
@@ -857,7 +897,7 @@ export async function getExamHistory(userId?: number, _limit?: number): Promise<
   const list = storageService.getExamHistory();
   return list.map((item) => ({
     id: item.id,
-    user_id: userId ?? 1,
+    user_id: userId ?? GUEST_USER_KEY,
     score: item.score,
     total_questions: item.totalQuestions,
     correct_answers: item.correctAnswers,
@@ -868,7 +908,7 @@ export async function getExamHistory(userId?: number, _limit?: number): Promise<
 }
 
 export async function saveExamResult(params: {
-  userId: number;
+  userId: UserScopeId;
   score: number;
   totalQuestions: number;
   correctAnswers: number;
@@ -914,7 +954,7 @@ export async function saveExamResult(params: {
   };
 }
 
-export async function addWrongAnswer(_userId: number, question: OfflineQuestion | number): Promise<boolean> {
+export async function addWrongAnswer(_userId: UserScopeId, question: OfflineQuestion | number): Promise<boolean> {
   const qId = typeof question === "number" ? question : question.id;
   if (typeof question !== "number") {
     storageService.addWrongAnswer(toStoredQuestion(question));
@@ -929,7 +969,7 @@ export async function addWrongAnswer(_userId: number, question: OfflineQuestion 
   return true;
 }
 
-export async function getWrongAnswers(_userId?: number): Promise<WrongAnswerEntry[]> {
+export async function getWrongAnswers(_userId?: UserScopeId): Promise<WrongAnswerEntry[]> {
   try {
     const res = await api.get<{ data: any[] }>("/api/v1/app/wrong-answers");
     if (res.data && Array.isArray(res.data.data)) {
@@ -959,7 +999,7 @@ export async function getWrongAnswers(_userId?: number): Promise<WrongAnswerEntr
   }));
 }
 
-export async function removeWrongAnswer(_userId: number, questionId: number): Promise<boolean> {
+export async function removeWrongAnswer(_userId: UserScopeId, questionId: number): Promise<boolean> {
   storageService.removeWrongAnswer(questionId);
   try {
     await api.delete(`/api/v1/app/wrong-answers/${questionId}`);
@@ -972,7 +1012,7 @@ export async function removeWrongAnswer(_userId: number, questionId: number): Pr
 
 const toggleLocks = new Set<number>();
 
-export async function toggleSavedQuestion(_userId: number, question: OfflineQuestion | number): Promise<boolean> {
+export async function toggleSavedQuestion(_userId: UserScopeId, question: OfflineQuestion | number): Promise<boolean> {
   const qId = typeof question === "number" ? question : question.id;
   if (toggleLocks.has(qId)) {
     return storageService.getSavedQuestions().some((s) => s.question.id === qId);
@@ -1013,7 +1053,7 @@ export async function toggleSavedQuestion(_userId: number, question: OfflineQues
   return saved;
 }
 
-export async function getSavedQuestions(_userId?: number): Promise<SavedQuestionEntry[]> {
+export async function getSavedQuestions(_userId?: UserScopeId): Promise<SavedQuestionEntry[]> {
   const localList = storageService.getSavedQuestions();
   try {
     const res = await api.get<{ data: any[] }>("/api/v1/app/saved-questions");
@@ -1060,7 +1100,7 @@ export async function getSavedQuestions(_userId?: number): Promise<SavedQuestion
 }
 
 export async function saveTicketStat(
-  _userId: number,
+  _userId: UserScopeId,
   ticketId: number,
   durationSeconds: number,
   correctCount: number,
@@ -1086,7 +1126,7 @@ export async function saveTicketStat(
   return true;
 }
 
-export async function getTicketStats(_userId?: number) {
+export async function getTicketStats(_userId?: UserScopeId) {
   const map = storageService.getTicketStats();
   return Object.values(map).map((s) => ({
     ticket_id: s.ticketId,
@@ -1100,7 +1140,7 @@ export async function getTicketStats(_userId?: number) {
 }
 
 export async function recordQuestionAttempt(
-  _userId: number,
+  _userId: UserScopeId,
   questionId: number,
   isCorrect: boolean,
   _source: string
@@ -1109,6 +1149,6 @@ export async function recordQuestionAttempt(
   return true;
 }
 
-export async function resetAllStats(_userId?: number): Promise<void> {
+export async function resetAllStats(_userId?: UserScopeId): Promise<void> {
   storageService.resetAllStats();
 }

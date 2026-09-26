@@ -32,6 +32,13 @@ const TopicDetail_Page = lazy(() => import("../page/Topics/TopicDetail"));
 const WrongAnswers_Page = lazy(() => import("../page/WrongAnswers"));
 const WrongExam_Page = lazy(() => import("../page/WrongExam"));
 const SavedQuestions_Page = lazy(() => import("../page/SavedQuestions"));
+// ── Learn (curriculum) pages ──
+const RoadSigns_Page = lazy(() => import("../page/RoadSigns"));
+const RoadMarkings_Page = lazy(() => import("../page/RoadMarkings"));
+const TrafficRules_Page = lazy(() => import("../page/TrafficRules"));
+const Penalties_Page = lazy(() => import("../page/Penalties"));
+const ExamCenters_Page = lazy(() => import("../page/ExamCenters"));
+const PracticalExam_Page = lazy(() => import("../page/PracticalExam"));
 const PaymentSuccessPage = lazy(() => import("../payment/PaymentSuccessPage"));
 const ActivationCodesPage = lazy(() => import("../page/Admin/ActivationCodes"));
 const NotFound_Page = lazy(() => import("../page/Notfound/404"));
@@ -107,6 +114,12 @@ function AppRoutes() {
             <Route path="/leaderboard" element={<Leaderboard_Page />} />
             <Route path="/history" element={<History_Page />} />
             <Route path="/settings" element={<Settings_Page />} />
+            <Route path="/signs" element={<RoadSigns_Page />} />
+            <Route path="/markings" element={<RoadMarkings_Page />} />
+            <Route path="/rules" element={<TrafficRules_Page />} />
+            <Route path="/penalties" element={<Penalties_Page />} />
+            <Route path="/exam-centers" element={<ExamCenters_Page />} />
+            <Route path="/practical-exam" element={<PracticalExam_Page />} />
             <Route path="/payment/success" element={<PaymentSuccessPage />} />
           </Route>
         </Route>

@@ -164,6 +164,11 @@ class OfflineDatasetManager {
       if (qCount >= EXPECTED_QUESTIONS_COUNT) {
         return true;
       }
+      // Official server bundle (v2: topics + tickets) already stored — never overwrite it
+      // with the bundled seed, even if the server currently has fewer questions.
+      if (qCount > 0 && (await dbClient.getSyncMeta("offline_bundle_schema").catch(() => null)) === "2") {
+        return true;
+      }
       console.info("[OfflineDatasetManager] Local question database empty. Initiating bundled seed...");
       await this.seedBundledData();
       return true;

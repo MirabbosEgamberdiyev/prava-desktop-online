@@ -4,6 +4,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios";
 import Cookies from "js-cookie";
+import { authCookieOptions } from "../auth/tokenCookies";
 import { ENV } from "../config/env";
 import i18n from "../utils/i18n";
 import { networkModeManager } from "../sync/networkModeManager";
@@ -52,7 +53,64 @@ function isTokenExpiringSoon(token: string): boolean {
   return expiresAt - Date.now() < fiveMinutes;
 }
 
-let isProactiveRefreshing = false;
+/**
+ * Persist freshly issued tokens to cookies.
+ */
+function storeTokens(newAccessToken: string, newRefreshToken?: string): void {
+  // Explicit attributes (path=/, sameSite=strict, secure only on https). NOTE: on
+  // http://tauri.localhost these are NOT HttpOnly/Secure — see src/auth/tokenCookies.ts
+  // for the limitation and the planned keychain migration (audit P2-D1).
+  Cookies.set(ACCESS_TOKEN_KEY, newAccessToken, authCookieOptions("access"));
+  if (newRefreshToken) {
+    Cookies.set(REFRESH_TOKEN_KEY, newRefreshToken, authCookieOptions("refresh"));
+  }
+  // Extend userData cookie expiry to match access token
+  const existingUserData = Cookies.get(USER_DATA_KEY);
+  if (existingUserData) {
+    Cookies.set(USER_DATA_KEY, existingUserData, authCookieOptions("userData"));
+  }
+}
+
+/*
+ * Refresh token logikasi (P1-W1).
+ *
+ * Bitta umumiy `refreshPromise`: proactive (request interceptor) va reactive
+ * (401 response interceptor) yo'llari AYNAN bitta promise'ni kutadi. Shu
+ * sababli hech bir so'rov "navbatda" abadiy osilib qolmaydi.
+ */
+let refreshPromise: Promise<string> | null = null;
+
+function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise;
+
+  window.dispatchEvent(new CustomEvent("auth-refresh-start"));
+  refreshPromise = (async () => {
+    const refreshToken = Cookies.get(REFRESH_TOKEN_KEY);
+    if (!refreshToken) {
+      throw new Error("No refresh token");
+    }
+    const response = await refreshClient.post("/api/v1/auth/refresh", {
+      refreshToken,
+    });
+    const newAccessToken: string | undefined =
+      response.data.data?.accessToken || response.data.accessToken;
+    const newRefreshToken: string | undefined =
+      response.data.data?.refreshToken || response.data.refreshToken;
+    if (!newAccessToken) {
+      throw new Error("No access token in refresh response");
+    }
+    storeTokens(newAccessToken, newRefreshToken);
+    return newAccessToken;
+  })().finally(() => {
+    refreshPromise = null;
+    window.dispatchEvent(new CustomEvent("auth-refresh-end"));
+  });
+
+  return refreshPromise;
+}
+
+// Bitta muvaffaqiyatsiz refresh uchun logout faqat bir marta yuboriladi
+let logoutHandledFor: Promise<string> | null = null;
 
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
@@ -63,7 +121,7 @@ api.interceptors.request.use(
       return Promise.reject(offlineErr);
     }
     // 1. Tokenni olish
-    const token = Cookies.get(ACCESS_TOKEN_KEY);
+    let token = Cookies.get(ACCESS_TOKEN_KEY);
 
     // 2. Tilni cookiedan olish
     const language = Cookies.get("i18next") || "uzl";
@@ -73,57 +131,17 @@ api.interceptors.request.use(
       config.headers["Accept-Language"] = language;
     }
 
-    // 3. Proactive token refresh: 5 daqiqadan kam qolsa oldindan yangilash
-    if (token && isTokenExpiringSoon(token) && !isProactiveRefreshing && !isRefreshing) {
-      const refreshToken = Cookies.get(REFRESH_TOKEN_KEY);
-      if (refreshToken) {
-        isProactiveRefreshing = true;
-        isRefreshing = true; // Block reactive refresh while proactive is in progress
-        window.dispatchEvent(new CustomEvent("auth-refresh-start"));
-        try {
-          const response = await refreshClient.post("/api/v1/auth/refresh", {
-            refreshToken,
-          });
-          const newAccessToken =
-            response.data.data?.accessToken || response.data.accessToken;
-          const newRefreshToken =
-            response.data.data?.refreshToken || response.data.refreshToken;
-
-          if (newAccessToken) {
-            const isSecure = window.location.protocol === "https:";
-            Cookies.set(ACCESS_TOKEN_KEY, newAccessToken, {
-              expires: 1,
-              secure: isSecure,
-              sameSite: isSecure ? "strict" : "lax",
-            });
-            if (newRefreshToken) {
-              Cookies.set(REFRESH_TOKEN_KEY, newRefreshToken, {
-                expires: 30,
-                secure: isSecure,
-                sameSite: isSecure ? "strict" : "lax",
-              });
-            }
-            // Extend userData cookie expiry to match access token
-            const existingUserData = Cookies.get(USER_DATA_KEY);
-            if (existingUserData) {
-              Cookies.set(USER_DATA_KEY, existingUserData, {
-                expires: 1,
-                secure: isSecure,
-                sameSite: isSecure ? "strict" : "lax",
-              });
-            }
-            if (config.headers) {
-              config.headers.Authorization = `Bearer ${newAccessToken}`;
-            }
-            return config;
-          }
-        } catch {
-          // Proactive refresh failed — proceed with existing token
-        } finally {
-          isProactiveRefreshing = false;
-          isRefreshing = false;
-          window.dispatchEvent(new CustomEvent("auth-refresh-end"));
-        }
+    // 3. Proactive token refresh: 5 daqiqadan kam qolsa oldindan yangilash.
+    //    Refresh allaqachon ketayotgan bo'lsa — o'sha promise'ni kutamiz.
+    if (
+      refreshPromise ||
+      (token && isTokenExpiringSoon(token) && Cookies.get(REFRESH_TOKEN_KEY))
+    ) {
+      try {
+        token = await refreshAccessToken();
+      } catch {
+        // Proactive refresh failed — proceed with existing token
+        token = Cookies.get(ACCESS_TOKEN_KEY);
       }
     }
 
@@ -138,24 +156,6 @@ api.interceptors.request.use(
     return Promise.reject(error);
   },
 );
-
-// Refresh token logikasi
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (value: unknown) => void;
-  reject: (reason?: unknown) => void;
-}> = [];
-
-const processQueue = (error: unknown, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
 
 api.interceptors.response.use(
   (response) => response,
@@ -185,6 +185,8 @@ api.interceptors.response.use(
           "/api/v1/auth/config",             // Heartbeat check
           "/api/v1/app/wrong-answers",       // Local fallback mavjud
           "/api/v1/app/saved-questions",     // Local fallback mavjud
+          "/api/v1/app/offline-bundle",      // background sync, non-blocking
+          "/api/v1/public/exam-rules",       // defaults/cache fallback
           "/api/v2/my-statistics",           // Local fallback mavjud
           "/api/v2/exams/history",           // Local fallback mavjud
           "/api/v1/auth/qr",                 // QR auth service handles status and fallback
@@ -209,6 +211,8 @@ api.interceptors.response.use(
         "/api/v1/auth/config",
         "/api/v1/app/wrong-answers",
         "/api/v1/app/saved-questions",
+        "/api/v1/app/offline-bundle",
+        "/api/v1/public/exam-rules",
         "/api/v2/my-statistics",
         "/api/v2/exams/history",
         "/api/v2/tickets",
@@ -269,74 +273,33 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      // Agar allaqachon refresh qilinayotgan bo'lsa, navbatga qo'shish
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-            }
-            return api(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
+      originalRequest._retry = true;
+
+      // So'rov eski token bilan yuborilgan, lekin shu orada token allaqachon
+      // yangilangan bo'lsa — qayta refresh qilmasdan yangi token bilan takrorlash.
+      const currentToken = Cookies.get(ACCESS_TOKEN_KEY);
+      if (
+        !refreshPromise &&
+        currentToken &&
+        originalRequest.headers?.Authorization !== `Bearer ${currentToken}`
+      ) {
+        originalRequest.headers.Authorization = `Bearer ${currentToken}`;
+        return api(originalRequest);
       }
 
-      originalRequest._retry = true;
-      isRefreshing = true;
-      window.dispatchEvent(new CustomEvent("auth-refresh-start"));
-
+      const pending = refreshAccessToken();
       try {
-        const response = await refreshClient.post("/api/v1/auth/refresh", {
-          refreshToken,
-        });
-
-        const newAccessToken = response.data.data?.accessToken || response.data.accessToken;
-        const newRefreshToken = response.data.data?.refreshToken || response.data.refreshToken;
-
-        if (newAccessToken) {
-          const isSecure = window.location.protocol === "https:";
-
-          Cookies.set(ACCESS_TOKEN_KEY, newAccessToken, {
-            expires: 1,
-            secure: isSecure,
-            sameSite: isSecure ? "strict" : "lax",
-          });
-
-          if (newRefreshToken) {
-            Cookies.set(REFRESH_TOKEN_KEY, newRefreshToken, {
-              expires: 30,
-              secure: isSecure,
-              sameSite: isSecure ? "strict" : "lax",
-            });
-          }
-
-          // Extend userData cookie expiry to match access token
-          const existingUserData = Cookies.get(USER_DATA_KEY);
-          if (existingUserData) {
-            Cookies.set(USER_DATA_KEY, existingUserData, {
-              expires: 1,
-              secure: isSecure,
-              sameSite: isSecure ? "strict" : "lax",
-            });
-          }
-
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-          }
-
-          processQueue(null, newAccessToken);
-          return api(originalRequest);
+        const newAccessToken = await pending;
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         }
-
-        throw new Error("No access token in refresh response");
+        return api(originalRequest);
       } catch (refreshError: any) {
-        processQueue(refreshError, null);
         const status = refreshError?.response?.status;
         // Only log out if the backend explicitly rejected the refresh token (400, 401, 403)
         // If it was a network drop, timeout, or server 5xx, preserve tokens so offline mode remains active!
-        if (status === 400 || status === 401 || status === 403) {
+        if ((status === 400 || status === 401 || status === 403) && logoutHandledFor !== pending) {
+          logoutHandledFor = pending;
           Cookies.remove(ACCESS_TOKEN_KEY);
           Cookies.remove(REFRESH_TOKEN_KEY);
           Cookies.remove(USER_DATA_KEY);
@@ -344,9 +307,6 @@ api.interceptors.response.use(
           window.dispatchEvent(new CustomEvent("auth-logout"));
         }
         return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-        window.dispatchEvent(new CustomEvent("auth-refresh-end"));
       }
     }
 

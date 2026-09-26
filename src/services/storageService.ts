@@ -42,6 +42,7 @@ export interface StoredTicketStat {
 }
 
 import Cookies from "js-cookie";
+import { GUEST_USER_KEY, scopedStorageKey } from "@/utils/userScope";
 
 function getCurrentUserId(): string {
   try {
@@ -54,12 +55,12 @@ function getCurrentUserId(): string {
   } catch {
     // ignore
   }
-  return "global";
+  return GUEST_USER_KEY;
 }
 
 function getScopedKey(baseKey: string): string {
-  const uid = getCurrentUserId();
-  return uid === "global" ? baseKey : `${baseKey}_u${uid}`;
+  // Guests get their own namespace (never the unscoped/legacy key, never user id 1).
+  return scopedStorageKey(baseKey, getCurrentUserId());
 }
 
 const STORAGE_KEYS = {
@@ -76,10 +77,11 @@ function safeGet<T>(baseKey: string, defaultValue: T): T {
     const rawScoped = localStorage.getItem(scopedKey);
     if (rawScoped) return JSON.parse(rawScoped);
 
-    // Fallback to legacy un-scoped key if available
-    const rawLegacy = localStorage.getItem(baseKey);
-    if (rawLegacy) {
-      return JSON.parse(rawLegacy);
+    // Legacy un-scoped key was written by guests in older builds — only the guest
+    // namespace may inherit it; a logged-in user must never see another person's data.
+    if (getCurrentUserId() === GUEST_USER_KEY) {
+      const rawLegacy = localStorage.getItem(baseKey);
+      if (rawLegacy) return JSON.parse(rawLegacy);
     }
 
     return defaultValue;
@@ -237,7 +239,6 @@ export const storageService = {
 
   // ── RESET ALL STATS ──
   resetAllStats(): void {
-    const uid = getCurrentUserId();
     const keys = [
       STORAGE_KEYS.WRONG_ANSWERS,
       STORAGE_KEYS.SAVED_QUESTIONS,
@@ -246,12 +247,22 @@ export const storageService = {
       STORAGE_KEYS.QUESTION_ATTEMPTS,
     ];
     for (const key of keys) {
-      localStorage.removeItem(key);
-      if (uid !== "global") {
-        localStorage.removeItem(`${key}_u${uid}`);
-      }
+      localStorage.removeItem(key); // legacy unscoped key
+      localStorage.removeItem(getScopedKey(key));
     }
     window.dispatchEvent(new Event("prava-storage-changed"));
+  },
+
+  /** Logout: drop this user's locally cached progress (other users / guest untouched). */
+  clearUserData(userId: string | number): void {
+    if (scopedStorageKey("x", userId) === scopedStorageKey("x", GUEST_USER_KEY)) return;
+    for (const key of Object.values(STORAGE_KEYS)) {
+      try {
+        localStorage.removeItem(scopedStorageKey(key, userId));
+      } catch {
+        // ignore
+      }
+    }
   },
 };
 

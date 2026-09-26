@@ -11,6 +11,8 @@ import {
   IconRefresh,
   IconArrowLeft,
   IconSparkles,
+  IconCircleCheck,
+  IconCircleX,
 } from "@tabler/icons-react";
 
 export interface GamificationResultProps {
@@ -28,6 +30,11 @@ export interface GamificationResultProps {
   onHome?: () => void;
   title?: string;
   errorMsg?: string | null;
+  /**
+   * Explicit pass/fail verdict (from `isExamPassed` in services/examRules). When given,
+   * a PASSED / FAILED badge is shown above the score in addition to the tier visuals.
+   */
+  passed?: boolean;
 }
 
 export const GamificationResult: React.FC<GamificationResultProps> = ({
@@ -45,6 +52,7 @@ export const GamificationResult: React.FC<GamificationResultProps> = ({
   onHome,
   title,
   errorMsg,
+  passed,
 }) => {
   const { t } = useTranslation();
   const actualTotal = totalQuestions ?? total ?? correct + wrong + unanswered;
@@ -159,6 +167,31 @@ export const GamificationResult: React.FC<GamificationResultProps> = ({
           {errorMsg ? errorMsg : tierConfig.message}
         </p>
 
+        {!errorMsg && passed !== undefined && (
+          <div
+            data-passed={passed ? "true" : "false"}
+            role="status"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 14px",
+              borderRadius: 999,
+              marginBottom: 16,
+              fontSize: 14,
+              fontWeight: 800,
+              letterSpacing: "0.4px",
+              textTransform: "uppercase",
+              background: passed ? "var(--success-bg)" : "var(--danger-bg)",
+              color: passed ? "var(--success)" : "var(--danger)",
+              border: `1.5px solid ${passed ? "var(--success)" : "var(--danger)"}`,
+            }}
+          >
+            {passed ? <IconCircleCheck size={16} stroke={2.4} /> : <IconCircleX size={16} stroke={2.4} />}
+            <span>{passed ? t("gamification.passed", "O'tdi") : t("gamification.failed", "O'tmadi")}</span>
+          </div>
+        )}
+
         {!errorMsg && (
           <>
             {/* Big Score Percentage */}
@@ -253,8 +286,8 @@ export const GamificationResult: React.FC<GamificationResultProps> = ({
               style={{
                 width: "100%",
                 minHeight: "46px",
-                background: "#1971c2",
-                color: "#ffffff",
+                background: "var(--primary)",
+                color: "var(--on-primary, #ffffff)",
                 border: "none",
                 borderRadius: "12px",
                 fontSize: "14px",

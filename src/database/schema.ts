@@ -33,6 +33,8 @@ export interface DbTopic {
   name_ru: string | null;
   order_num: number;
   question_count: number;
+  /** Official question ids of the topic (offline bundle v2). */
+  question_ids?: number[];
   updated_at: number;
 }
 
@@ -46,6 +48,10 @@ export interface DbTicket {
   duration_minutes?: number;
   passing_score?: number;
   question_count: number;
+  topic_id?: number | null;
+  package_id?: number | null;
+  /** Ordered official question ids of the ticket (offline bundle v2). */
+  question_ids?: number[];
   updated_at: number;
 }
 
@@ -62,13 +68,20 @@ export interface DbExamSession {
   local_id: string; // UUID v4
   server_id: number | null;
   user_id?: string | number | null;
-  exam_type: "EXAM" | "TICKET" | "MARATHON" | "TOPIC" | "WRONG_EXAM";
+  /** Canonical owner ("42" | "guest"; "" = pre-v3 row not yet claimed). Set by dbClient. */
+  owner?: string;
+  /** "EXAM" | "MARATHON" | "WRONG_EXAM" | "ticket_<id>" … */
+  exam_type: "EXAM" | "TICKET" | "MARATHON" | "TOPIC" | "WRONG_EXAM" | `ticket_${number}`;
   status: "IN_PROGRESS" | "COMPLETED" | "ABANDONED";
   total_questions: number;
   correct_answers: number;
   score: number;
   duration_seconds: number;
   time_remaining_seconds: number;
+  /** Absolute deadline (epoch ms) of a timed session — survives crashes/restarts. */
+  deadline_at?: number | null;
+  /** Ticket / package id the session belongs to (for record-offline targetId). */
+  target_id?: number | null;
   started_at: number;
   completed_at: number | null;
   answers_json: string; // JSON: Record<number, { selected: number; correct: number }>
@@ -81,6 +94,8 @@ export interface DbExamSession {
 export interface DbUserProgress {
   progress_key: string; // e.g. "ticket_1" or "topic_12"
   user_id?: string | number | null;
+  /** Canonical owner ("42" | "guest"; "" = pre-v3 row not yet claimed). Set by dbClient. */
+  owner?: string;
   progress_type: "TICKET" | "TOPIC" | "MARATHON";
   total_items: number;
   completed_items: number;
@@ -93,6 +108,8 @@ export interface DbUserProgress {
 export interface DbSavedQuestion {
   question_id: number;
   user_id?: string | number | null;
+  /** Canonical owner ("42" | "guest"; "" = pre-v3 row not yet claimed). Set by dbClient. */
+  owner?: string;
   saved_at: number;
   is_deleted: number; // 0 = active, 1 = tombstone (deleted offline, to be synced)
   synced: number; // 0 = pending sync, 1 = synced
@@ -101,12 +118,15 @@ export interface DbSavedQuestion {
 export interface DbWrongAnswer {
   question_id: number;
   user_id?: string | number | null;
+  /** Canonical owner ("42" | "guest"; "" = pre-v3 row not yet claimed). Set by dbClient. */
+  owner?: string;
   wrong_count: number;
   last_wrong_at: number;
 }
 
 export type OutboxAction =
   | "SUBMIT_EXAM"
+  | "RECORD_OFFLINE_EXAM"
   | "SAVE_QUESTION"
   | "UNSAVE_QUESTION"
   | "UPDATE_PROGRESS"
@@ -115,6 +135,8 @@ export type OutboxAction =
 export interface DbOutboxItem {
   id: string; // UUID v4
   user_id?: string | number | null;
+  /** Canonical owner ("42" | "guest"; "" = pre-v3 row not yet claimed). Set by dbClient. */
+  owner?: string;
   action_type: OutboxAction;
   endpoint: string;
   http_method: "POST" | "PUT" | "DELETE" | "PATCH";

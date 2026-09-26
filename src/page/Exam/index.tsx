@@ -1,3 +1,5 @@
+import { resolveUserScopeId } from "@/utils/userScope";
+import { getExamRules, maxWrongFor, durationSecondsFor, isExamPassed } from "@/services/examRules";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -12,12 +14,15 @@ import {
   localizeOpt,
   parseOptions,
   getActiveExamSessionId,
-  submitExamSession,
+  reportExamResult,
   toggleSavedQuestion,
 } from "../../services/desktopAdapter";
+import { isFakeLocalSessionId } from "../../services/offlineExamRecord";
 import storageService from "../../services/storageService";
 import SecureImage from "../../components/common/SecureImage";
-import ExamTimerDisplay from "../../components/quiz/ExamTimerDisplay";
+import ExamTimerDisplay, { remainingSecondsUntil } from "../../components/quiz/ExamTimerDisplay";
+import ShortcutHint from "../../components/quiz/ShortcutHint";
+import { useExamShortcuts } from "../../hooks/useExamShortcuts";
 import { offlineMediaManager } from "../../services/offlineMediaManager";
 import { getImageUrl } from "../../utils/imageUtils";
 import ImageZoomModal from "../../components/common/ImageZoomModal";
@@ -27,7 +32,7 @@ import SEO from "../../components/common/SEO";
 import GamificationResult from "../../components/quiz/GamificationResult";
 import QuizReviewModal from "../../components/quiz/QuizReviewModal";
 import { dbClient } from "../../database";
-import { generateUUID } from "../../sync";
+import { generateUUID } from "../../sync/outboxQueue";
 import { showToast } from "../../utils/notificationUtils";
 import OfflinePreparationModal from "../../components/offline/OfflinePreparationModal";
 import {
@@ -55,17 +60,21 @@ export default function Exam_Page() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const userId = user?.id ? Number(user.id) : 1;
+  const userId = resolveUserScopeId(user);
 
   const countParam = Number(searchParams.get("count"));
-  const questionCount = countParam && countParam > 0 ? countParam : 20;
-  const MAX_WRONG = Math.floor(questionCount / 10); // 20→2, 40→4, 50→5, 60→6, 80→8, 100→10
+  // Exam rules (server-driven, cached; defaults: 20 savol, 60 s/savol, max 2 xato) — fixed for this page's lifetime
+  const [rules] = useState(getExamRules);
+  const questionCount = countParam && countParam > 0 ? countParam : rules.real.questionCount;
+  const MAX_WRONG = maxWrongFor(questionCount, rules); // 20→2, 40→4, 50→5, 100→10
+  const EXAM_SECONDS = durationSecondsFor("real", questionCount, rules);
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [questions, setQuestions] = useState<OfflineQuestion[]>([]);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, Answer>>({});
-  const [timeLeft, setTimeLeft] = useState(questionCount * 60);
+  /** Absolute deadline (epoch ms) — persisted for crash recovery. */
+  const [deadline, setDeadline] = useState<number>(() => Date.now() + EXAM_SECONDS * 1000);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [zoomSrc, setZoomSrc] = useState<string | null>(null);
@@ -92,11 +101,16 @@ export default function Exam_Page() {
     });
   };
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(Date.now());
   const autoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answersRef = useRef(answers);
   answersRef.current = answers;
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+  const deadlineRef = useRef(deadline);
+  deadlineRef.current = deadline;
+  const serverSessionIdRef = useRef<number | null>(null);
+  const finishedRef = useRef(false);
 
   const onBack = () => navigate("/me");
 
@@ -117,7 +131,80 @@ export default function Exam_Page() {
     el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [current]);
 
+  // Predictive image prefetching (must run before any early return — rules of hooks)
+  useEffect(() => {
+    if (!questions || questions.length === 0) return;
+    const nextQs = questions.slice(current + 1, current + 4);
+    const prevQs = questions.slice(Math.max(0, current - 2), current);
+    [...nextQs, ...prevQs].forEach((item) => {
+      if (item.image_path) {
+        const url = getImageUrl(item.image_path);
+        if (url) {
+          const img = new Image();
+          img.src = url;
+        }
+        offlineMediaManager.cacheImage(item.image_path).catch(() => {});
+      }
+    });
+  }, [current, questions]);
+
   const localSessionIdRef = useRef<string>(generateUUID());
+
+  /** Grade + persist + report. Uses refs so it also works right after a crash restore. */
+  const triggerFinish = useCallback(
+    (timeUp = false) => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      if (autoRef.current) {
+        clearTimeout(autoRef.current);
+        autoRef.current = null;
+      }
+      const curAnswers = answersRef.current;
+      const qs = questionsRef.current;
+      const now = Date.now();
+      const duration = Math.max(0, Math.floor((Math.min(now, deadlineRef.current) - startTimeRef.current) / 1000));
+      const correct = Object.values(curAnswers).filter((a) => a.selected === a.correct).length;
+      const total = qs.length || questionCount;
+      const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+      setSavedScore(score);
+      setIsTimeUp(timeUp);
+      setConfirmFinishOpen(false);
+      setPhase("result");
+
+      // Mark session completed in local crash-recovery database
+      dbClient
+        .completeExamSession(localSessionIdRef.current, {
+          status: "COMPLETED",
+          correct_answers: correct,
+          score,
+          duration_seconds: duration,
+          completed_at: now,
+        })
+        .catch(() => {});
+
+      saveExamResult({
+        userId,
+        score,
+        totalQuestions: total,
+        correctAnswers: correct,
+        durationSeconds: duration,
+        examType: "exam",
+      }).catch(() => {});
+
+      // Server session → /submit; locally graded → /record-offline (all questions, unanswered = null)
+      reportExamResult({
+        serverSessionId: serverSessionIdRef.current,
+        localSessionId: localSessionIdRef.current,
+        examType: "real",
+        targetId: null,
+        questions: qs,
+        answers: curAnswers,
+        durationSeconds: duration,
+        completedAt: now,
+      }).catch(() => {});
+    },
+    [questionCount, userId]
+  );
 
   const loadQuestions = useCallback(
     async (forceFresh = false) => {
@@ -126,30 +213,38 @@ export default function Exam_Page() {
       answersRef.current = {};
       setCurrent(0);
       setIsTimeUp(false);
-      setTimeLeft(questionCount * 60);
       setErrorMsg(null);
+      finishedRef.current = false;
 
       // Crash recovery: check for existing active exam session in SQLite / IndexedDB
       if (!forceFresh) {
         try {
           const active = await dbClient.getActiveExamSession("EXAM");
-          if (
-            active &&
-            active.questions_json &&
-            active.time_remaining_seconds > 10 &&
-            Date.now() - active.started_at < 60 * 60 * 1000
-          ) {
+          if (active && active.questions_json && Date.now() - active.started_at < 24 * 60 * 60 * 1000) {
             const restoredQs: OfflineQuestion[] = JSON.parse(active.questions_json);
             const restoredAns: Record<number, Answer> = JSON.parse(active.answers_json || "{}");
+            const restoredDeadline =
+              active.deadline_at ??
+              active.started_at + durationSecondsFor("real", restoredQs.length || questionCount, rules) * 1000;
 
             if (restoredQs.length > 0) {
               localSessionIdRef.current = active.local_id;
+              serverSessionIdRef.current =
+                active.server_id != null && !isFakeLocalSessionId(active.server_id) ? active.server_id : null;
               setQuestions(restoredQs);
+              questionsRef.current = restoredQs;
               setAnswers(restoredAns);
               answersRef.current = restoredAns;
               setCurrent(active.current_index || 0);
-              setTimeLeft(active.time_remaining_seconds);
               startTimeRef.current = active.started_at;
+              setDeadline(restoredDeadline);
+              deadlineRef.current = restoredDeadline;
+
+              if (restoredDeadline <= Date.now()) {
+                // Time ran out while the app was closed → submit what was answered.
+                triggerFinish(true);
+                return;
+              }
               setPhase("exam");
 
               showToast({
@@ -180,22 +275,30 @@ export default function Exam_Page() {
         }
 
         const newId = generateUUID();
+        const startedAt = Date.now();
+        const examSeconds = durationSecondsFor("real", qs.length, rules);
+        const newDeadline = startedAt + examSeconds * 1000;
         localSessionIdRef.current = newId;
+        serverSessionIdRef.current = getActiveExamSessionId();
         setQuestions(qs);
+        questionsRef.current = qs;
+        startTimeRef.current = startedAt;
+        setDeadline(newDeadline);
+        deadlineRef.current = newDeadline;
         setPhase("exam");
-        startTimeRef.current = Date.now();
 
         await dbClient.saveExamSession({
           local_id: newId,
-          server_id: getActiveExamSessionId(),
+          server_id: serverSessionIdRef.current,
           exam_type: "EXAM",
           status: "IN_PROGRESS",
           total_questions: qs.length,
           correct_answers: 0,
           score: 0,
           duration_seconds: 0,
-          time_remaining_seconds: questionCount * 60,
-          started_at: Date.now(),
+          time_remaining_seconds: examSeconds,
+          deadline_at: newDeadline,
+          started_at: startedAt,
           completed_at: null,
           answers_json: "{}",
           questions_json: JSON.stringify(qs),
@@ -207,92 +310,15 @@ export default function Exam_Page() {
         setPhase("result");
       }
     },
-    [questionCount, t]
+    [questionCount, rules, t, triggerFinish]
   );
 
   useEffect(() => {
     loadQuestions();
   }, [loadQuestions]);
 
-  const triggerFinish = useCallback(
-    (timeUp = false) => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (autoRef.current) {
-        clearTimeout(autoRef.current);
-        autoRef.current = null;
-      }
-      const curAnswers = answersRef.current;
-      const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      const correct = Object.values(curAnswers).filter((a) => a.selected === a.correct).length;
-      const total = questions.length || questionCount;
-      const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-      setSavedScore(score);
-      if (!timeUp) setIsTimeUp(false);
-      setPhase("result");
-
-      // Mark session completed in local crash-recovery database
-      dbClient
-        .completeExamSession(localSessionIdRef.current, {
-          status: "COMPLETED",
-          correct_answers: correct,
-          score,
-          duration_seconds: duration,
-          completed_at: Date.now(),
-        })
-        .catch(() => {});
-
-      saveExamResult({
-        userId,
-        score,
-        totalQuestions: total,
-        correctAnswers: correct,
-        durationSeconds: duration,
-        examType: "exam",
-      }).catch(() => {});
-
-      const activeSessionId = getActiveExamSessionId();
-      if (activeSessionId && questions.length > 0) {
-        const answersPayload = questions.map((q, idx) => ({
-          questionId: q.id,
-          selectedOptionIndex: curAnswers[idx]?.selected ?? null,
-        }));
-        submitExamSession(activeSessionId, answersPayload).catch(() => {});
-      }
-    },
-    [questions, questionCount, userId]
-  );
-
-  useEffect(() => {
-    if (phase !== "exam") return;
-    const startSnapshot = Date.now();
-    const startRemaining = timeLeft;
-
-    const tick = () => {
-      const elapsed = Math.floor((Date.now() - startSnapshot) / 1000);
-      const remaining = Math.max(0, startRemaining - elapsed);
-      setTimeLeft(remaining);
-      if (remaining <= 0) {
-        if (timerRef.current) clearInterval(timerRef.current);
-        setIsTimeUp(true);
-        triggerFinish(true);
-      }
-    };
-
-    timerRef.current = setInterval(tick, 1000);
-
-    const handleFocus = () => tick();
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("system-resumed-from-sleep", handleFocus);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("system-resumed-from-sleep", handleFocus);
-    };
-  }, [phase, triggerFinish]);
-
   const handleSelect = (optIdx: number) => {
-    if (answers[current] !== undefined) return;
+    if (phase !== "exam" || answers[current] !== undefined) return;
     const q = questions[current];
     if (!q) return;
     const opts = parseOptions(q.options_json);
@@ -322,14 +348,15 @@ export default function Exam_Page() {
     dbClient
       .saveExamSession({
         local_id: localSessionIdRef.current,
-        server_id: getActiveExamSessionId(),
+        server_id: serverSessionIdRef.current,
         exam_type: "EXAM",
         status: "IN_PROGRESS",
         total_questions: questions.length,
         correct_answers: correctSoFar,
         score: scoreSoFar,
         duration_seconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
-        time_remaining_seconds: timeLeft,
+        time_remaining_seconds: remainingSecondsUntil(deadlineRef.current),
+        deadline_at: deadlineRef.current,
         started_at: startTimeRef.current,
         completed_at: null,
         answers_json: JSON.stringify(newAns),
@@ -351,62 +378,42 @@ export default function Exam_Page() {
     }
   };
 
-  // Full Desktop Keyboard Navigation (1-5, F1-F5, Arrows, Space, Enter, Esc)
-  useEffect(() => {
-    if (phase !== "exam") return;
-    const handleKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  const handleFinishClick = () => {
+    const answeredCount = Object.keys(answers).length;
+    if (answeredCount < questions.length) {
+      setConfirmFinishOpen(true);
+    } else {
+      triggerFinish(false);
+    }
+  };
 
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (zoomSrc) {
-          setZoomSrc(null);
-        } else if (confirmFinishOpen) {
-          setConfirmFinishOpen(false);
-        }
-        return;
+  // Unified desktop keyboard shortcuts (1–5 / A–E, ←/→, Enter, Esc, Shift+B)
+  useExamShortcuts(phase === "exam", {
+    onSelect: (idx) => {
+      if (!confirmFinishOpen && !zoomSrc) handleSelect(idx);
+    },
+    onPrev: () => setCurrent((c) => Math.max(0, c - 1)),
+    onNext: () => setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1)),
+    onSpace: () => {
+      if (answers[current] !== undefined) setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
+    },
+    onConfirm: () => {
+      if (confirmFinishOpen) {
+        setConfirmFinishOpen(false);
+        triggerFinish(false);
+      } else {
+        handleFinishClick();
       }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (confirmFinishOpen) {
-          setConfirmFinishOpen(false);
-          triggerFinish(false);
-        } else {
-          handleFinishClick();
-        }
-        return;
-      }
-
-      if (e.key === " " || e.code === "Space") {
-        e.preventDefault();
-        if (answers[current] !== undefined) {
-          setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
-        }
-        return;
-      }
-
-      const map: Record<string, number> = {
-        F1: 0, F2: 1, F3: 2, F4: 3, F5: 4,
-        "1": 0, "2": 1, "3": 2, "4": 3, "5": 4,
-      };
-      if (e.key in map) {
-        e.preventDefault();
-        handleSelect(map[e.key]);
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        setCurrent((c) => Math.max(0, c - 1));
-      }
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [phase, answers, current, questions.length, zoomSrc, confirmFinishOpen, triggerFinish]);
+    },
+    onEscape: () => {
+      if (zoomSrc) setZoomSrc(null);
+      else if (confirmFinishOpen) setConfirmFinishOpen(false);
+    },
+    onBookmark: () => {
+      const q = questions[current];
+      if (q) handleToggleSave(q);
+    },
+  });
 
   // ─── LOADING ───
   if (phase === "loading") {
@@ -503,6 +510,7 @@ export default function Exam_Page() {
             title={t("exam.officialTitle", "Rasmiy DTM Imtihon Simulyatori")}
             badge={`${total} ${t("activeTest.questionsCount", "savol")} • ${MAX_WRONG} ${t("exam.maxWrongAllowed", "tagacha xato")}`}
             isTimeUp={isTimeUp}
+            passed={isExamPassed({ mode: "real", total, correct, wrong, unanswered }, rules)}
             onRetry={() => loadQuestions(true)}
             onReviewMistakes={() => setReviewOpen(true)}
             onHome={onBack}
@@ -528,32 +536,6 @@ export default function Exam_Page() {
   const correct = Object.values(answers).filter((a) => a.selected === a.correct).length;
   const wrong = Object.values(answers).length - correct;
 
-  // Predictive Image Prefetching for 0ms transitions
-  useEffect(() => {
-    if (!questions || questions.length === 0) return;
-    const nextQs = questions.slice(current + 1, current + 4);
-    const prevQs = questions.slice(Math.max(0, current - 2), current);
-    [...nextQs, ...prevQs].forEach((item) => {
-      if (item.image_path) {
-        const url = getImageUrl(item.image_path);
-        if (url) {
-          const img = new Image();
-          img.src = url;
-        }
-        offlineMediaManager.cacheImage(item.image_path).catch(() => {});
-      }
-    });
-  }, [current, questions]);
-
-  const handleFinishClick = () => {
-    const answeredCount = Object.keys(answers).length;
-    if (answeredCount < questions.length) {
-      setConfirmFinishOpen(true);
-    } else {
-      triggerFinish(false);
-    }
-  };
-
   return (
     <>
       <SEO
@@ -573,7 +555,7 @@ export default function Exam_Page() {
             >
               {t("exam.finish", "Yakunlash")} <IconX size={15} />
             </button>
-            <ExamTimerDisplay initialSeconds={questionCount * 60} onTimeUp={() => { setIsTimeUp(true); triggerFinish(true); }} />
+            <ExamTimerDisplay deadline={deadline} onTimeUp={() => triggerFinish(true)} />
           </div>
 
           <div className="exam-topbar-center">
@@ -633,7 +615,7 @@ export default function Exam_Page() {
                   disabled={answered !== undefined}
                   type="button"
                 >
-                  <span className="opt-key">F{idx + 1}</span>
+                  <span className="opt-key" title={`${idx + 1} / ${String.fromCharCode(65 + idx)}`}>{idx + 1}</span>
                   <span className="opt-text">{localizeOpt(opt)}</span>
                   {answered && idx === q.correct_option && (
                     <IconCheck size={15} className="opt-icon correct" />
@@ -717,6 +699,7 @@ export default function Exam_Page() {
               </button>
             )}
           </div>
+          <ShortcutHint />
         </div>
       </div>
 

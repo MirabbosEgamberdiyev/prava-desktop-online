@@ -1,7 +1,15 @@
 /**
  * PRAVA DESKTOP ONLINE — BACKGROUND BIDIRECTIONAL SYNCHRONIZATION ENGINE
  * Orchestrates Local -> Server (Push Outbox) and Server -> Local (Pull Updates)
- * with Mutex Lock, Incremental Sync, Crash Recovery, and Zero Hardcoded Data.
+ * with a single-flight mutex, conditional (ETag) bundle download and crash recovery.
+ *
+ * Scheduling (Phase 5 perf):
+ *  - nothing runs at import time — `start()` is called once the app is ready;
+ *  - full sync (push + pull): on start, on `online` / reconnect, on window focus when the
+ *    last sync is older than 5 min, and every 15 min;
+ *  - outbox flush (push only): every 45 s but ONLY when the outbox is non-empty, plus
+ *    right after something is enqueued;
+ *  - `prava-storage-changed` is dispatched only when something actually changed.
  */
 
 import api from "../api/api";
@@ -15,7 +23,8 @@ import {
   ticketRepository,
   topicRepository,
 } from "../database/repositories";
-import type { DbOutboxItem, DbQuestion, DbTicket, DbTopic } from "../database/schema";
+import type { DbExamSession, DbOutboxItem, DbQuestion, DbTicket, DbTopic } from "../database/schema";
+import { convertLegacySubmitItem, isFakeLocalSessionId } from "../services/offlineExamRecord";
 
 export type SyncState = "IDLE" | "SYNCING" | "OFFLINE" | "ERROR";
 
@@ -34,6 +43,18 @@ export interface SyncResult {
   pulledCount: number;
   error?: string;
 }
+
+const OFFLINE_BUNDLE_URL = "/api/v1/app/offline-bundle";
+const OFFLINE_BUNDLE_VERSION_KEY = "offline_bundle_version";
+const OFFLINE_BUNDLE_ETAG_KEY = "offline_bundle_etag";
+/** Bumped when the locally stored bundle shape changes → forces one unconditional download. */
+const OFFLINE_BUNDLE_SCHEMA_KEY = "offline_bundle_schema";
+const OFFLINE_BUNDLE_SCHEMA = "2";
+const LEGACY_SUBMIT_MIGRATION_KEY = "legacy_exam_submit_migrated_v1";
+
+export const FULL_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+export const OUTBOX_FLUSH_INTERVAL_MS = 45 * 1000;
+export const FOCUS_SYNC_STALE_MS = 5 * 60 * 1000;
 
 /**
  * Normalizes backend question payload into clean SQLite / IndexedDB schema.
@@ -83,128 +104,213 @@ export function normalizeServerQuestion(q: any, defaultTicketId?: number | null)
   };
 }
 
+function idList(v: unknown): number[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => Number(x)).filter((n) => Number.isFinite(n));
+}
+
+function str(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v : null;
+}
+
+export interface MappedOfflineBundle {
+  version: string | null;
+  questions: DbQuestion[];
+  /** null → the bundle has no topics array (pre-v2 backend). */
+  topics: DbTopic[] | null;
+  /** null → the bundle has no tickets array (pre-v2 backend). */
+  tickets: DbTicket[] | null;
+}
+
+/**
+ * Pure mapper for GET /api/v1/app/offline-bundle `data`:
+ *   { version, questions[], topics[{id, code, nameUzl.., displayOrder, questionIds}],
+ *     tickets[{id, ticketNumber, topicId, packageId, nameUzl.., durationMinutes, questionIds}] }
+ * Server ids are kept as-is so the desktop shows exactly the web's official topics/tickets.
+ * Each question gets ticket_id / topic_id / order_num from the official mappings.
+ */
+export function mapOfflineBundle(data: any, now: number = Date.now()): MappedOfflineBundle {
+  const version = data?.version != null ? String(data.version) : null;
+
+  const topics: DbTopic[] | null = Array.isArray(data?.topics)
+    ? data.topics
+        .filter((tp: any) => tp && Number.isFinite(Number(tp.id)))
+        .map((tp: any) => {
+          const ids = idList(tp.questionIds);
+          return {
+            id: Number(tp.id),
+            code: str(tp.code) ?? `topic_${tp.id}`,
+            name_uzl: str(tp.nameUzl) ?? str(tp.nameUzc) ?? str(tp.nameRu) ?? "",
+            name_uzc: str(tp.nameUzc),
+            name_ru: str(tp.nameRu),
+            name_en: str(tp.nameEn),
+            order_num: Number.isFinite(Number(tp.displayOrder)) ? Number(tp.displayOrder) : Number(tp.id),
+            question_count: ids.length,
+            question_ids: ids,
+            updated_at: now,
+          } satisfies DbTopic;
+        })
+    : null;
+
+  const tickets: DbTicket[] | null = Array.isArray(data?.tickets)
+    ? data.tickets
+        .filter((tk: any) => tk && Number.isFinite(Number(tk.id)))
+        .map((tk: any) => {
+          const ids = idList(tk.questionIds);
+          const num = Number.isFinite(Number(tk.ticketNumber)) ? Number(tk.ticketNumber) : Number(tk.id);
+          return {
+            id: Number(tk.id),
+            ticket_number: num,
+            topic_id: tk.topicId != null ? Number(tk.topicId) : null,
+            package_id: tk.packageId != null ? Number(tk.packageId) : null,
+            name_uzl: str(tk.nameUzl) ?? `${num}-bilet`,
+            name_uzc: str(tk.nameUzc) ?? `${num}-билет`,
+            name_ru: str(tk.nameRu) ?? `Билет #${num}`,
+            name_en: str(tk.nameEn) ?? `Ticket #${num}`,
+            duration_minutes: Number.isFinite(Number(tk.durationMinutes)) ? Number(tk.durationMinutes) : undefined,
+            question_count: ids.length,
+            question_ids: ids,
+            updated_at: now,
+          } satisfies DbTicket;
+        })
+    : null;
+
+  // question id → first (ticket, position) and topic that contains it
+  const ticketOf = new Map<number, { ticketId: number; order: number }>();
+  for (const tk of tickets ?? []) {
+    (tk.question_ids ?? []).forEach((qid, i) => {
+      if (!ticketOf.has(qid)) ticketOf.set(qid, { ticketId: tk.id, order: i + 1 });
+    });
+  }
+  const topicOf = new Map<number, number>();
+  for (const tp of topics ?? []) {
+    for (const qid of tp.question_ids ?? []) if (!topicOf.has(qid)) topicOf.set(qid, tp.id);
+  }
+
+  const questions: DbQuestion[] = Array.isArray(data?.questions)
+    ? data.questions
+        .filter((q: any) => q && Number.isFinite(Number(q.id)))
+        .map((raw: any) => {
+          const q = normalizeServerQuestion(raw);
+          const tk = ticketOf.get(q.id);
+          if (tk) {
+            q.ticket_id = tk.ticketId;
+            if (!q.order_num) q.order_num = tk.order;
+          }
+          const tp = topicOf.get(q.id);
+          if (tp != null && q.topic_id == null) q.topic_id = tp;
+          q.updated_at = now;
+          return q;
+        })
+    : [];
+
+  return { version, questions, topics, tickets };
+}
+
 export class SyncEngine {
   private isRunning: boolean = false;
   private state: SyncState = "IDLE";
   private activeSyncPromise: Promise<SyncResult> | null = null;
-  private syncIntervalTimer: any = null;
+  private activeFlushPromise: Promise<number> | null = null;
+  private fullSyncTimer: ReturnType<typeof setInterval> | null = null;
+  private flushTimer: ReturnType<typeof setInterval> | null = null;
   private lastSyncAt: number | null = null;
   private lastError: string | null = null;
-  private readonly SYNC_INTERVAL_MS = 30000; // 30s background sweep when online
+  private startPromise: Promise<void> | null = null;
+  private cleanups: Array<() => void> = [];
 
-  constructor() {
-    this.init();
+  /**
+   * Start background sync (idempotent). Call once after the app is ready — importing
+   * this module no longer triggers any network or IndexedDB work.
+   */
+  public start(): Promise<void> {
+    if (!this.startPromise) this.startPromise = this.init();
+    return this.startPromise;
   }
 
   private async init(): Promise<void> {
     try {
-      // 1. Initialize local database
       await dbClient.init();
-
-      // 2. Crash recovery: reset any stuck IN_FLIGHT items from previous session
       await this.recoverStuckInFlightItems();
+      await this.migrateLegacyExamSubmits();
 
-      // 3. Load last sync metadata
       const storedLastSync = await dbClient.getSyncMeta("last_sync_at");
-      if (storedLastSync) {
-        this.lastSyncAt = parseInt(storedLastSync, 10) || null;
-      }
+      if (storedLastSync) this.lastSyncAt = parseInt(storedLastSync, 10) || null;
 
-      // 4. Initial sync check: if local database has 0 questions, queue background initial download
-      this.checkAndTriggerInitialSync();
+      let reconnectDebounce: ReturnType<typeof setTimeout> | undefined;
+      const syncSoon = (delay = 2000) => {
+        clearTimeout(reconnectDebounce);
+        reconnectDebounce = setTimeout(() => {
+          this.triggerSync().catch(() => {});
+        }, delay);
+      };
 
-      // 5. React to network status changes (auto-sync on reconnection with debounce)
-      let reconnectDebounce: any = null;
-      networkHeartbeat.subscribe((isOnline) => {
+      // Reconnection (heartbeat) → one debounced full sync
+      const unsubHeartbeat = networkHeartbeat.subscribe((isOnline) => {
         if (isOnline) {
-          clearTimeout(reconnectDebounce);
-          reconnectDebounce = setTimeout(() => {
-            this.triggerSync().catch(() => {});
-          }, 2000);
+          syncSoon();
         } else {
           this.state = "OFFLINE";
           this.broadcastStatus();
         }
       });
+      if (typeof unsubHeartbeat === "function") this.cleanups.push(unsubHeartbeat);
 
-      // 6. React to successful re-authentication or token refresh
-      if (typeof window !== "undefined") {
-        window.addEventListener("desktop-auth-success", () => {
-          this.triggerSync().catch(() => {});
-        });
-        window.addEventListener("auth-refresh-end", () => {
-          this.triggerSync().catch(() => {});
-        });
-        // Windows Wake from sleep / resume listener
-        window.addEventListener("online", () => {
-          if (!networkModeManager.isOfflineOnly()) {
-            this.triggerSync().catch(() => {});
-          }
-        });
-      }
-
-      // 7. React to network mode changes (AUTO, ONLINE, OFFLINE)
-      networkModeManager.subscribe((mode) => {
+      const unsubMode = networkModeManager.subscribe((mode) => {
         if (mode === "OFFLINE" || networkModeManager.isOfflineOnly()) {
           this.state = "OFFLINE";
           this.broadcastStatus();
         } else if (networkHeartbeat.getStatus().isOnline) {
-          this.triggerSync().catch(() => {});
+          syncSoon(500);
         }
       });
+      if (typeof unsubMode === "function") this.cleanups.push(unsubMode);
 
-      // 8. Periodic background sweep
-      this.syncIntervalTimer = setInterval(() => {
-        if (networkModeManager.isOfflineOnly()) return;
-        const { isOnline } = networkHeartbeat.getStatus();
-        if (isOnline && !this.isRunning) {
+      if (typeof window !== "undefined") {
+        const on = (name: string, fn: () => void) => {
+          window.addEventListener(name, fn);
+          this.cleanups.push(() => window.removeEventListener(name, fn));
+        };
+        on("online", () => {
+          if (!networkModeManager.isOfflineOnly()) syncSoon();
+        });
+        on("focus", () => {
+          if (!this.lastSyncAt || Date.now() - this.lastSyncAt > FOCUS_SYNC_STALE_MS) syncSoon(500);
+        });
+        on("desktop-auth-success", () => {
           this.triggerSync().catch(() => {});
-          this.checkDailySync().catch(() => {});
-        }
-      }, this.SYNC_INTERVAL_MS);
-
-      // 9. Initial sync and daily sync check
-      if (networkHeartbeat.getStatus().isOnline && !networkModeManager.isOfflineOnly()) {
-        this.triggerSync().catch(() => {});
-        this.checkDailySync().catch(() => {});
+        });
+        // Token refreshed → only push what is pending (no full pull).
+        on("auth-refresh-end", () => {
+          this.flushOutbox().catch(() => {});
+        });
+        let flushDebounce: ReturnType<typeof setTimeout> | undefined;
+        on("prava-outbox-enqueued", () => {
+          clearTimeout(flushDebounce);
+          flushDebounce = setTimeout(() => this.flushOutbox().catch(() => {}), 1000);
+        });
       }
+
+      this.fullSyncTimer = setInterval(() => {
+        this.triggerSync().catch(() => {});
+      }, FULL_SYNC_INTERVAL_MS);
+
+      this.flushTimer = setInterval(() => {
+        this.flushOutbox().catch(() => {});
+      }, OUTBOX_FLUSH_INTERVAL_MS);
+
+      // Initial sync after app ready
+      this.triggerSync().catch(() => {});
     } catch (err) {
       console.error("[SyncEngine] Initialization error:", err);
     }
   }
 
-  /**
-   * Daily Automatic Sync: Guarantees at least 1 background synchronization every 24 hours.
-   */
+  /** Kept for callers: a full sync if the last one is older than 24 h. */
   public async checkDailySync(): Promise<void> {
-    if (networkModeManager.isOfflineOnly()) return;
-    try {
-      const lastDailySync = await dbClient.getSyncMeta("last_daily_sync_at");
-      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-      const now = Date.now();
-      if (!lastDailySync || now - parseInt(lastDailySync, 10) > ONE_DAY_MS) {
-        if (networkHeartbeat.getStatus().isOnline) {
-          console.info("[SyncEngine] 24h threshold reached. Executing daily auto-synchronization...");
-          await this.triggerSync();
-        }
-      }
-    } catch (err) {
-      console.warn("[SyncEngine] Daily sync check error:", err);
-    }
-  }
-
-  /**
-   * If local database is empty on first install, initiate non-blocking background sync
-   */
-  private async checkAndTriggerInitialSync(): Promise<void> {
-    try {
-      const count = await questionRepository.getQuestionCount();
-      if (count === 0 && networkHeartbeat.getStatus().isOnline && !networkModeManager.isOfflineOnly()) {
-        console.info("[SyncEngine] Local database empty. Triggering background initial sync...");
-        this.triggerSync().catch(() => {});
-      }
-    } catch (err) {
-      console.warn("[SyncEngine] Initial sync check error:", err);
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    if (!this.lastSyncAt || Date.now() - this.lastSyncAt > ONE_DAY_MS) {
+      await this.triggerSync();
     }
   }
 
@@ -213,8 +319,8 @@ export class SyncEngine {
    */
   private async recoverStuckInFlightItems(): Promise<void> {
     try {
-      const pending = await OutboxQueue.getPending();
-      for (const item of pending) {
+      const all = await dbClient.getAllOutbox();
+      for (const item of all) {
         if (item.status === "IN_FLIGHT") {
           await dbClient.updateOutboxItem(item.id, { status: "PENDING" });
         }
@@ -225,33 +331,133 @@ export class SyncEngine {
   }
 
   /**
+   * One-time repair: exam results used to be queued to /api/v2/exams/submit with a fake
+   * Date.now() session id (backend 404 → dead-letter). Convert those rows — dead-lettered
+   * or still pending — into record-offline rows and re-queue them once.
+   */
+  public async migrateLegacyExamSubmits(): Promise<number> {
+    try {
+      if ((await dbClient.getSyncMeta(LEGACY_SUBMIT_MIGRATION_KEY)) === "1") return 0;
+      const all = await dbClient.getAllOutbox();
+      const legacy = all.filter(
+        (i) => i.action_type === "SUBMIT_EXAM" && (i.status === "FAILED" || i.status === "PENDING")
+      );
+      let converted = 0;
+      if (legacy.length > 0) {
+        const sessions = await dbClient.getAllExamSessions().catch(() => [] as DbExamSession[]);
+        const byServerId = new Map<number, DbExamSession>();
+        for (const s of sessions) {
+          if (s.server_id != null && isFakeLocalSessionId(s.server_id)) byServerId.set(Number(s.server_id), s);
+        }
+        for (const item of legacy) {
+          let sessionId: number | null = null;
+          try {
+            sessionId = Number(JSON.parse(item.payload_json || "{}")?.sessionId) || null;
+          } catch {
+            sessionId = null;
+          }
+          const next = convertLegacySubmitItem(item, sessionId != null ? byServerId.get(sessionId) ?? null : null);
+          if (next) {
+            await dbClient.putOutboxItem(next);
+            converted++;
+          }
+        }
+      }
+      await dbClient.setSyncMeta(LEGACY_SUBMIT_MIGRATION_KEY, "1");
+      if (converted > 0) console.info(`[SyncEngine] Re-queued ${converted} legacy exam result(s) via record-offline`);
+      return converted;
+    } catch (err) {
+      console.warn("[SyncEngine] Legacy exam submit migration error:", err);
+      return 0;
+    }
+  }
+
+  private canReachServer(): boolean {
+    if (networkModeManager.isOfflineOnly()) {
+      this.state = "OFFLINE";
+      this.broadcastStatus();
+      return false;
+    }
+    if (!networkHeartbeat.getStatus().isOnline) {
+      this.state = "OFFLINE";
+      this.broadcastStatus();
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Manually or reactively trigger a bidirectional synchronization round.
    * Mutex lock: guarantees only ONE sync cycle executes at any time.
    */
   public async triggerSync(): Promise<SyncResult> {
-    // If a sync is already running, join the existing promise (single-flight)
-    if (this.activeSyncPromise) {
-      return this.activeSyncPromise;
+    if (this.activeSyncPromise) return this.activeSyncPromise;
+    if (!this.canReachServer()) {
+      return {
+        success: false,
+        pushedCount: 0,
+        pulledCount: 0,
+        error: networkModeManager.isOfflineOnly() ? "Offline mode active" : "Offline",
+      };
     }
-
-    if (networkModeManager.isOfflineOnly()) {
-      this.state = "OFFLINE";
-      this.broadcastStatus();
-      return { success: false, pushedCount: 0, pulledCount: 0, error: "Offline mode active" };
-    }
-
-    const { isOnline } = networkHeartbeat.getStatus();
-    if (!isOnline) {
-      this.state = "OFFLINE";
-      this.broadcastStatus();
-      return { success: false, pushedCount: 0, pulledCount: 0, error: "Offline" };
-    }
+    if (this.activeFlushPromise) await this.activeFlushPromise.catch(() => 0);
 
     this.activeSyncPromise = this.executeSyncCycle();
     try {
       return await this.activeSyncPromise;
     } finally {
       this.activeSyncPromise = null;
+    }
+  }
+
+  /**
+   * Push-only round: sends pending outbox rows. Cheap no-op when the outbox is empty.
+   * Returns the number of rows pushed.
+   */
+  public async flushOutbox(): Promise<number> {
+    if (this.activeSyncPromise) {
+      const r = await this.activeSyncPromise.catch(() => null);
+      return r?.pushedCount ?? 0;
+    }
+    if (this.activeFlushPromise) return this.activeFlushPromise;
+    if (networkModeManager.isOfflineOnly() || !networkHeartbeat.getStatus().isOnline) return 0;
+
+    this.activeFlushPromise = (async () => {
+      const pendingCount = await dbClient.countPendingOutbox().catch(() => 0);
+      if (pendingCount === 0) return 0;
+      const pushed = await this.pushOutbox();
+      if (pushed > 0) this.notifyStorageChanged();
+      return pushed;
+    })();
+    try {
+      return await this.activeFlushPromise;
+    } finally {
+      this.activeFlushPromise = null;
+    }
+  }
+
+  private async pushOutbox(): Promise<number> {
+    let pushedCount = 0;
+    const userId = getCurrentUserId();
+    // Guests have no session: their rows are never pushed (and are dropped on login).
+    if (userId === null) return 0;
+    // Strictly the logged-in user's rows — never another account's or legacy rows.
+    const pendingItems = await OutboxQueue.getPending(userId);
+    for (const item of pendingItems) {
+      if (!networkHeartbeat.getStatus().isOnline) {
+        this.state = "OFFLINE";
+        break;
+      }
+      const success = await this.processPushItem(item);
+      if (success) pushedCount++;
+      else break; // network or auth dropped — stop this round
+    }
+    return pushedCount;
+  }
+
+  private notifyStorageChanged(): void {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("prava-storage-changed"));
     }
   }
 
@@ -268,38 +474,14 @@ export class SyncEngine {
     let pulledCount = 0;
 
     try {
-      // ═════════════════════════════════════════════════════════════
       // PHASE 1: PUSH (Local -> Server)
-      // ═════════════════════════════════════════════════════════════
-      const currentUserId = getCurrentUserId();
-      const pendingItems = await OutboxQueue.getPending(currentUserId);
-      if (pendingItems.length > 0) {
-        console.info(`[SyncEngine] Pushing ${pendingItems.length} pending local outbox mutation(s)...`);
+      pushedCount = await this.pushOutbox();
 
-        for (const item of pendingItems) {
-          if (!networkHeartbeat.getStatus().isOnline) {
-            this.state = "OFFLINE";
-            break;
-          }
-
-          const success = await this.processPushItem(item);
-          if (success) {
-            pushedCount++;
-          } else {
-            // Stop processing further push items if network or auth dropped
-            break;
-          }
-        }
-      }
-
-      // ═════════════════════════════════════════════════════════════
       // PHASE 2: PULL (Server -> Local)
-      // ═════════════════════════════════════════════════════════════
       if (networkHeartbeat.getStatus().isOnline) {
         pulledCount = await this.pullServerChanges();
       }
 
-      // Update sync metadata and dispatch notification
       this.lastSyncAt = Date.now();
       await dbClient.setSyncMeta("last_sync_at", this.lastSyncAt.toString());
       await dbClient.setSyncMeta("last_daily_sync_at", this.lastSyncAt.toString());
@@ -307,9 +489,8 @@ export class SyncEngine {
       this.state = "IDLE";
       this.broadcastStatus();
 
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("prava-storage-changed"));
-      }
+      // Re-render listeners only when local data really changed.
+      if (pushedCount > 0 || pulledCount > 0) this.notifyStorageChanged();
 
       return { success: true, pushedCount, pulledCount };
     } catch (err: any) {
@@ -338,7 +519,6 @@ export class SyncEngine {
         payload = {};
       }
 
-      // Network mutation with UUID idempotency key
       const response = await api.request({
         url: item.endpoint,
         method: item.http_method,
@@ -348,10 +528,7 @@ export class SyncEngine {
         },
       });
 
-      // Post-sync local state resolution
       await this.handlePostSyncSuccess(item, response.data);
-
-      // Successfully synced
       await OutboxQueue.markSynced(item.id);
       return true;
     } catch (err: any) {
@@ -365,7 +542,7 @@ export class SyncEngine {
         return false;
       }
 
-      // 400 or 422 Client validation errors — dead-letter, don't block rest of queue
+      // 4xx client validation errors — dead-letter, don't block rest of queue
       if (status && status >= 400 && status < 500) {
         console.error(`[SyncEngine] Client error ${status} for item ${item.id}. Moving to dead-letter.`);
         await OutboxQueue.markFailed(item.id, `Client error ${status}: ${errorMessage}`, 10);
@@ -382,32 +559,41 @@ export class SyncEngine {
    * Update local database records once remote mutation succeeds
    */
   private async handlePostSyncSuccess(item: DbOutboxItem, responseData: any): Promise<void> {
+    const payload = (() => {
+      try {
+        return JSON.parse(item.payload_json || "{}");
+      } catch {
+        return {};
+      }
+    })();
+
     switch (item.action_type) {
+      case "RECORD_OFFLINE_EXAM": {
+        // clientSessionId is the local exam_sessions.local_id
+        if (payload.clientSessionId) {
+          const serverId = Number(responseData?.data?.sessionId ?? responseData?.data?.id) || null;
+          await dbClient.markExamSessionSynced(String(payload.clientSessionId), serverId);
+        }
+        break;
+      }
+
       case "SUBMIT_EXAM": {
-        const payload = JSON.parse(item.payload_json || "{}");
+        // Real server session: mark any local session that references it as synced.
         if (payload.sessionId) {
-          const serverId = responseData?.data?.id || responseData?.id || null;
-          await dbClient.completeExamSession(String(payload.sessionId), {
-            server_id: serverId,
-            synced: 1,
-          });
+          const sessions = await dbClient.getAllExamSessions().catch(() => [] as DbExamSession[]);
+          const local = sessions.find((s) => Number(s.server_id) === Number(payload.sessionId));
+          if (local) await dbClient.markExamSessionSynced(local.local_id, Number(payload.sessionId));
         }
         break;
       }
 
       case "SAVE_QUESTION": {
-        const payload = JSON.parse(item.payload_json || "{}");
-        if (payload.questionId) {
-          await dbClient.setQuestionSaved(payload.questionId, true);
-        }
+        if (payload.questionId) await dbClient.setQuestionSaved(payload.questionId, true, item.user_id ?? undefined);
         break;
       }
 
       case "UNSAVE_QUESTION": {
-        const payload = JSON.parse(item.payload_json || "{}");
-        if (payload.questionId) {
-          await dbClient.setQuestionSaved(payload.questionId, false);
-        }
+        if (payload.questionId) await dbClient.setQuestionSaved(payload.questionId, false, item.user_id ?? undefined);
         break;
       }
 
@@ -417,12 +603,64 @@ export class SyncEngine {
   }
 
   /**
-   * PULL: Fetch authoritative server updates and reconcile into local database
+   * PULL: Fetch authoritative server updates and reconcile into local database.
+   * Returns the number of locally CHANGED records (0 when nothing changed).
    */
   private async pullServerChanges(): Promise<number> {
     let count = 0;
 
-    // 1. Pull Topics
+    // 1. Offline bundle (questions + official topics + tickets). 304 → nothing changed.
+    let bundle: Awaited<ReturnType<SyncEngine["pullOfflineBundle"]>> | null = null;
+    try {
+      bundle = await this.pullOfflineBundle();
+    } catch {
+      bundle = null; // network/5xx — try again next cycle
+    }
+
+    if (bundle && bundle !== "UNSUPPORTED") {
+      count += bundle.changed;
+      // Pre-v2 backend: bundle without topics/tickets → legacy list pulls
+      if (bundle.changed > 0 && !bundle.hasTopics) count += await this.pullTopicsLegacy();
+      if (bundle.changed > 0 && !bundle.hasTickets) count += await this.pullTicketsLegacy();
+    } else if (bundle === "UNSUPPORTED") {
+      // Old backend without the bundle endpoint (404) → legacy pulls only
+      count += await this.pullTopicsLegacy();
+      count += await this.pullTicketsLegacy();
+      count += await this.pullQuestionsLegacy();
+    }
+
+    // 2. Saved questions (bookmarks) & tombstones
+    try {
+      const savedRes = await api.get<{ data: any[] }>("/api/v1/app/saved-questions");
+      const serverBookmarks = (savedRes.data?.data || []).map((b: any) => ({
+        questionId: b.questionId ?? b.id,
+        savedAt: b.savedAt ? new Date(b.savedAt).getTime() : Date.now(),
+      }));
+
+      const localActiveIds = await dbClient.getActiveSavedQuestions();
+      const localSet = new Set(localActiveIds);
+      const localSavedList = localActiveIds.map((id) => ({
+        question_id: id,
+        saved_at: Date.now(),
+        is_deleted: 0,
+        synced: 1,
+      }));
+
+      const resolved = ConflictResolver.resolveBookmarks(localSavedList, serverBookmarks);
+      for (const activeId of resolved.finalLocalActiveIds) {
+        if (!localSet.has(activeId)) {
+          await dbClient.setQuestionSaved(activeId, true);
+          count++;
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    return count;
+  }
+
+  private async pullTopicsLegacy(): Promise<number> {
     try {
       let topicList: any[] = [];
       try {
@@ -437,111 +675,124 @@ export class SyncEngine {
           topicList = res3.data?.data || [];
         }
       }
-
-      if (topicList.length > 0) {
-        const dbTopics: DbTopic[] = topicList.map((tp: any) => ({
-          id: tp.id,
-          code: tp.code || `topic_${tp.id}`,
-          name_uzl: typeof tp.name === "object" ? tp.name?.uzl : (tp.name || tp.nameUzl || ""),
-          name_uzc: typeof tp.name === "object" ? tp.name?.uzc : (tp.nameUzc || ""),
-          name_ru: typeof tp.name === "object" ? tp.name?.ru : (tp.nameRu || ""),
-          order_num: tp.id,
-          question_count: tp.questionCount ?? tp.questionsCount ?? 20,
-          updated_at: Date.now(),
-        }));
-        await topicRepository.saveTopics(dbTopics);
-        count += dbTopics.length;
-      }
+      if (topicList.length === 0) return 0;
+      const dbTopics: DbTopic[] = topicList.map((tp: any) => ({
+        id: tp.id,
+        code: tp.code || `topic_${tp.id}`,
+        name_uzl: typeof tp.name === "object" ? tp.name?.uzl : (tp.name || tp.nameUzl || ""),
+        name_uzc: typeof tp.name === "object" ? tp.name?.uzc : (tp.nameUzc || ""),
+        name_ru: typeof tp.name === "object" ? tp.name?.ru : (tp.nameRu || ""),
+        order_num: tp.displayOrder ?? tp.id,
+        question_count: tp.questionCount ?? tp.questionsCount ?? 20,
+        updated_at: Date.now(),
+      }));
+      await topicRepository.saveTopics(dbTopics);
+      return dbTopics.length;
     } catch {
-      // Non-blocking
+      return 0;
     }
+  }
 
-    // 2. Pull Tickets
+  private async pullTicketsLegacy(): Promise<number> {
     try {
       const ticketsRes = await api.get<{ data: { content?: any[]; tickets?: any[] } }>(
         "/api/v2/tickets?page=0&size=100&sortBy=ticketNumber&direction=ASC"
       );
       const ticketList = ticketsRes.data?.data?.content || ticketsRes.data?.data?.tickets || [];
-      if (ticketList.length > 0) {
-        const dbTickets: DbTicket[] = ticketList.map((tk: any) => ({
-          id: tk.id,
-          ticket_number: tk.ticketNumber ?? tk.number ?? tk.id,
-          question_count: tk.questionCount ?? 20,
-          updated_at: Date.now(),
-        }));
-        await ticketRepository.saveTickets(dbTickets);
-        count += dbTickets.length;
-      }
+      if (ticketList.length === 0) return 0;
+      const dbTickets: DbTicket[] = ticketList.map((tk: any) => ({
+        id: tk.id,
+        ticket_number: tk.ticketNumber ?? tk.number ?? tk.id,
+        question_count: tk.questionCount ?? 20,
+        updated_at: Date.now(),
+      }));
+      await ticketRepository.saveTickets(dbTickets);
+      return dbTickets.length;
     } catch {
-      // Non-blocking
+      return 0;
     }
+  }
 
-    // 3. Pull Questions in background streaming batches
+  /** 404 bundle fallback: ticket chunks, only while the local DB is (almost) empty. */
+  private async pullQuestionsLegacy(): Promise<number> {
+    let count = 0;
     try {
-      // Check if questions are already present or if we need to sync them
       const localQCount = await questionRepository.getQuestionCount();
-      if (localQCount < 100) {
-        // Attempt downloading marathon question set (which encompasses all topics and tickets)
+      if (localQCount >= 100) return 0;
+      const tickets = await ticketRepository.getAllTickets();
+      for (const tk of tickets.slice(0, 10)) {
         try {
-          const res = await api.post<{ data: { questions: any[] } }>("/api/v2/exams/marathon/start-visible", {
-            questionCount: 1200,
-            durationMinutes: 1200,
+          const tkRes = await api.post<{ data: { questions: any[] } }>("/api/v2/tickets/start-visible", {
+            ticketId: tk.id,
           });
-          const questions = res.data?.data?.questions;
-          if (Array.isArray(questions) && questions.length > 0) {
-            const dbQuestions = questions.map((q: any) => normalizeServerQuestion(q));
-            await dbClient.bulkInsertQuestions(dbQuestions);
-            count += dbQuestions.length;
+          const qList = tkRes.data?.data?.questions;
+          if (Array.isArray(qList) && qList.length > 0) {
+            const dbQ = qList.map((q: any) => normalizeServerQuestion(q, tk.id));
+            await dbClient.bulkInsertQuestions(dbQ);
+            count += dbQ.length;
           }
         } catch {
-          // If bulk marathon call fails, try fetching first 5-10 tickets in small chunks
-          const tickets = await ticketRepository.getAllTickets();
-          for (const tk of tickets.slice(0, 10)) {
-            try {
-              const tkRes = await api.post<{ data: { questions: any[] } }>("/api/v2/tickets/start-visible", {
-                ticketId: tk.id,
-              });
-              const qList = tkRes.data?.data?.questions;
-              if (Array.isArray(qList) && qList.length > 0) {
-                const dbQ = qList.map((q: any) => normalizeServerQuestion(q, tk.id));
-                await dbClient.bulkInsertQuestions(dbQ);
-                count += dbQ.length;
-              }
-            } catch {
-              // Non-blocking
-            }
-          }
+          // Non-blocking
         }
       }
     } catch {
-      // Non-blocking
+      // ignore
     }
-
-    // 4. Pull Saved Questions (Bookmarks) & Resolve Tombstones
-    try {
-      const savedRes = await api.get<{ data: any[] }>("/api/v1/app/saved-questions");
-      const serverBookmarks = (savedRes.data?.data || []).map((b: any) => ({
-        questionId: b.questionId ?? b.id,
-        savedAt: b.savedAt ? new Date(b.savedAt).getTime() : Date.now(),
-      }));
-
-      const localActiveIds = await dbClient.getActiveSavedQuestions();
-      const localSavedList = localActiveIds.map((id) => ({
-        question_id: id,
-        saved_at: Date.now(),
-        is_deleted: 0,
-        synced: 1,
-      }));
-
-      const resolved = ConflictResolver.resolveBookmarks(localSavedList, serverBookmarks);
-      for (const activeId of resolved.finalLocalActiveIds) {
-        await dbClient.setQuestionSaved(activeId, true);
-      }
-    } catch {
-      // Non-blocking
-    }
-
     return count;
+  }
+
+  /**
+   * Download the offline bundle with a conditional request.
+   * Returns the number of changed rows (0 when unchanged / 304) and whether the bundle
+   * carried topics/tickets, or "UNSUPPORTED" when the backend has no endpoint (404).
+   */
+  private async pullOfflineBundle(): Promise<
+    { changed: number; hasTopics: boolean; hasTickets: boolean } | "UNSUPPORTED"
+  > {
+    const storedVersion = await dbClient.getSyncMeta(OFFLINE_BUNDLE_VERSION_KEY);
+    const storedEtag = await dbClient.getSyncMeta(OFFLINE_BUNDLE_ETAG_KEY);
+    const storedSchema = await dbClient.getSyncMeta(OFFLINE_BUNDLE_SCHEMA_KEY);
+    // Until the v2 shape (topics/tickets) was stored once, download unconditionally.
+    const conditional = storedSchema === OFFLINE_BUNDLE_SCHEMA;
+    const ifNoneMatch = conditional ? storedEtag || (storedVersion ? `"${storedVersion}"` : null) : null;
+
+    const res = await api.get<{ data?: any }>(OFFLINE_BUNDLE_URL, {
+      headers: ifNoneMatch ? { "If-None-Match": ifNoneMatch } : undefined,
+      // 304 / 404 are expected outcomes here, not errors
+      validateStatus: (st) => (st >= 200 && st < 300) || st === 304 || st === 404,
+    });
+
+    if (res.status === 404) return "UNSUPPORTED";
+    if (res.status === 304) return { changed: 0, hasTopics: true, hasTickets: true };
+
+    const mapped = mapOfflineBundle(res.data?.data);
+    const hasTopics = mapped.topics !== null;
+    const hasTickets = mapped.tickets !== null;
+    if (conditional && mapped.version && storedVersion && mapped.version === storedVersion) {
+      return { changed: 0, hasTopics: true, hasTickets: true };
+    }
+    if (mapped.questions.length === 0 && !mapped.topics?.length && !mapped.tickets?.length) {
+      return { changed: 0, hasTopics, hasTickets };
+    }
+
+    let changed = 0;
+    if (mapped.questions.length > 0) changed += await dbClient.bulkInsertQuestions(mapped.questions);
+    if (mapped.topics && mapped.topics.length > 0) {
+      await topicRepository.replaceTopics(mapped.topics);
+      changed += mapped.topics.length;
+    }
+    if (mapped.tickets && mapped.tickets.length > 0) {
+      await ticketRepository.replaceTickets(mapped.tickets);
+      changed += mapped.tickets.length;
+    }
+
+    // Persist version/ETag only after everything was stored successfully.
+    if (mapped.version) await dbClient.setSyncMeta(OFFLINE_BUNDLE_VERSION_KEY, mapped.version);
+    const etag = (res.headers?.["etag"] as string | undefined) ?? null;
+    if (etag) await dbClient.setSyncMeta(OFFLINE_BUNDLE_ETAG_KEY, etag);
+    if (hasTopics && hasTickets) await dbClient.setSyncMeta(OFFLINE_BUNDLE_SCHEMA_KEY, OFFLINE_BUNDLE_SCHEMA);
+
+    return { changed, hasTopics, hasTickets };
   }
 
   /**
@@ -584,9 +835,18 @@ export class SyncEngine {
   }
 
   public destroy(): void {
-    if (this.syncIntervalTimer) {
-      clearInterval(this.syncIntervalTimer);
+    if (this.fullSyncTimer) clearInterval(this.fullSyncTimer);
+    if (this.flushTimer) clearInterval(this.flushTimer);
+    this.fullSyncTimer = null;
+    this.flushTimer = null;
+    for (const fn of this.cleanups.splice(0)) {
+      try {
+        fn();
+      } catch {
+        // ignore
+      }
     }
+    this.startPromise = null;
   }
 }
 

@@ -65,10 +65,10 @@ const User_Nav = ({ toggle }: AppShellNavbarProps) => {
           name: t("nav.topics"),
           url: "/topics",
         },
-        // {
-        //   name: t("nav.packages"),
-        //   url: "/packages",
-        // },
+        {
+          name: t("nav.packages"),
+          url: "/packages",
+        },
         {
           name: t("nav.ticket"),
           url: "/tickets",

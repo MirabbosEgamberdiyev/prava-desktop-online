@@ -9,12 +9,15 @@ import React, {
   type ReactNode,
 } from "react";
 import Cookies from "js-cookie";
+import { authCookieOptions } from "./tokenCookies";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { User, AuthData } from "../types";
 import api from "../api/api";
 import { showToast } from "../utils/notificationUtils";
-import { AccountManager } from "./accountManager";
+import { AccountManager, readRememberMePreference } from "./accountManager";
+import { dbClient } from "../database/dbClient";
+import { clearLocalUserData, flushOutboxBeforeLogout, runLocalStorageMigrations } from "./localDataCleanup";
 
 const ACCESS_TOKEN_KEY = "accessToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
@@ -36,7 +39,8 @@ export interface AuthContextType {
   user: User | null;
   login: (authData: AuthData) => void;
   register: (authData: AuthData) => void;
-  logout: () => Promise<void>;
+  /** Explicit logout. Flushes the outbox (≤5 s), then clears this user's local data. */
+  logout: (opts?: { redirectTo?: string }) => Promise<void>;
   transitionTo: (nextState: AuthState) => void;
 }
 
@@ -109,6 +113,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     authStateRef.current = authState;
   }, [authState]);
+
+  // One-time, idempotent local-storage migrations (strip tokens/PII from saved accounts, ...).
+  useEffect(() => {
+    runLocalStorageMigrations();
+  }, []);
+
+  // Per-user IndexedDB scope: drop guest outbox rows + one-time claim of pre-v3 rows.
+  const scopedUserId = isAuthenticated ? user?.id ?? null : null;
+  useEffect(() => {
+    if (scopedUserId === null || scopedUserId === undefined) return;
+    dbClient.prepareForUser(scopedUserId).catch(() => {});
+  }, [scopedUserId]);
 
   const isAuthenticatedRef = useRef(isAuthenticated);
   useEffect(() => {
@@ -226,33 +242,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
     // expiresIn millisekundda kelsa kun hisobiga o'tkazamiz, kelmasa 1 kun
     const expiryDays = expiresIn ? expiresIn / (1000 * 60 * 60 * 24) : 1;
-    const isSecure = window.location.protocol === "https:";
-
-    const tokenCookieOpts: Cookies.CookieAttributes = {
-      secure: isSecure,
-      sameSite: isSecure ? "strict" : "lax",
-    };
-    if (rememberMe !== false) {
-      tokenCookieOpts.expires = expiryDays;
-    }
+    // Explicit cookie attributes; tokens are not HttpOnly on http://tauri.localhost —
+    // see src/auth/tokenCookies.ts (audit P2-D1). rememberMe=false → session cookies.
+    const tokenCookieOpts = authCookieOptions("access", rememberMe !== false ? expiryDays : null);
 
     Cookies.set(ACCESS_TOKEN_KEY, accessToken, tokenCookieOpts);
 
     if (refreshToken) {
-      const refreshOpts: Cookies.CookieAttributes = {
-        secure: isSecure,
-        sameSite: isSecure ? "strict" : "lax",
-      };
-      if (rememberMe !== false) {
-        refreshOpts.expires = 30; // Refresh token uchun 30 kun
-      }
+      // Refresh token: 30 kun, sameSite strict
+      const refreshOpts = authCookieOptions("refresh", rememberMe !== false ? undefined : null);
       Cookies.set(REFRESH_TOKEN_KEY, refreshToken, refreshOpts);
     }
 
     Cookies.set(USER_DATA_KEY, JSON.stringify(userData), tokenCookieOpts);
 
     try {
-      AccountManager.saveAccount(userData, accessToken, refreshToken);
+      // "Accounts on this device": display name + masked identifier only, and only with remember-me.
+      const remember = rememberMe ?? readRememberMePreference();
+      if (remember) AccountManager.saveAccount(userData);
+      else if (userData?.id) AccountManager.removeAccount(userData.id);
       localStorage.setItem("auth_sync_event", `login_${Date.now()}`);
     } catch {
       // ignore
@@ -369,10 +377,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     transitionTo("AUTHENTICATED");
   };
 
-  const logout = async () => {
+  const logout = async (opts?: { redirectTo?: string }) => {
     if (authStateRef.current === "LOGGING_OUT") return;
     transitionTo("LOGGING_OUT");
+    const loggingOutUserId = user?.id ?? getInitialUser()?.id ?? null;
     try {
+      // Push what is still queued while the tokens are valid (best-effort, ≤5 s).
+      await flushOutboxBeforeLogout();
       const refreshToken = Cookies.get(REFRESH_TOKEN_KEY);
       if (refreshToken) {
         await api.post("/api/v1/auth/logout", { refreshToken });
@@ -383,6 +394,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       Cookies.remove(ACCESS_TOKEN_KEY);
       Cookies.remove(REFRESH_TOKEN_KEY);
       Cookies.remove(USER_DATA_KEY);
+      await clearLocalUserData(loggingOutUserId);
       try {
         localStorage.setItem("auth_sync_event", `logout_${Date.now()}`);
       } catch {
@@ -390,7 +402,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       }
       setUser(null);
       transitionTo("UNAUTHENTICATED");
-      navigate("/", { replace: true });
+      navigate(opts?.redirectTo ?? "/", { replace: true });
     }
   };
 

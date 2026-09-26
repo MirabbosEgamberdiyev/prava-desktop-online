@@ -77,13 +77,8 @@ const Login_Page = () => {
 
   const form = useForm({
     initialValues: {
-      identifier: (() => {
-        try {
-          return localStorage.getItem("prava_saved_identifier") || "";
-        } catch {
-          return "";
-        }
-      })(),
+      // The full phone/email is never persisted (shared PCs) — see src/auth/accountManager.ts.
+      identifier: "",
       password: "",
     },
     validate: {
@@ -123,20 +118,10 @@ const Login_Page = () => {
           i18n.changeLanguage(userLang);
         }
 
-        if (rememberMe) {
-          try {
-            localStorage.setItem("prava_remember_me", "true");
-            localStorage.setItem("prava_saved_identifier", cleanIdentifier);
-          } catch {
-            // ignore
-          }
-        } else {
-          try {
-            localStorage.setItem("prava_remember_me", "false");
-            localStorage.removeItem("prava_saved_identifier");
-          } catch {
-            // ignore
-          }
+        try {
+          localStorage.setItem("prava_remember_me", rememberMe ? "true" : "false");
+        } catch {
+          // ignore
         }
 
         login({ ...response.data.data, rememberMe });

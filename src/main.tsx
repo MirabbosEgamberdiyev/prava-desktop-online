@@ -3,6 +3,11 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App.tsx";
 import { MantineProvider } from "@mantine/core";
+// Montserrat bundled locally (offline-first; no Google Fonts CDN) — weights from design tokens
+import "@fontsource/montserrat/400.css";
+import "@fontsource/montserrat/500.css";
+import "@fontsource/montserrat/600.css";
+import "@fontsource/montserrat/700.css";
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "@mantine/nprogress/styles.css";

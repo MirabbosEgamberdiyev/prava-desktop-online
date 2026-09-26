@@ -1,3 +1,5 @@
+import { resolveUserScopeId } from "@/utils/userScope";
+import { getExamRules, durationSecondsFor, isExamPassed } from "@/services/examRules";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
@@ -17,18 +19,22 @@ import {
   localizeTopic,
   parseOptions,
   getActiveMarathonSessionId,
-  submitExamSession,
+  reportExamResult,
 } from "../../services/desktopAdapter";
+import { isFakeLocalSessionId } from "../../services/offlineExamRecord";
 import ColorMode from "../../components/other/ColorMode";
 import LanguagePicker from "../../components/language/LanguagePicker";
 import ImageZoomModal, { ZoomableImage } from "../../components/common/ImageZoomModal";
+import ExamTimerDisplay, { remainingSecondsUntil } from "../../components/quiz/ExamTimerDisplay";
+import ShortcutHint from "../../components/quiz/ShortcutHint";
+import { useExamShortcuts } from "../../hooks/useExamShortcuts";
 import { offlineMediaManager } from "../../services/offlineMediaManager";
 import { getImageUrl } from "../../utils/imageUtils";
 import GamificationResult from "../../components/quiz/GamificationResult";
 import QuizReviewModal from "../../components/quiz/QuizReviewModal";
 import TestSetupCard from "../../components/quiz/TestSetupCard";
 import { dbClient } from "../../database";
-import { generateUUID } from "../../sync";
+import { generateUUID } from "../../sync/outboxQueue";
 import { showToast } from "../../utils/notificationUtils";
 import SEO from "../../components/common/SEO";
 import {
@@ -60,11 +66,13 @@ export default function Marafon_Page() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const userId = user?.id ? Number(user.id) : 1;
+  const userId = resolveUserScopeId(user);
 
   const location = useLocation();
   const rawTopicId = searchParams.get("topicId") || (location.state as any)?.topicId;
   const initialTopicId = rawTopicId ? Number(rawTopicId) : null;
+  // Rules (marathon = TIMED, secondsPerQuestion each) — fixed for this page's lifetime
+  const [rules] = useState(getExamRules);
 
   // Setup state
   const [topics, setTopics] = useState<OfflineTopic[]>([]);
@@ -76,6 +84,9 @@ export default function Marafon_Page() {
   const [questions, setQuestions] = useState<OfflineQuestion[]>([]);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, Answer>>({});
+  /** Absolute deadline (epoch ms): count × marathon.secondsPerQuestion, persisted for crash recovery. */
+  const [deadline, setDeadline] = useState<number>(0);
+  const [isTimeUp, setIsTimeUp] = useState(false);
   const [showExp, setShowExp] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
@@ -88,6 +99,15 @@ export default function Marafon_Page() {
   const answersRef = useRef(answers);
   const activeQnumRef = useRef<HTMLButtonElement | null>(null);
   answersRef.current = answers;
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+  const deadlineRef = useRef(deadline);
+  deadlineRef.current = deadline;
+  const startTimeRef = useRef<number>(Date.now());
+  const serverSessionIdRef = useRef<number | null>(null);
+  const finishedRef = useRef(false);
+  const selTopicRef = useRef(selTopic);
+  selTopicRef.current = selTopic;
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -134,7 +154,105 @@ export default function Marafon_Page() {
     });
   }, [current]);
 
+  // Predictive image prefetching (before any early return — rules of hooks)
+  useEffect(() => {
+    if (!questions || questions.length === 0) return;
+    const nextQs = questions.slice(current + 1, current + 4);
+    const prevQs = questions.slice(Math.max(0, current - 2), current);
+    [...nextQs, ...prevQs].forEach((item) => {
+      if (item.image_path) {
+        const url = getImageUrl(item.image_path);
+        if (url) {
+          const img = new Image();
+          img.src = url;
+        }
+        offlineMediaManager.cacheImage(item.image_path).catch(() => {});
+      }
+    });
+  }, [current, questions]);
+
   const localSessionIdRef = useRef<string>(generateUUID());
+
+  const triggerFinish = useCallback(
+    (timeUp = false) => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      if (autoRef.current) {
+        clearTimeout(autoRef.current);
+        autoRef.current = null;
+      }
+      const curAnswers = answersRef.current;
+      const qs = questionsRef.current;
+      const now = Date.now();
+      const endAt = deadlineRef.current > 0 ? Math.min(now, deadlineRef.current) : now;
+      const duration = Math.max(0, Math.floor((endAt - startTimeRef.current) / 1000));
+      const correct = Object.values(curAnswers).filter((a) => a.selected === a.correct).length;
+      const total = qs.length;
+      const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+      setIsTimeUp(timeUp);
+      setConfirmFinishOpen(false);
+      setPhase("result");
+
+      // Mark session completed in local database
+      dbClient
+        .completeExamSession(localSessionIdRef.current, {
+          status: "COMPLETED",
+          correct_answers: correct,
+          score,
+          duration_seconds: duration,
+          completed_at: now,
+        })
+        .catch(() => {});
+
+      saveExamResult({
+        userId,
+        score,
+        totalQuestions: total,
+        correctAnswers: correct,
+        durationSeconds: duration,
+        examType: "marathon",
+      }).catch(() => {});
+
+      reportExamResult({
+        serverSessionId: serverSessionIdRef.current,
+        localSessionId: localSessionIdRef.current,
+        examType: "marathon",
+        targetId: null,
+        questions: qs,
+        answers: curAnswers,
+        durationSeconds: duration,
+        completedAt: now,
+      }).catch(() => {});
+    },
+    [userId]
+  );
+
+  const persistProgress = (newAns: Record<number, Answer>, idx: number) => {
+    const qs = questionsRef.current;
+    const correctSoFar = Object.values(newAns).filter((a) => a.selected === a.correct).length;
+    const scoreSoFar = qs.length > 0 ? Math.round((correctSoFar / qs.length) * 100) : 0;
+    dbClient
+      .saveExamSession({
+        local_id: localSessionIdRef.current,
+        server_id: serverSessionIdRef.current,
+        exam_type: "MARATHON",
+        target_id: selTopicRef.current,
+        status: "IN_PROGRESS",
+        total_questions: qs.length,
+        correct_answers: correctSoFar,
+        score: scoreSoFar,
+        duration_seconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
+        time_remaining_seconds: remainingSecondsUntil(deadlineRef.current),
+        deadline_at: deadlineRef.current,
+        started_at: startTimeRef.current,
+        completed_at: null,
+        answers_json: JSON.stringify(newAns),
+        questions_json: JSON.stringify(qs),
+        current_index: idx,
+        synced: 0,
+      })
+      .catch(() => {});
+  };
 
   const startExam = useCallback(
     async (forceFresh = false) => {
@@ -143,25 +261,38 @@ export default function Marafon_Page() {
       answersRef.current = {};
       setCurrent(0);
       setErrorMsg(null);
+      setIsTimeUp(false);
+      finishedRef.current = false;
 
-      // Crash recovery: check for existing active marathon session
+      // Crash recovery: resume an unfinished marathon with its ORIGINAL absolute deadline
       if (!forceFresh) {
         try {
           const active = await dbClient.getActiveExamSession("MARATHON");
-          if (
-            active &&
-            active.questions_json &&
-            Date.now() - active.started_at < 24 * 60 * 60 * 1000
-          ) {
+          if (active && active.questions_json && Date.now() - active.started_at < 24 * 60 * 60 * 1000) {
             const restoredQs: OfflineQuestion[] = JSON.parse(active.questions_json);
             const restoredAns: Record<number, Answer> = JSON.parse(active.answers_json || "{}");
 
             if (restoredQs.length > 0) {
+              const restoredDeadline =
+                active.deadline_at ??
+                active.started_at + durationSecondsFor("marathon", restoredQs.length, rules) * 1000;
               localSessionIdRef.current = active.local_id;
+              serverSessionIdRef.current =
+                active.server_id != null && !isFakeLocalSessionId(active.server_id) ? active.server_id : null;
               setQuestions(restoredQs);
+              questionsRef.current = restoredQs;
               setAnswers(restoredAns);
               answersRef.current = restoredAns;
               setCurrent(active.current_index || 0);
+              startTimeRef.current = active.started_at;
+              setDeadline(restoredDeadline);
+              deadlineRef.current = restoredDeadline;
+
+              if (restoredDeadline <= Date.now()) {
+                // Expired while the app was closed → auto-submit what was answered.
+                triggerFinish(true);
+                return;
+              }
               setPhase("exam");
 
               showToast({
@@ -186,8 +317,8 @@ export default function Marafon_Page() {
       try {
         const maxQ =
           selTopic != null
-            ? topics.find((t) => t.id === selTopic)?.question_count ?? 0
-            : topics.reduce((s, t) => s + (t.question_count || 0), 0);
+            ? topics.find((tp) => tp.id === selTopic)?.question_count ?? 0
+            : topics.reduce((s, tp) => s + (tp.question_count || 0), 0);
 
         const chosenOption = COUNT_OPTIONS[countIdx];
         const limit =
@@ -202,22 +333,36 @@ export default function Marafon_Page() {
           return;
         }
 
+        // A deliberately fresh start supersedes an unfinished marathon.
+        const stale = await dbClient.getActiveExamSession("MARATHON").catch(() => null);
+        if (stale) await dbClient.abandonExamSession(stale.local_id).catch(() => {});
+
         const newId = generateUUID();
+        const startedAt = Date.now();
+        const seconds = durationSecondsFor("marathon", qs.length, rules);
+        const newDeadline = startedAt + seconds * 1000;
         localSessionIdRef.current = newId;
+        serverSessionIdRef.current = getActiveMarathonSessionId();
         setQuestions(qs);
+        questionsRef.current = qs;
+        startTimeRef.current = startedAt;
+        setDeadline(newDeadline);
+        deadlineRef.current = newDeadline;
         setPhase("exam");
 
         await dbClient.saveExamSession({
           local_id: newId,
-          server_id: getActiveMarathonSessionId(),
+          server_id: serverSessionIdRef.current,
           exam_type: "MARATHON",
+          target_id: selTopic,
           status: "IN_PROGRESS",
           total_questions: qs.length,
           correct_answers: 0,
           score: 0,
           duration_seconds: 0,
-          time_remaining_seconds: 0,
-          started_at: Date.now(),
+          time_remaining_seconds: seconds,
+          deadline_at: newDeadline,
+          started_at: startedAt,
           completed_at: null,
           answers_json: "{}",
           questions_json: JSON.stringify(qs),
@@ -229,70 +374,28 @@ export default function Marafon_Page() {
         setPhase("result");
       }
     },
-    [selTopic, countIdx, topics, t]
+    [selTopic, countIdx, topics, rules, t, triggerFinish]
   );
 
-  const triggerFinish = useCallback(() => {
-    if (autoRef.current) {
-      clearTimeout(autoRef.current);
-      autoRef.current = null;
-    }
-    const curAnswers = answersRef.current;
-    const correct = Object.values(curAnswers).filter((a) => a.selected === a.correct).length;
-    const total = questions.length;
-    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-    setPhase("result");
-
-    // Mark session completed in local database
+  // Resume an interrupted marathon automatically on page open (crash recovery).
+  useEffect(() => {
+    let alive = true;
     dbClient
-      .completeExamSession(localSessionIdRef.current, {
-        status: "COMPLETED",
-        correct_answers: correct,
-        score,
-        duration_seconds: 0,
-        completed_at: Date.now(),
+      .getActiveExamSession("MARATHON")
+      .then((active) => {
+        if (alive && active && active.questions_json && Date.now() - active.started_at < 24 * 60 * 60 * 1000) {
+          startExam(false);
+        }
       })
       .catch(() => {});
-
-    saveExamResult({
-      userId,
-      score,
-      totalQuestions: total,
-      correctAnswers: correct,
-      durationSeconds: 0,
-      examType: "marathon",
-    }).catch(() => {});
-
-    const activeId = getActiveMarathonSessionId();
-    if (activeId && questions.length > 0) {
-      const submitList = questions.map((q, idx) => ({
-        questionId: q.id,
-        selectedOptionIndex: curAnswers[idx]?.selected ?? null,
-      }));
-      submitExamSession(activeId, submitList).catch(() => {});
-    }
-  }, [questions, userId]);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleSelect = (optIdx: number) => {
-    if (answers[current] !== undefined) return;
-    // Predictive Image Prefetching for 0ms transitions
-  useEffect(() => {
-    if (!questions || questions.length === 0) return;
-    const nextQs = questions.slice(current + 1, current + 4);
-    const prevQs = questions.slice(Math.max(0, current - 2), current);
-    [...nextQs, ...prevQs].forEach((item) => {
-      if (item.image_path) {
-        const url = getImageUrl(item.image_path);
-        if (url) {
-          const img = new Image();
-          img.src = url;
-        }
-        offlineMediaManager.cacheImage(item.image_path).catch(() => {});
-      }
-    });
-  }, [current, questions]);
-
-  const q = questions[current];
+    if (phase !== "exam" || answers[current] !== undefined) return;
+    const q = questions[current];
     if (!q) return;
     const opts = parseOptions(q.options_json);
     if (optIdx >= opts.length) return;
@@ -312,29 +415,8 @@ export default function Marafon_Page() {
     setAnswers(newAns);
     answersRef.current = newAns;
 
-    const correctSoFar = Object.values(newAns).filter((a) => a.selected === a.correct).length;
-    const scoreSoFar = Math.round((correctSoFar / questions.length) * 100);
-
-    // Persist real-time marathon progress to local database
-    dbClient
-      .saveExamSession({
-        local_id: localSessionIdRef.current,
-        server_id: getActiveMarathonSessionId(),
-        exam_type: "MARATHON",
-        status: "IN_PROGRESS",
-        total_questions: questions.length,
-        correct_answers: correctSoFar,
-        score: scoreSoFar,
-        duration_seconds: 0,
-        time_remaining_seconds: 0,
-        started_at: Date.now(),
-        completed_at: null,
-        answers_json: JSON.stringify(newAns),
-        questions_json: JSON.stringify(questions),
-        current_index: current,
-        synced: 0,
-      })
-      .catch(() => {});
+    // Persist real-time marathon progress (keeps the ORIGINAL started_at / deadline)
+    persistProgress(newAns, current);
 
     if (current < questions.length - 1) {
       autoRef.current = setTimeout(() => setCurrent((c) => c + 1), 800);
@@ -373,66 +455,37 @@ export default function Marafon_Page() {
     if (answeredCount < questions.length) {
       setConfirmFinishOpen(true);
     } else {
-      triggerFinish();
+      triggerFinish(false);
     }
   }, [answers, questions.length, triggerFinish]);
 
-  // Full Desktop Keyboard Navigation (1-5, F1-F5, Arrows, Space, Enter, Esc)
-  useEffect(() => {
-    if (phase !== "exam") return;
-    const handleKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (zoomSrc) {
-          setZoomSrc(null);
-        } else if (confirmFinishOpen) {
-          setConfirmFinishOpen(false);
-        }
-        return;
+  // Unified desktop keyboard shortcuts (1–5 / A–E, ←/→, Enter, Esc, Shift+B)
+  useExamShortcuts(phase === "exam", {
+    onSelect: (idx) => {
+      if (!confirmFinishOpen && !zoomSrc) handleSelect(idx);
+    },
+    onPrev: () => setCurrent((c) => Math.max(0, c - 1)),
+    onNext: () => setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1)),
+    onSpace: () => {
+      if (answers[current] !== undefined) setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
+    },
+    onConfirm: () => {
+      if (confirmFinishOpen) {
+        setConfirmFinishOpen(false);
+        triggerFinish(false);
+      } else {
+        handleFinishClick();
       }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (confirmFinishOpen) {
-          setConfirmFinishOpen(false);
-          triggerFinish();
-        } else {
-          handleFinishClick();
-        }
-        return;
-      }
-
-      if (e.key === " " || e.code === "Space") {
-        e.preventDefault();
-        if (answers[current] !== undefined) {
-          setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
-        }
-        return;
-      }
-
-      const map: Record<string, number> = {
-        F1: 0, F2: 1, F3: 2, F4: 3, F5: 4,
-        "1": 0, "2": 1, "3": 2, "4": 3, "5": 4,
-      };
-      if (e.key in map) {
-        e.preventDefault();
-        handleSelect(map[e.key]);
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        setCurrent((c) => Math.max(0, c - 1));
-      }
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [phase, answers, current, questions.length, zoomSrc, confirmFinishOpen, triggerFinish]);
+    },
+    onEscape: () => {
+      if (zoomSrc) setZoomSrc(null);
+      else if (confirmFinishOpen) setConfirmFinishOpen(false);
+    },
+    onBookmark: () => {
+      const q = questions[current];
+      if (q) handleToggleSave(q);
+    },
+  });
 
   // ─── SETUP ───
   if (phase === "setup") {
@@ -474,7 +527,7 @@ export default function Marafon_Page() {
               countOptions={COUNT_OPTIONS}
               selectedCountIdx={countIdx}
               onSelectCountIdx={(idx) => setCountIdx(idx)}
-              onStart={startExam}
+              onStart={() => startExam(true)}
               onBack={onBack}
               localizeTopic={localizeTopic}
             />
@@ -608,6 +661,8 @@ export default function Marafon_Page() {
               unanswered={unanswered}
               totalQuestions={total}
               errorMsg={errorMsg}
+              isTimeUp={isTimeUp}
+              passed={isExamPassed({ mode: "marathon", total, correct, wrong, unanswered }, rules)}
               onReviewMistakes={() => setReviewOpen(true)}
               onRetry={() => {
                 setPhase("setup");
@@ -654,6 +709,7 @@ export default function Marafon_Page() {
             >
               {t("activeTest.finishTest", "Yakunlash")} <IconX size={15} />
             </button>
+            {deadline > 0 && <ExamTimerDisplay deadline={deadline} onTimeUp={() => triggerFinish(true)} />}
           </div>
 
           <div className="exam-topbar-center">
@@ -713,7 +769,7 @@ export default function Marafon_Page() {
                   disabled={!!answered}
                   type="button"
                 >
-                  <span className="exam-option-key">F{idx + 1}</span>
+                  <span className="exam-option-key" title={`${idx + 1} / ${String.fromCharCode(65 + idx)}`}>{idx + 1}</span>
                   <span className="exam-option-text">{localizeOpt(opt)}</span>
                   {answered && idx === q.correct_option && (
                     <IconCheck size={15} className="opt-icon correct" />
@@ -850,7 +906,7 @@ export default function Marafon_Page() {
                   if (answeredCount < questions.length) {
                     setConfirmFinishOpen(true);
                   } else {
-                    triggerFinish();
+                    triggerFinish(false);
                   }
                 }}
                 type="button"
@@ -867,6 +923,7 @@ export default function Marafon_Page() {
               </button>
             )}
           </div>
+          <ShortcutHint />
         </div>
 
         {/* Confirmation Modal before early finish */}
@@ -942,7 +999,7 @@ export default function Marafon_Page() {
                   type="button"
                   onClick={() => {
                     setConfirmFinishOpen(false);
-                    triggerFinish();
+                    triggerFinish(false);
                   }}
                   style={{
                     flex: 1,

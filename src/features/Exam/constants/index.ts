@@ -1,6 +1,7 @@
 // Exam sahifasi uchun default qiymatlar
 export const EXAM_DEFAULTS = {
   QUESTION_COUNT: 20,
+  /** @deprecated use durationMinutesFor() from services/examRules (60 s per question) */
   DURATION_MINUTES: 20,
 } as const;
 

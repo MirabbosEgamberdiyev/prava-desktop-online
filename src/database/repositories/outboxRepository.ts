@@ -17,20 +17,7 @@ function generateUUID(): string {
   });
 }
 
-import Cookies from "js-cookie";
-
-function getCurrentUserId(): string | number | null {
-  try {
-    const raw = Cookies.get("userData");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.id) return parsed.id;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
+import { getActiveUserId as getCurrentUserId } from "../../utils/userScope";
 
 export const outboxRepository = {
   /**
@@ -110,7 +97,7 @@ export const outboxRepository = {
    * Reset all stuck IN_FLIGHT items back to PENDING (Crash Recovery)
    */
   async recoverStuckItems(): Promise<number> {
-    const pending = await dbClient.getPendingOutbox();
+    const pending = await dbClient.getAllOutbox();
     let recovered = 0;
     for (const item of pending) {
       if (item.status === "IN_FLIGHT") {

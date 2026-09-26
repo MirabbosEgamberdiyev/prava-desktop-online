@@ -1,3 +1,4 @@
+import { resolveUserScopeId } from "@/utils/userScope";
 import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -164,7 +165,7 @@ export default function Statistics_Page() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const userId = user?.id ? Number(user.id) : 1;
+  const userId = resolveUserScopeId(user);
 
   const [tab, setTab] = useState<Tab>("tickets");
   const [stats, setStats] = useState<FullStats | null>(null);

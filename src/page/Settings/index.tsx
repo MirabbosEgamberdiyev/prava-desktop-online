@@ -31,9 +31,10 @@ import {
   IconWifiOff,
   IconCloudUpload,
   IconInfoCircle,
+  IconTypography,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import useSWR, { mutate } from "swr";
 import { useAuth } from "../../auth/AuthContext";
 import { AccountManager, type StoredAccount } from "../../auth/accountManager";
@@ -45,6 +46,7 @@ import { showToast } from "../../utils/notificationUtils";
 import { ProfileInfoCard } from "../../features/me/components/ProfileInfoCard";
 import { ChangePasswordForm } from "../../features/me/components/ChangePasswordForm";
 import SEO from "../../components/common/SEO";
+import { SimpleTypographyControl } from "../../components/common/SimpleTypographyControl";
 
 interface DeviceInfo {
   activeDevices?: number;
@@ -61,7 +63,9 @@ interface DeviceInfo {
 const Settings_Page = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "profile";
 
   const { data: deviceResponse, isLoading: devicesLoading } = useSWR<{
     data: DeviceInfo;
@@ -171,8 +175,9 @@ const Settings_Page = () => {
     }
   };
 
-  const handleSwitchAccount = (accountId: string | number) => {
-    AccountManager.switchAccount(accountId);
+  // Switching never reuses stored credentials: log out, then a normal login.
+  const handleSwitchAccount = () => {
+    logout({ redirectTo: "/auth/login" }).catch(() => {});
   };
 
   const handleRemoveAccount = (accountId: string | number) => {
@@ -214,7 +219,7 @@ const Settings_Page = () => {
         </header>
         <main style={{ flex: 1, overflowY: "auto", padding: "0 16px 32px" }}>
           <Container size="md" pt="xs">
-            <Tabs defaultValue="profile">
+            <Tabs defaultValue={initialTab}>
               <div
                 style={{
                   position: "sticky",
@@ -236,6 +241,9 @@ const Settings_Page = () => {
                   </Tabs.Tab>
                   <Tabs.Tab value="devices" leftSection={<IconDevices size={16} />}>
                     {t("settings.devices", "Qurilmalar")}
+                  </Tabs.Tab>
+                  <Tabs.Tab value="appearance" leftSection={<IconTypography size={16} />}>
+                    {t("settings.appearance", "Ko'rinish")}
                   </Tabs.Tab>
                   <Tabs.Tab value="desktop" leftSection={<IconDeviceDesktop size={16} />}>
                     Desktop & Boshqaruv
@@ -336,6 +344,12 @@ const Settings_Page = () => {
                 </Stack>
               </Tabs.Panel>
 
+              <Tabs.Panel value="appearance">
+                <Stack gap="lg">
+                  <SimpleTypographyControl />
+                </Stack>
+              </Tabs.Panel>
+
               {/* ── DESKTOP TAB ── */}
               <Tabs.Panel value="desktop">
                 <Stack gap="lg">
@@ -388,6 +402,24 @@ const Settings_Page = () => {
                         <Group justify="space-between">
                           <Text size="sm">Modal / Rasmni yopish:</Text>
                           <Kbd>Esc</Kbd>
+                        </Group>
+                      </Paper>
+
+                      <Paper p="sm" withBorder radius="sm">
+                        <Group justify="space-between">
+                          <Text size="sm">{t("search.shortcutLabel", "Global qidiruv")}:</Text>
+                          <Group gap={4}>
+                            <Kbd>Ctrl</Kbd>+<Kbd>K</Kbd>
+                          </Group>
+                        </Group>
+                      </Paper>
+
+                      <Paper p="sm" withBorder radius="sm">
+                        <Group justify="space-between">
+                          <Text size="sm">{t("search.pageSearchLabel", "Sahifa ichida qidirish")}:</Text>
+                          <Group gap={4}>
+                            <Kbd>Ctrl</Kbd>+<Kbd>F</Kbd> / <Kbd>/</Kbd>
+                          </Group>
                         </Group>
                       </Paper>
                     </SimpleGrid>
@@ -569,12 +601,12 @@ const Settings_Page = () => {
                   <Paper p="lg" radius="md" withBorder shadow="sm">
                     <Group justify="space-between" mb="sm">
                       <Text fw={600} fz="md">
-                        Kompyuterdagi hisoblar (Multi-Account)
+                        {t("settings.accounts.title")}
                       </Text>
-                      <Badge variant="light">{savedAccounts.length} ta hisob saqlangan</Badge>
+                      <Badge variant="light">{t("settings.accounts.count", { count: savedAccounts.length })}</Badge>
                     </Group>
                     <Text size="sm" c="dimmed" mb="md">
-                      Bir nechta foydalanuvchi hisoblari o'rtasida parolni qayta kiritmasdan bir zumda almashing:
+                      {t("settings.accounts.description")}
                     </Text>
 
                     {savedAccounts.length > 0 ? (
@@ -594,37 +626,35 @@ const Settings_Page = () => {
                                   <IconUser size={18} color="var(--mantine-color-blue-6)" />
                                   <div>
                                     <Text size="sm" fw={600}>
-                                      {acc.fullName}
+                                      {acc.displayName || t("settings.accounts.unnamed")}
                                     </Text>
-                                    <Text size="xs" c="dimmed">
-                                      {acc.phone || acc.email || "ID: " + acc.id}
-                                    </Text>
+                                    {acc.maskedIdentifier ? (
+                                      <Text size="xs" c="dimmed">
+                                        {acc.maskedIdentifier}
+                                      </Text>
+                                    ) : null}
                                   </div>
                                 </Group>
                                 <Group gap="xs">
                                   {isCurrent ? (
                                     <Badge color="blue" variant="filled">
-                                      Joriy hisob
+                                      {t("settings.accounts.current")}
                                     </Badge>
                                   ) : (
-                                    <>
-                                      <Button
-                                        size="xs"
-                                        variant="light"
-                                        onClick={() => handleSwitchAccount(acc.id)}
-                                      >
-                                        Ushbu hisobga o‘tish
-                                      </Button>
-                                      <Button
-                                        size="xs"
-                                        color="red"
-                                        variant="subtle"
-                                        onClick={() => handleRemoveAccount(acc.id)}
-                                      >
-                                        <IconTrash size={14} />
-                                      </Button>
-                                    </>
+                                    <Button size="xs" variant="light" onClick={handleSwitchAccount}>
+                                      {t("settings.accounts.switch")}
+                                    </Button>
                                   )}
+                                  <Button
+                                    size="xs"
+                                    color="red"
+                                    variant="subtle"
+                                    aria-label={t("settings.accounts.remove")}
+                                    title={t("settings.accounts.remove")}
+                                    onClick={() => handleRemoveAccount(acc.id)}
+                                  >
+                                    <IconTrash size={14} />
+                                  </Button>
                                 </Group>
                               </Group>
                             </Paper>
@@ -633,7 +663,7 @@ const Settings_Page = () => {
                       </Stack>
                     ) : (
                       <Text size="sm" c="dimmed">
-                        Boshqa saqlangan hisoblar mavjud emas.
+                        {t("settings.accounts.empty")}
                       </Text>
                     )}
                   </Paper>

@@ -19,6 +19,12 @@ const prefetchMap: Record<string, () => Promise<unknown>> = {
   "/settings": () => import("../page/Settings"),
   "/wrong-answers": () => import("../page/WrongAnswers"),
   "/saved-questions": () => import("../page/SavedQuestions"),
+  "/signs": () => import("../page/RoadSigns"),
+  "/markings": () => import("../page/RoadMarkings"),
+  "/rules": () => import("../page/TrafficRules"),
+  "/penalties": () => import("../page/Penalties"),
+  "/exam-centers": () => import("../page/ExamCenters"),
+  "/practical-exam": () => import("../page/PracticalExam"),
 };
 
 const prefetchedRoutes = new Set<string>();

@@ -1,3 +1,4 @@
+import { resolveUserScopeId } from "@/utils/userScope";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -13,7 +14,11 @@ import {
   localizeOpt,
   localizeExp,
   parseOptions,
+  reportExamResult,
 } from "../../services/desktopAdapter";
+import { isExamPassed } from "../../services/examRules";
+import { useExamShortcuts } from "../../hooks/useExamShortcuts";
+import ShortcutHint from "../../components/quiz/ShortcutHint";
 import { dbClient } from "../../database/dbClient";
 import { generateUUID } from "../../sync/outboxQueue";
 import { showToast } from "../../utils/notificationUtils";
@@ -45,7 +50,7 @@ export default function WrongExam_Page() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const userId = user?.id ? Number(user.id) : 1;
+  const userId = resolveUserScopeId(user);
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [questions, setQuestions] = useState<OfflineQuestion[]>([]);
@@ -229,7 +234,19 @@ export default function WrongExam_Page() {
       durationSeconds: duration,
       examType: "wrong_practice",
     }).catch(() => {});
-  }, [questions.length, userId]);
+
+    // Locally graded → /api/v2/exams/record-offline (all questions, unanswered = null)
+    reportExamResult({
+      serverSessionId: null,
+      localSessionId: localSessionIdRef.current,
+      examType: "wrong",
+      targetId: null,
+      questions,
+      answers: curAnswers,
+      durationSeconds: duration,
+      completedAt: Date.now(),
+    }).catch(() => {});
+  }, [questions, userId]);
 
   useEffect(() => {
     if (phase !== "exam") return;
@@ -347,66 +364,31 @@ export default function WrongExam_Page() {
     }
   };
 
-  // Full Desktop Keyboard Navigation (1-5, F1-F5, Arrows, Space, Enter, Esc)
-  useEffect(() => {
-    if (phase !== "exam") return;
-    const handleKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (zoomSrc) {
-          setZoomSrc(null);
-        } else if (confirmFinishOpen) {
-          setConfirmFinishOpen(false);
-        }
-        return;
+  // Unified desktop keyboard shortcuts (1–5 / A–E, ←/→, Enter, Esc)
+  useExamShortcuts(phase === "exam", {
+    onSelect: (idx) => {
+      if (!confirmFinishOpen && !zoomSrc) handleSelect(idx);
+    },
+    onPrev: () => setCurrent((c) => Math.max(0, c - 1)),
+    onNext: () => setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1)),
+    onSpace: () => {
+      if (answers[current] === undefined) return;
+      if (current < questions.length - 1) setCurrent((c) => c + 1);
+      else handleFinishClick();
+    },
+    onConfirm: () => {
+      if (confirmFinishOpen) {
+        setConfirmFinishOpen(false);
+        triggerFinish();
+      } else {
+        handleFinishClick();
       }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (confirmFinishOpen) {
-          setConfirmFinishOpen(false);
-          triggerFinish();
-        } else {
-          handleFinishClick();
-        }
-        return;
-      }
-
-      if (e.key === " " || e.code === "Space") {
-        e.preventDefault();
-        if (answers[current] !== undefined) {
-          if (current < questions.length - 1) {
-            setCurrent((c) => c + 1);
-          } else {
-            handleFinishClick();
-          }
-        }
-        return;
-      }
-
-      const map: Record<string, number> = {
-        F1: 0, F2: 1, F3: 2, F4: 3, F5: 4,
-        "1": 0, "2": 1, "3": 2, "4": 3, "5": 4,
-      };
-      if (e.key in map) {
-        e.preventDefault();
-        handleSelect(map[e.key]);
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        setCurrent((c) => Math.max(0, c - 1));
-      }
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        setCurrent((c) => Math.min((questions.length || 1) - 1, c + 1));
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [phase, answers, current, questions.length, zoomSrc, confirmFinishOpen, handleFinishClick, triggerFinish]);
+    },
+    onEscape: () => {
+      if (zoomSrc) setZoomSrc(null);
+      else if (confirmFinishOpen) setConfirmFinishOpen(false);
+    },
+  });
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
@@ -478,6 +460,7 @@ export default function WrongExam_Page() {
               fixedCount > 0 ? ` • ${fixedCount} ${t("wrongAnswers.fixedShort", "to'g'rilandi")}` : ""
             }`}
             isTimeUp={timeLeft <= 0}
+            passed={isExamPassed({ mode: "wrong", total, correct, wrong, unanswered })}
             onRetry={() => loadQuestions(true)}
             onReviewMistakes={() => setReviewOpen(true)}
             onHome={onBack}
@@ -571,7 +554,7 @@ export default function WrongExam_Page() {
                   disabled={!!answered}
                   type="button"
                 >
-                  <span className="exam-option-key">F{idx + 1}</span>
+                  <span className="exam-option-key" title={`${idx + 1} / ${String.fromCharCode(65 + idx)}`}>{idx + 1}</span>
                   <span className="exam-option-text">{localizeOpt(opt)}</span>
                   {answered && idx === q.correct_option && (
                     <IconCheck size={15} className="opt-icon correct" />
@@ -675,6 +658,7 @@ export default function WrongExam_Page() {
               </button>
             )}
           </div>
+          <ShortcutHint bookmark={false} />
         </div>
       </div>
 

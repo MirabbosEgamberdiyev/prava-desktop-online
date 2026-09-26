@@ -6,6 +6,7 @@ import api from "../../../api/api";
 import { useAutoSave, restoreAnswers } from "../../../hooks/useAutoSave";
 import { getImageUrl } from "../../../utils/imageUtils";
 import { EXAM_API, EXAM_DEFAULTS } from "../constants";
+import { durationMinutesFor } from "../../../services/examRules";
 import type { ExamData, AnswersRecord, ExamStartRequest } from "../types";
 
 interface UseExamOptions {
@@ -31,7 +32,7 @@ interface UseExamReturn {
 export function useExam(options: UseExamOptions = {}): UseExamReturn {
   const {
     questionCount = EXAM_DEFAULTS.QUESTION_COUNT,
-    durationMinutes = EXAM_DEFAULTS.DURATION_MINUTES,
+    durationMinutes = durationMinutesFor("real", questionCount),
   } = options;
 
   const { t } = useTranslation();

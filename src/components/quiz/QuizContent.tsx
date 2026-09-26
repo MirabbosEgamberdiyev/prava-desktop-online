@@ -40,6 +40,8 @@ import { ImagePlaceholder } from "../common/ImagePlaceholder";
 import { getImageUrl } from "../../utils/imageUtils";
 import api from "../../api/api";
 import classes from "./QuizContent.module.css";
+import { resolveExamShortcut } from "../../hooks/useExamShortcuts";
+import ShortcutHint from "./ShortcutHint";
 
 interface QuizContentProps {
   questions: Question[];
@@ -296,13 +298,12 @@ export function QuizContent({
       }
 
       // 5. Select Option: 1-5 and F1-F5
-      const map: Record<string, number> = {
-        F1: 0, F2: 1, F3: 2, F4: 3, F5: 4,
-        "1": 0, "2": 1, "3": 2, "4": 3, "5": 4,
-      };
-      if (e.key in map) {
+      // (unified desktop mapping: 1-5 / A-E / F1-F5, layout-independent)
+      const action = resolveExamShortcut(e);
+      if (action?.type === "select") {
         e.preventDefault();
-        const optionIndex = map[e.key];
+        if (e.repeat) return;
+        const optionIndex = action.index;
         const options = currentQuestion?.options || [];
         if (optionIndex < options.length) {
           handleSelectAnswer(activeQuiz, optionIndex);
@@ -1019,6 +1020,7 @@ export function QuizContent({
             </Button>
           )}
         </Flex>
+        <ShortcutHint bookmark={false} />
       </Container>
     </Box>
   );

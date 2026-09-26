@@ -10,9 +10,11 @@ interface Props {
   className?: string;
   style?: React.CSSProperties;
   onOpen?: (src: string) => void;
+  /** Native lazy loading (long lists / grids). */
+  lazy?: boolean;
 }
 
-export default function SecureImage({ path, alt = "", className, style, onOpen }: Props) {
+export default function SecureImage({ path, alt = "", className, style, onOpen, lazy }: Props) {
   const [hasError, setHasError] = useState(false);
   const [localSrc, setLocalSrc] = useState<string | null>(null);
 
@@ -60,6 +62,8 @@ export default function SecureImage({ path, alt = "", className, style, onOpen }
       alt={alt}
       className={className}
       draggable={false}
+      loading={lazy ? "lazy" : undefined}
+      decoding={lazy ? "async" : undefined}
       onContextMenu={(e) => e.preventDefault()}
       onError={() => setHasError(true)}
       onClick={onOpen ? () => onOpen(src) : undefined}

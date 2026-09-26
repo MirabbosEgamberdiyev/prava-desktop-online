@@ -5,37 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
 
-    <!-- Preconnect / DNS Prefetch for performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-
-    <!--
-      Shriftlar: avval `src/index.css` ichida `@import url(fonts.googleapis.com)`
-      orqali yuklanardi. `@import` CSS parse qilingandan KEYIN ishga tushadi,
-      ya'ni zanjirli (chained) render-blocking so'rov hosil qilardi.
-      Bu yerda `media="print" + onload` naqshi bilan bloklamasdan yuklaymiz.
-      Faqat 400/500/600/700 og'irliklari — avval 100..900 to'liq variable
-      diapazon (normal + italic, 2 fayl) so'ralardi, ammo kodda italic
-      umuman ishlatilmaydi.
-    -->
-    <link
-      rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap"
-    />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap"
-      media="print"
-      onload="this.media='all'"
-    />
-    <noscript>
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap"
-      />
-    </noscript>
+    <!-- Montserrat is bundled locally via @fontsource/montserrat (imported in src/main.tsx) — no font CDN, works offline. -->
 
     <!-- API same-origin (nginx /api/* proxy) — preconnect kerakmas, HTML loadda allaqachon ulangan -->
     <!--
@@ -88,8 +58,8 @@
     <meta name="twitter:image:alt" content="Prava Online - Haydovchilik guvohnomasi imtihoni" />
 
     <!-- PWA -->
-    <meta name="theme-color" content="#228be6" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1b1e" />
+    <meta name="theme-color" content="#0284c7" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b1220" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

@@ -1,17 +1,17 @@
 import { createTheme, type MantineColorsTuple } from "@mantine/core";
+/**
+ * SINGLE SOURCE of design values: src/theme/design-tokens.json (identical copy of the web
+ * prava-test tokens — do not edit values here). CSS variables in styles/desktop.css mirror
+ * the same JSON (guarded by tests/designTokens.test.ts).
+ */
+import tokens from "./theme/design-tokens.json";
 
-const primaryBlue: MantineColorsTuple = [
-  "#e7f5ff",
-  "#d0ebff",
-  "#a5d8ff",
-  "#74c0fc",
-  "#4dabf7",
-  "#339af0",
-  "#228be6",
-  "#1c7ed6",
-  "#1971c2",
-  "#1864ab",
-];
+const BRAND_STEPS = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900"] as const;
+const brand = tokens.color.brand as Record<(typeof BRAND_STEPS)[number], string>;
+const primaryBlue = BRAND_STEPS.map((k) => brand[k]) as unknown as MantineColorsTuple;
+
+const FONT_STACK = `"${tokens.font.family}", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+const px = (n: number) => `${n}px`;
 
 export const theme = createTheme({
   primaryColor: "blue",
@@ -20,11 +20,10 @@ export const theme = createTheme({
   },
 
   /**
-   * `primaryShade` — light rejimda 7-shade (#1c7ed6) ishlatiladi.
-   * Sabab: 6-shade (#228be6) oq fonda ~3.3:1 kontrast beradi — WCAG AA (4.5:1)
-   * dan past. 7-shade ~4.6:1 beradi. Dark rejimda yorqinroq 5-shade kerak.
+   * `primaryShade` — light: 6-shade (brand.600 #0284c7, ~4.7:1 on white),
+   * dark: 4-shade (brand.400 #38bdf8, ~7.5:1 on the dark background). Same as web.
    */
-  primaryShade: { light: 7, dark: 5 },
+  primaryShade: { light: 6, dark: 4 },
 
   /**
    * `autoContrast` — "filled" variantlarda matn rangi fon yorqinligiga qarab
@@ -34,8 +33,7 @@ export const theme = createTheme({
   autoContrast: true,
   luminanceThreshold: 0.3,
 
-  fontFamily:
-    '"Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontFamily: FONT_STACK,
 
   /**
    * Imtihon davomida foydalanuvchi ketma-ket 20-50 ta savol o'qiydi.
@@ -58,8 +56,7 @@ export const theme = createTheme({
   },
 
   headings: {
-    fontFamily:
-      '"Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    fontFamily: FONT_STACK,
     sizes: {
       h1: { fontSize: "2.125rem", lineHeight: "1.3", fontWeight: "700" },
       h2: { fontSize: "1.625rem", lineHeight: "1.35", fontWeight: "700" },
@@ -75,6 +72,13 @@ export const theme = createTheme({
   // Kodda tugmalar/kartalar allaqachon `radius="md"` ni qo'lda uzatardi —
   // defaultni "md" qilib, `sm` bilan aralashib ketishiga chek qo'yamiz.
   defaultRadius: "md",
+  radius: {
+    xs: px(Math.round(tokens.radius.sm / 2)),
+    sm: px(tokens.radius.sm),
+    md: px(tokens.radius.md),
+    lg: px(tokens.radius.lg),
+    xl: px(tokens.radius.xl),
+  },
 
   components: {
     Card: {

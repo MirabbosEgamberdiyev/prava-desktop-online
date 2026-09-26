@@ -1,3 +1,4 @@
+import type { UserScopeId } from "@/utils/userScope";
 export interface DesktopUser {
   id: number;
   name: string;
@@ -19,7 +20,7 @@ export interface UserStats {
 
 export interface ExamResult {
   id: number;
-  user_id: number;
+  user_id: UserScopeId;
   score: number;
   total_questions: number;
   correct_answers: number;

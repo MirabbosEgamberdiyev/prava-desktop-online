@@ -1,19 +1,10 @@
-import Cookies from "js-cookie";
 import { dbClient } from "../database/dbClient";
+import { getActiveUserId } from "../utils/userScope";
 import type { DbOutboxItem, OutboxAction } from "../database/schema";
 
 // Helper to determine currently active user ID for outbox isolation
 export function getCurrentUserId(): string | number | null {
-  try {
-    const raw = Cookies.get("userData");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.id) return parsed.id;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
+  return getActiveUserId();
 }
 
 // Deterministic UUID v4 generator without external dependency
@@ -48,7 +39,7 @@ export class OutboxQueue {
     if (actionType === "SAVE_QUESTION" || actionType === "UNSAVE_QUESTION") {
       const opposingType: OutboxAction = actionType === "SAVE_QUESTION" ? "UNSAVE_QUESTION" : "SAVE_QUESTION";
       try {
-        const pending = await dbClient.getPendingOutbox(userId ?? undefined);
+        const pending = await dbClient.getPendingOutbox(userId);
         const opposingItem = pending.find(
           (p) => p.action_type === opposingType && p.endpoint === endpoint
         );
@@ -58,6 +49,27 @@ export class OutboxQueue {
         }
       } catch (err) {
         console.warn("[OutboxQueue] Mutation collapse error:", err);
+      }
+    }
+
+    // Locally graded exam results: one outbox row per clientSessionId (server is idempotent too).
+    if (actionType === "RECORD_OFFLINE_EXAM") {
+      const csid = (payload as { clientSessionId?: string } | null)?.clientSessionId;
+      if (csid) {
+        try {
+          const all = await dbClient.getAllOutbox();
+          const dup = all.find((p) => {
+            if (p.action_type !== "RECORD_OFFLINE_EXAM" || p.status === "FAILED") return false;
+            try {
+              return JSON.parse(p.payload_json)?.clientSessionId === csid;
+            } catch {
+              return false;
+            }
+          });
+          if (dup) return dup.id;
+        } catch (err) {
+          console.warn("[OutboxQueue] Dedupe check error:", err);
+        }
       }
     }
 
@@ -76,6 +88,10 @@ export class OutboxQueue {
     };
 
     await dbClient.enqueueOutbox(item);
+    if (typeof window !== "undefined") {
+      // Lets the sync engine flush right away instead of waiting for its next tick.
+      window.dispatchEvent(new Event("prava-outbox-enqueued"));
+    }
     return id;
   }
 
@@ -83,7 +99,8 @@ export class OutboxQueue {
    * Barcha kutilayotgan (PENDING) mutatsiyalarni olish (ixtiyoriy userId bo'yicha filtrlangan).
    */
   static async getPending(userId?: string | number | null): Promise<DbOutboxItem[]> {
-    return dbClient.getPendingOutbox(userId ?? undefined);
+    // undefined → logged-in user; null → guest. Never another user's rows.
+    return dbClient.getPendingOutbox(userId);
   }
 
   /**

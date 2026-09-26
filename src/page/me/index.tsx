@@ -1,3 +1,4 @@
+import { resolveUserScopeId } from "@/utils/userScope";
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -16,7 +17,6 @@ import {
   IconRun,
   IconChartBar,
   IconTicket,
-  IconAlertTriangle,
   IconBookmark,
   IconTargetArrow,
   IconTrophy,
@@ -25,9 +25,21 @@ import {
   IconArrowRight,
   IconCheck,
   IconSparkles,
+  IconSearch,
 } from "@tabler/icons-react";
 
 import { useLanguage } from "../../context/LanguageContext";
+import { useSearchParams } from "react-router-dom";
+import { dbClient } from "../../database/dbClient";
+import type { DbTicket } from "../../database/schema";
+import { pickResumableSession, type ResumableSession } from "../../features/Dashboard/resumeSession";
+import { selectNextBestAction } from "../../features/Dashboard/nextBestAction";
+import { LEARN_SECTIONS } from "../../features/Curriculum/learnSections";
+import { openGlobalSearch } from "../../features/Search/GlobalSearchHost";
+import NextBestActionCard from "../../components/dashboard/NextBestActionCard";
+import ResumeExamCard from "../../components/dashboard/ResumeExamCard";
+import SmartRecommendationSection from "../../components/dashboard/SmartRecommendationSection";
+import NotificationCenter from "../../components/dashboard/NotificationCenter";
 
 const EXAM_OPTIONS = [20, 40, 50, 60, 80, 100];
 
@@ -49,12 +61,38 @@ export default function User_Page() {
     }
   });
 
-  const userId = user?.id ? Number(user.id) : 1;
+  const userId = resolveUserScopeId(user);
+  const [resumeSession, setResumeSession] = useState<ResumableSession | null>(null);
+  const [tickets, setTickets] = useState<DbTicket[]>([]);
+  const [ticketStatsVersion, setTicketStatsVersion] = useState(0);
+
+  // ?picker=exam (Ctrl+K "Real exam") opens the question-count picker.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("picker") === "exam") {
+      setShowExamPicker(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     getFullStats(userId).then(setStats).catch(() => {});
     getWrongAnswers(userId).then(setWrongAnswers).catch(() => {});
     getTopics().then(setTopics).catch(() => {});
+
+    // Local-only sources: crash-recovery session (resume card) + tickets store (NBA next ticket).
+    const loadLocal = () => {
+      Promise.all([dbClient.getAllExamSessions(), dbClient.getTickets()])
+        .then(([sessions, tks]) => {
+          const byId = new Map(tks.map((tk) => [tk.id, tk.ticket_number]));
+          setTickets(tks);
+          setResumeSession(pickResumableSession(sessions, Date.now(), byId));
+        })
+        .catch(() => {});
+      setTicketStatsVersion((v) => v + 1);
+    };
+    loadLocal();
+    window.addEventListener("prava-storage-changed", loadLocal);
 
     const updateSaved = () => {
       getSavedQuestions(userId)
@@ -67,7 +105,10 @@ export default function User_Page() {
     };
     updateSaved();
     window.addEventListener("prava-storage-changed", updateSaved);
-    return () => window.removeEventListener("prava-storage-changed", updateSaved);
+    return () => {
+      window.removeEventListener("prava-storage-changed", updateSaved);
+      window.removeEventListener("prava-storage-changed", loadLocal);
+    };
   }, [userId]);
 
   // Sanitized Dynamic User Name (Eliminates {{name}} template interpolation bugs)
@@ -224,6 +265,30 @@ export default function User_Page() {
       .slice(0, 5);
   }, [wrongAnswers, topicMap]);
 
+  // Ticket ids with a passed attempt (local stats are keyed by official ticket id).
+  const passedTicketIds = useMemo(() => {
+    void ticketStatsVersion; // recompute after local progress changes
+    const set = new Set<number>();
+    for (const st of Object.values(storageService.getTicketStats())) {
+      if (st && st.timesPassed > 0) set.add(Number(st.ticketId));
+    }
+    return set;
+  }, [ticketStatsVersion]);
+
+  const nextBestAction = useMemo(
+    () =>
+      selectNextBestAction({
+        activeSession: resumeSession,
+        totalWrongs: wrongAnswers.length,
+        weakTopics: currentWeakTopics,
+        tickets,
+        passedTicketIds,
+        practicedCount: qPracticed,
+        readinessPercent,
+      }),
+    [resumeSession, wrongAnswers.length, currentWeakTopics, tickets, passedTicketIds, qPracticed, readinessPercent]
+  );
+
   return (
     <>
       <SEO
@@ -258,10 +323,16 @@ export default function User_Page() {
 
             {/* Right Zone Controls: Mode & Sync, Theme, Language, User Profile */}
             <div className="home-header-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button type="button" className="dash-search-btn" onClick={openGlobalSearch} aria-label={t("search.shortcutLabel", "Global qidiruv")} aria-keyshortcuts="Control+K">
+                <IconSearch size={15} />
+                <span>{t("search.buttonLabel", "Qidirish...")}</span>
+                <kbd>Ctrl K</kbd>
+              </button>
               <NetworkModeSelector />
               <ColorMode />
               <LanguagePicker />
               <div className="navbar-divider" aria-hidden="true" />
+              <NotificationCenter />
               <UserMenuButton />
             </div>
           </div>
@@ -277,6 +348,10 @@ export default function User_Page() {
               </h2>
               <p>{t("dashboard.subtitle")}</p>
             </div>
+
+            {/* 1.5 Unfinished test (crash-recovery session) + deterministic next step */}
+            <ResumeExamCard session={resumeSession} />
+            <NextBestActionCard decision={nextBestAction} onOpenExamPicker={() => setShowExamPicker(true)} />
 
             {/* 2. Three Gamified Metrics Bar */}
             <section className="home-stats-bar" aria-label="Metrikalar">
@@ -477,78 +552,31 @@ export default function User_Page() {
               </div>
             </section>
 
-            {/* ================= 4. AQLLI TAVSIYA VA XATOLAR (12 USTUNLI 7/5 NISBAT) ================= */}
-            <section className="smart-recommendation-section" aria-label={t("dashboard.smartSectionTitle")}>
+            {/* ================= 4. O'RGANISH (LEARN) ================= */}
+            <section className="dash-section" aria-label={t("nav.learn", "O'rganish")}>
               <div className="section-headline">
-                <h3>{t("dashboard.smartSectionTitle")}</h3>
-                <p>{t("dashboard.smartSectionSubtitle")}</p>
+                <h3>{t("nav.learn", "O'rganish")}</h3>
+                <p>{t("learn.sectionSubtitle", "Yo'l belgilari, chiziqlar, qoidalar va amaliy imtihon — internetsiz ham")}</p>
               </div>
-
-              <div className="smart-recommendation-grid">
-                {/* Left Column (7 cols): Weak Topics Interactive List */}
-                <div className="smart-col-left">
-                  <div>
-                    <span className="smart-badge amber">
-                      <IconAlertTriangle size={12} stroke={2.5} />
-                      <span>{t("dashboard.weakTopicsTitle")}</span>
+              <div className="dash-learn-grid">
+                {LEARN_SECTIONS.map((s) => (
+                  <button key={s.id} type="button" className="dash-learn-card" onClick={() => navigate(s.path)}>
+                    <span className="dash-learn-icon" style={{ background: s.gradient }}>
+                      <s.icon size={20} stroke={1.8} />
                     </span>
-                    <h4 className="smart-col-title">{t("dashboard.weakTopicsSubtitle")}</h4>
-                  </div>
-
-                  <div className="nba-topic-list" role="list">
-                    {currentWeakTopics.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--text-muted)" }}>
-                        <IconSparkles size={32} color="#2f9e44" style={{ marginBottom: 8 }} />
-                        <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text)" }}>
-                          {t("dashboard.noMistakesYet")}
-                        </div>
-                        <div style={{ fontSize: "13px", marginTop: 4 }}>
-                          {t("dashboard.noMistakesDesc")}
-                        </div>
-                      </div>
-                    ) : (
-                      currentWeakTopics.map((topic) => (
-                        <button
-                          key={topic.id}
-                          type="button"
-                          className="nba-topic-item"
-                          onClick={() => navigate(`/marafon?topicId=${topic.id}`)}
-                          title={topic.name}
-                        >
-                          <span className="nba-topic-name">{topic.name}</span>
-                          <span className="nba-topic-count">
-                            {topic.wrongCount} {t("dashboard.totalUnit")} {t("dashboard.mistakesCount")}
-                          </span>
-                          <IconArrowRight size={16} className="nba-topic-arrow" />
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Column (5 cols): Fix Mistakes Quick CTA */}
-                <div className="smart-col-right">
-                  <div>
-                    <span className="smart-badge red">
-                      <IconFlame size={12} stroke={2.5} />
-                      <span>{t("dashboard.quickFix")}</span>
-                    </span>
-                    <h4 className="smart-col-title">{wrongAnswers.length} {t("dashboard.mistakesTitle")}</h4>
-                    <p className="smart-col-desc">{t("dashboard.mistakesDesc")}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="nba-cta-btn secondary"
-                    style={{ marginTop: "auto" }}
-                    onClick={() => navigate("/wrong-exam")}
-                  >
-                    <span>{t("dashboard.fixMistakesBtn")}</span>
-                    <IconArrowRight size={18} stroke={2.5} />
+                    <span className="dash-learn-title">{t(s.labelKey, s.fallback)}</span>
                   </button>
-                </div>
+                ))}
               </div>
             </section>
+
+            {/* ================= 5. AQLLI TAVSIYA VA XATOLAR ================= */}
+            <SmartRecommendationSection
+              weakTopics={currentWeakTopics}
+              totalWrongs={wrongAnswers.length}
+              practicedCount={qPracticed}
+              onOpenExamPicker={() => setShowExamPicker(true)}
+            />
 
             {/* ================= 5. SECONDARY COMPACT TOOLS GRID (4 COLS) ================= */}
             <section className="secondary-tools-section" aria-label={t("dashboard.analyticsTitle")}>

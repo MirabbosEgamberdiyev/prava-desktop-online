@@ -57,28 +57,44 @@
 :root,
 [data-theme="light"],
 [data-mantine-color-scheme="light"] {
-  --primary: #1971c2;
-  --primary-hover: #1c7ed6;
-  --primary-light: #e7f5ff;
-  --primary-mid: #228be6;
-  --danger: #e03131;
-  --danger-light: #fff5f5;
-  --success: #2f9e44;
-  --correct: #2f9e44;
-  --wrong: #e03131;
-  --warning: #e67700;
-  --bg: #f8f9fa;
+  /* design-tokens.json (single source) */
+  --on-primary: #ffffff;
+  --danger-bg: #fee2e2;
+  --success-bg: #dcfce7;
+  --warning-bg: #fef3c7;
+  --surface-alt: #f1f5f9;
+  --token-radius-sm: 8px;
+  --token-radius-md: 12px;
+  --token-radius-lg: 16px;
+  --token-radius-xl: 20px;
+  --token-radius-pill: 999px;
+  --content-max-width: 1200px;
+  --pointer-target-min: 32px;
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-easing: cubic-bezier(0.2, 0, 0, 1);
+  --primary: #0284c7;
+  --primary-hover: #0369a1;
+  --primary-light: #e0f2fe;
+  --primary-mid: #0ea5e9;
+  --danger: #dc2626;
+  --danger-light: #fee2e2;
+  --success: #16a34a;
+  --correct: #16a34a;
+  --wrong: #dc2626;
+  --warning: #b45309;
+  --bg: #f8fafc;
   --card-bg: #ffffff;
   --surface: #ffffff;
-  --surface-muted: #f1f3f5;
+  --surface-muted: #f1f5f9;
   --surface-elevated: #ffffff;
-  --text: #1a1b1e;
-  --text-muted: #6c757d;
-  --border: #dee2e6;
-  --theme-text: #1a1b1e;
-  --theme-border: #dee2e6;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --border: #e2e8f0;
+  --theme-text: #0f172a;
+  --theme-border: #e2e8f0;
   --header-bg: rgba(255, 255, 255, 0.82);
-  --header-border: rgba(222, 226, 230, 0.85);
+  --header-border: rgba(226, 232, 240, 0.85);
 
   /* ============ GLOBAL DESIGN SYSTEM TOKENS ============ */
   --radius-xs: 8px;
@@ -101,7 +117,7 @@
   --space-16: 64px;
   --space-20: 80px;
 
-  --container-max: 1440px;
+  --container-max: var(--content-max-width, 1200px);
 
   --card-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
   --card-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
@@ -115,10 +131,10 @@
   --transition-normal: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Mantine V7 Semantic Token Bridge */
-  --mantine-color-body: #f8f9fa;
+  --mantine-color-body: #f8fafc;
   --mantine-color-default: #ffffff;
-  --mantine-color-default-border: #dee2e6;
-  --mantine-color-default-hover: #f1f3f5;
+  --mantine-color-default-border: #e2e8f0;
+  --mantine-color-default-hover: #f1f5f9;
 
   /* Safe Area Inset Support (iPhone Notch, Dynamic Island) */
   --sat: env(safe-area-inset-top, 0px);
@@ -130,78 +146,90 @@
 /* ============ DARK MODE ============ */
 [data-theme="dark"],
 [data-mantine-color-scheme="dark"] {
-  --primary: #4dabf7;
-  --primary-hover: #74c0fc;
-  --primary-light: rgba(24, 100, 171, 0.25);
-  --primary-mid: #339af0;
-  --danger: #ff6b6b;
-  --danger-light: rgba(255, 107, 107, 0.15);
-  --success: #51cf66;
-  --correct: #51cf66;
-  --wrong: #ff6b6b;
-  --warning: #ffd43b;
-  --bg: #031824;
-  --card-bg: #072033;
-  --surface: #072033;
-  --surface-muted: #0b2a43;
-  --surface-elevated: #0f314c;
-  --text: #e6edf3;
-  --text-muted: #8b949e;
-  --border: #1a364d;
-  --theme-text: #e6edf3;
-  --theme-border: #1a364d;
-  --header-bg: rgba(3, 24, 36, 0.82);
-  --header-border: rgba(26, 54, 77, 0.85);
+  /* design-tokens.json (single source) */
+  --on-primary: #0b1220;
+  --danger-bg: #7f1d1d;
+  --success-bg: #14532d;
+  --warning-bg: #78350f;
+  --surface-alt: #1e293b;
+  --primary: #38bdf8;
+  --primary-hover: #7dd3fc;
+  --primary-light: rgba(56, 189, 248, 0.16);
+  --primary-mid: #38bdf8;
+  --danger: #f87171;
+  --danger-light: #7f1d1d;
+  --success: #4ade80;
+  --correct: #4ade80;
+  --wrong: #f87171;
+  --warning: #fbbf24;
+  --bg: #0b1220;
+  --card-bg: #111827;
+  --surface: #111827;
+  --surface-muted: #1e293b;
+  --surface-elevated: #1e293b;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --theme-text: #e2e8f0;
+  --theme-border: #334155;
+  --header-bg: rgba(11, 18, 32, 0.82);
+  --header-border: rgba(51, 65, 85, 0.85);
 
   --card-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
   --card-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.07);
-  --card-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(77, 171, 247, 0.25);
+  --card-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(56, 189, 248, 0.25);
 
   --shadow-sm: var(--card-shadow-sm);
   --shadow: var(--card-shadow-md);
   --shadow-lg: var(--card-shadow-lg);
 
   /* Mantine V7 Semantic Token Bridge */
-  --mantine-color-body: #031824;
-  --mantine-color-default: #072033;
-  --mantine-color-default-border: #1a364d;
-  --mantine-color-default-hover: #0b2a43;
+  --mantine-color-body: #0b1220;
+  --mantine-color-default: #111827;
+  --mantine-color-default-border: #334155;
+  --mantine-color-default-hover: #1e293b;
 }
 
 /* ============ OS PREFERS DARK MODE FALLBACK ============ */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --primary: #4dabf7;
-    --primary-hover: #74c0fc;
-    --primary-light: rgba(24, 100, 171, 0.25);
-    --primary-mid: #339af0;
-    --danger: #ff6b6b;
-    --danger-light: rgba(255, 107, 107, 0.15);
-    --success: #51cf66;
-    --correct: #51cf66;
-    --wrong: #ff6b6b;
-    --warning: #ffd43b;
-    --bg: #031824;
-    --card-bg: #072033;
-    --surface: #072033;
-    --surface-muted: #0b2a43;
-    --surface-elevated: #0f314c;
-    --text: #e6edf3;
-    --text-muted: #8b949e;
-    --border: #1a364d;
-    --theme-text: #e6edf3;
-    --theme-border: #1a364d;
-    --header-bg: rgba(3, 24, 36, 0.82);
-    --header-border: rgba(26, 54, 77, 0.85);
+    /* design-tokens.json (single source) */
+    --on-primary: #0b1220;
+    --danger-bg: #7f1d1d;
+    --success-bg: #14532d;
+    --warning-bg: #78350f;
+    --surface-alt: #1e293b;
+    --primary: #38bdf8;
+    --primary-hover: #7dd3fc;
+    --primary-light: rgba(56, 189, 248, 0.16);
+    --primary-mid: #38bdf8;
+    --danger: #f87171;
+    --danger-light: #7f1d1d;
+    --success: #4ade80;
+    --correct: #4ade80;
+    --wrong: #f87171;
+    --warning: #fbbf24;
+    --bg: #0b1220;
+    --card-bg: #111827;
+    --surface: #111827;
+    --surface-muted: #1e293b;
+    --surface-elevated: #1e293b;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --border: #334155;
+    --theme-text: #e2e8f0;
+    --theme-border: #334155;
+    --header-bg: rgba(11, 18, 32, 0.82);
+    --header-border: rgba(51, 65, 85, 0.85);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
     --shadow: 0 4px 16px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.07);
-    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(77, 171, 247, 0.25);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(56, 189, 248, 0.25);
 
     /* Mantine V7 Semantic Token Bridge */
-    --mantine-color-body: #031824;
-    --mantine-color-default: #072033;
-    --mantine-color-default-border: #1a364d;
-    --mantine-color-default-hover: #0b2a43;
+    --mantine-color-body: #0b1220;
+    --mantine-color-default: #111827;
+    --mantine-color-default-border: #334155;
+    --mantine-color-default-hover: #1e293b;
   }
 }
 
@@ -1017,7 +1045,8 @@ body:has(.app) {
   transform: translateY(-3px);
 }
 
-/* Delete button — top right, visible on hover */
+/* Delete button — top right. Always visible (no hover-only critical actions on desktop);
+   emphasised on hover / keyboard focus. */
 .usp-card-menu {
   position: absolute;
   top: 8px;
@@ -1029,13 +1058,16 @@ body:has(.app) {
   border: 1px solid #ffc9c9;
   color: var(--danger);
   cursor: pointer;
-  display: none;
+  display: flex;
+  opacity: 0.6;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
 }
-.usp-card:hover .usp-card-menu {
-  display: flex;
+.usp-card:hover .usp-card-menu,
+.usp-card:focus-within .usp-card-menu,
+.usp-card-menu:focus-visible {
+  opacity: 1;
 }
 .usp-card-menu:hover {
   background: var(--danger);
@@ -1549,7 +1581,7 @@ body:has(.app) {
 }
 .home-header-inner {
   width: 100%;
-  max-width: 1200px;
+  max-width: var(--content-max-width, 1200px);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -1682,7 +1714,7 @@ body:has(.app) {
 
 .home-inner {
   width: 100%;
-  max-width: 1200px;
+  max-width: var(--content-max-width, 1200px);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -3557,7 +3589,7 @@ body:has(.app) {
 }
 .home-footer-inner {
   width: 100%;
-  max-width: 1200px;
+  max-width: var(--content-max-width, 1200px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -5167,7 +5199,7 @@ body:has(.app) {
 
 /* ── Stats container (max-width) ── */
 .stats-container {
-  max-width: 1400px;
+  max-width: var(--content-max-width, 1200px);
   width: 100%;
   margin: 0 auto;
   display: flex;
@@ -5995,7 +6027,7 @@ body:has(.app) {
    ========================================================================== */
 .saas-page-container {
   width: 100%;
-  max-width: 1200px;
+  max-width: var(--content-max-width, 1200px);
   margin: 0 auto;
   padding: 20px 20px 50px;
 }
@@ -6258,3 +6290,69 @@ body:has(.app) {
 }
 
 
+
+/* ============ DESKTOP KEYBOARD SHORTCUT LEGEND (all exam screens) ============ */
+.exam-shortcut-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 14px;
+  padding: 6px 12px 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  user-select: none;
+}
+.exam-shortcut-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.exam-shortcut-hint kbd {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  background: var(--surface-alt, var(--surface-muted));
+  color: var(--text);
+}
+@media (max-height: 720px) {
+  .exam-shortcut-hint {
+    padding-top: 2px;
+    font-size: 11px;
+  }
+}
+
+/* ==========================================================================
+   SETTINGS → APPEARANCE (TypographyContext)
+   Text size: native WebView zoom under Tauri (data-native-zoom); root font-size
+   fallback in a plain browser (web parity). Bold text: web parity rules.
+   ========================================================================== */
+html[data-text-size="small"]:not([data-native-zoom]) { font-size: 92%; }
+html[data-text-size="large"]:not([data-native-zoom]) { font-size: 112%; }
+
+[data-bold-text="true"] body,
+[data-bold-text="true"] p,
+[data-bold-text="true"] span,
+[data-bold-text="true"] a,
+[data-bold-text="true"] button,
+[data-bold-text="true"] label,
+[data-bold-text="true"] input,
+[data-bold-text="true"] textarea,
+[data-bold-text="true"] .mantine-Text-root {
+  font-weight: 600 !important;
+}
+[data-bold-text="true"] h1,
+[data-bold-text="true"] h2,
+[data-bold-text="true"] h3,
+[data-bold-text="true"] h4,
+[data-bold-text="true"] strong,
+[data-bold-text="true"] b,
+[data-bold-text="true"] .mantine-Title-root {
+  font-weight: 800 !important;
+}

@@ -1,3 +1,4 @@
+import { resolveUserScopeId } from "@/utils/userScope";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -26,7 +27,7 @@ export default function SavedQuestions_Page() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const userId = user?.id ? Number(user.id) : 1;
+  const userId = resolveUserScopeId(user);
 
   const [entries, setEntries] = useState<SavedQuestionEntry[]>([]);
   const [loading, setLoading] = useState(true);

@@ -10,6 +10,23 @@ import { showToast } from "./utils/notificationUtils";
 import { useTranslation } from "react-i18next";
 import { ScrollManager } from "./components/common/ScrollManager";
 import { networkHeartbeat } from "./sync/networkHeartbeat";
+import { syncEngine } from "./sync/syncEngine";
+import GlobalSearchHost from "./features/Search/GlobalSearchHost";
+import { TypographyProvider } from "./context/TypographyContext";
+
+/**
+ * Background sync starts only once the UI is up (not at module import), so the first
+ * paint is never competing with IndexedDB/network work.
+ */
+function SyncBootstrap() {
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      syncEngine.start().catch(() => {});
+    }, 1500);
+    return () => window.clearTimeout(handle);
+  }, []);
+  return null;
+}
 
 /**
  * Global API error listener with deduplication cooldown.
@@ -85,16 +102,20 @@ function AppInner() {
 
   return (
     <DesktopThemeProvider>
-      <AuthProvider>
-        <LanguageProvider>
-          <ApiErrorListener />
-          <GoogleOneTap />
-          <ScrollManager />
-          <ErrorBoundary resetKey={location.pathname}>
-            <AppRoutes />
-          </ErrorBoundary>
-        </LanguageProvider>
-      </AuthProvider>
+      <TypographyProvider>
+        <AuthProvider>
+          <LanguageProvider>
+            <ApiErrorListener />
+            <SyncBootstrap />
+            <GoogleOneTap />
+            <ScrollManager />
+            <GlobalSearchHost />
+            <ErrorBoundary resetKey={location.pathname}>
+              <AppRoutes />
+            </ErrorBoundary>
+          </LanguageProvider>
+        </AuthProvider>
+      </TypographyProvider>
     </DesktopThemeProvider>
   );
 }

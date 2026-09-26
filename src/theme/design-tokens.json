@@ -1,0 +1,59 @@
+{
+  "$comment": "PRAVA ONLINE yagona dizayn tokenlari. MANBA: prava-test (web). Nusxalari: prava-desktop-online/src/theme/design-tokens.json, prava-mobile/constants/design-tokens.json — o'zgartirsangiz uchalasini ham yangilang (CI tekshiradi).",
+  "version": 1,
+  "font": {
+    "family": "Montserrat",
+    "weights": [400, 500, 600, 700],
+    "size": { "xs": 12, "sm": 14, "md": 16, "lg": 18, "xl": 20, "h3": 20, "h2": 24, "h1": 28 },
+    "lineHeight": { "tight": 1.25, "normal": 1.5 }
+  },
+  "color": {
+    "brand": {
+      "50": "#f0f9ff", "100": "#e0f2fe", "200": "#bae6fd", "300": "#7dd3fc", "400": "#38bdf8",
+      "500": "#0ea5e9", "600": "#0284c7", "700": "#0369a1", "800": "#075985", "900": "#0c4a6e"
+    },
+    "light": {
+      "primary": "#0284c7",
+      "primaryHover": "#0369a1",
+      "onPrimary": "#ffffff",
+      "background": "#f8fafc",
+      "surface": "#ffffff",
+      "surfaceAlt": "#f1f5f9",
+      "border": "#e2e8f0",
+      "text": "#0f172a",
+      "textMuted": "#475569",
+      "success": "#16a34a",
+      "danger": "#dc2626",
+      "warning": "#b45309",
+      "successBg": "#dcfce7",
+      "dangerBg": "#fee2e2",
+      "warningBg": "#fef3c7"
+    },
+    "dark": {
+      "primary": "#38bdf8",
+      "primaryHover": "#7dd3fc",
+      "onPrimary": "#0b1220",
+      "background": "#0b1220",
+      "surface": "#111827",
+      "surfaceAlt": "#1e293b",
+      "border": "#334155",
+      "text": "#e2e8f0",
+      "textMuted": "#94a3b8",
+      "success": "#4ade80",
+      "danger": "#f87171",
+      "warning": "#fbbf24",
+      "successBg": "#14532d",
+      "dangerBg": "#7f1d1d",
+      "warningBg": "#78350f"
+    }
+  },
+  "radius": { "sm": 8, "md": 12, "lg": 16, "xl": 20, "pill": 999 },
+  "spacing": { "xxs": 4, "xs": 8, "sm": 12, "md": 16, "lg": 24, "xl": 32, "xxl": 48 },
+  "motion": { "fast": 120, "normal": 200, "slow": 320, "easing": "cubic-bezier(0.2, 0, 0, 1)" },
+  "layout": {
+    "touchTargetMin": 48,
+    "pointerTargetMin": 32,
+    "contentMaxWidth": 1200,
+    "breakpoints": { "sm": 576, "md": 768, "lg": 992, "xl": 1200 }
+  }
+}

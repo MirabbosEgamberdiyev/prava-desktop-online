@@ -12,6 +12,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import api from "../../../api/api";
+import { durationMinutesFor } from "../../../services/examRules";
 import { QuizNav, type QuizNavHandle } from "../../../components/quiz/QuizNav";
 import { QuizContent } from "../../../components/quiz/QuizContent";
 import { useAutoSave, restoreAnswers } from "../../../hooks/useAutoSave";
@@ -27,10 +28,12 @@ interface MarathonExamPageProps {
 
 const Marathon_ExamPage = ({
   questionCount = 20,
-  durationMinutes = 30,
+  durationMinutes: durationMinutesProp,
   topicId = null,
   examMode = "visible",
 }: MarathonExamPageProps) => {
+  // 1 daqiqa / savol (exam rules) unless the caller passes an explicit duration
+  const durationMinutes = durationMinutesProp ?? durationMinutesFor("marathon", questionCount);
   const isSecureMode = examMode === "secure";
   const { t } = useTranslation();
   const navigate = useNavigate();
